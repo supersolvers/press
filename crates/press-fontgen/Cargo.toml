@@ -1,0 +1,8 @@
+[package]
+name = "press-fontgen"
+version = "0.1.0"
+edition = "2021"
+license = "GPL-3.0-or-later"
+
+[dependencies]
+ttf-parser = "=0.25.1"
