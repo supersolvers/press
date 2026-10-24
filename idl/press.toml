@@ -1,0 +1,1000 @@
+# The press interface definition. This file is the single source of truth for
+# the C ABI: the C header, the Rust export layer and every language binding
+# are generated from it (cargo run -p press-idl).
+#
+# Types: bool, i32, u32, str (UTF-8 pointer + length, borrowed for the call),
+# bytes (any bytes: pointer + length, borrowed for the call; arguments only),
+# the name of an [[enum]], or the name of a [[class]] (passed as a handle).
+# A str result is copied into a buffer the caller supplies. A str event
+# argument is lent to the handler for the length of the call.
+# callback, for method arguments only: a function to be called later, passed
+# with its userdata and an optional destroy notifier.
+# An [[enum]] marked flags = true holds bits that are OR-ed into a u32.
+#
+# ABI rules, which the generators enforce:
+#   * every function returns a Status; results come back through an out pointer
+#   * objects are opaque 64-bit handles, never pointers or structs
+#   * events take a callback, a userdata pointer and an optional destroy
+#     notifier that runs when the callback is dropped
+
+[library]
+name = "press"
+prefix = "press"
+abi_version = 1
+doc = "press: a one-bit user interface toolkit with a flat C ABI."
+
+# ---------------------------------------------------------------- enums ---
+
+[[enum]]
+name = "Status"
+doc = "Result of every call. Zero is success."
+values = [
+    { name = "Ok", value = 0, doc = "success" },
+    { name = "NotInitialized", value = 1, doc = "press_app_init has not been called on this thread" },
+    { name = "InvalidHandle", value = 2, doc = "the handle is null, stale or already destroyed" },
+    { name = "WrongType", value = 3, doc = "the handle refers to an object of another class" },
+    { name = "InvalidArgument", value = 4, doc = "an argument is out of range, null or not valid UTF-8" },
+    { name = "InvalidState", value = 5, doc = "the call is not allowed in the current state" },
+    { name = "Backend", value = 6, doc = "the display backend failed" },
+    { name = "Io", value = 7, doc = "a file could not be read or written" },
+    { name = "Internal", value = 8, doc = "an internal error; this is a bug in press" },
+]
+
+[[enum]]
+name = "Orientation"
+doc = "Direction in which a Stack lays out its children."
+values = [
+    { name = "Vertical", value = 0, doc = "top to bottom" },
+    { name = "Horizontal", value = 1, doc = "left to right" },
+]
+
+[[enum]]
+name = "Align"
+doc = "Placement of children across a Stack's axis."
+values = [
+    { name = "Start", value = 0, doc = "left or top" },
+    { name = "Center", value = 1, doc = "centred" },
+    { name = "End", value = 2, doc = "right or bottom" },
+    { name = "Fill", value = 3, doc = "stretched to the full width or height" },
+]
+
+[[enum]]
+name = "Key"
+doc = "A key that does not type a character."
+values = [
+    { name = "Tab", value = 1, doc = "move the focus on; with Shift, back" },
+    { name = "Return", value = 2, doc = "press the default button" },
+    { name = "Escape", value = 3, doc = "press the cancel button" },
+    { name = "Backspace", value = 4, doc = "delete backwards" },
+    { name = "Delete", value = 5, doc = "delete forwards" },
+    { name = "Left", value = 6, doc = "left arrow" },
+    { name = "Right", value = 7, doc = "right arrow" },
+    { name = "Up", value = 8, doc = "up arrow" },
+    { name = "Down", value = 9, doc = "down arrow" },
+    { name = "Home", value = 10, doc = "start of the line" },
+    { name = "End", value = 11, doc = "end of the line" },
+    { name = "Menu", value = 12, doc = "pull down or put away the menu bar (F10)" },
+    { name = "Context", value = 13, doc = "pop up the context menu of whatever has the keyboard (the Menu key, or Shift+F10)" },
+]
+
+[[enum]]
+name = "Modifier"
+flags = true
+doc = "Modifier keys held during a key press. Combine with bitwise OR."
+values = [
+    { name = "Shift", value = 1, doc = "extends the selection; reverses Tab" },
+    { name = "Control", value = 2, doc = "the command key: moves and deletes by word" },
+    { name = "Alt", value = 4, doc = "reserved" },
+]
+
+[[enum]]
+name = "Icon"
+doc = "A small picture shown before an item's label in a list."
+values = [
+    { name = "None", value = 0, doc = "no picture" },
+    { name = "Folder", value = 1, doc = "a folder" },
+    { name = "Document", value = 2, doc = "a sheet of paper with a corner turned down" },
+    { name = "Application", value = 3, doc = "a diamond" },
+]
+
+[[enum]]
+name = "Typeface"
+doc = "One of the bundled typefaces, each drawn in pixels for the one size it is used at. Every one has Western, Greek, Cyrillic and Hebrew letters of its own and the Chinese, Japanese and Korean characters they all share."
+values = [
+    { name = "Cicero", value = 0, doc = "heavy and plain, 12 pixels: the face of the interface" },
+    { name = "Agate", value = 1, doc = "small and light, 11 pixels, for a lot of words in a little room" },
+    { name = "AgateBold", value = 2, doc = "Agate made heavy" },
+    { name = "Brevier", value = 3, doc = "light and airy, 12 pixels, for reading" },
+    { name = "Pica", value = 4, doc = "every character the same width, 12 pixels, for columns and program text" },
+    { name = "Elite", value = 5, doc = "the same, heavy and larger, 16 pixels, in the manner of a terminal" },
+]
+
+# -------------------------------------------------------------- classes ---
+
+[[class]]
+name = "App"
+static = true
+doc = "Process-wide state. A process has one UI thread, the one that called init, and every press call must come from it, except post."
+
+  [[class.method]]
+  name = "init"
+  doc = "Start press and make the calling thread the UI thread. Safe to call again from that thread; refused from any other until it has shut down."
+
+  [[class.method]]
+  name = "run"
+  doc = "Show the windows and process events until quit is called or the last window closes. With the headless backend this returns at once."
+
+  [[class.method]]
+  name = "start"
+  doc = "For programs with an event loop of their own, in place of run: connect to the display without waiting. Then wait on the descriptor from fd and call dispatch whenever it is readable."
+
+  [[class.method]]
+  name = "fd"
+  doc = "A file descriptor that becomes readable whenever dispatch has work: input, an animation or key repeat coming due, or a change made through this API that needs drawing. Only poll it; never read from it. Valid from start until stop."
+  returns = "i32"
+
+  [[class.method]]
+  name = "dispatch"
+  doc = "Do everything that is ready, without waiting: handle input, call handlers, redraw. Returns false once quit has been called or no window is left showing. Not allowed from inside a handler."
+  returns = "bool"
+
+  [[class.method]]
+  name = "stop"
+  doc = "Disconnect from the display after start. Objects survive and can be shown again with start."
+
+  [[class.method]]
+  name = "post"
+  doc = "Hand over work to be done on the UI thread. This is the one function that may be called from any thread. The work is called from the next dispatch (or by run), in the order posted, and may call any press function. If this returns an error nothing was taken: neither the work nor its destroy notifier will be called."
+  args = [{ name = "work", type = "callback" }]
+
+  [[class.method]]
+  name = "copy_data"
+  doc = "Put something other than text on the clipboard: a picture, say. `kind` says what it is, as a media type such as image/png, and `data` is the thing itself, as the bytes of a file of that type. It takes the place of whatever was on the clipboard, and any program that understands the kind can paste it. Text fields look after copying text themselves."
+  args = [{ name = "kind", type = "str" }, { name = "data", type = "bytes" }]
+
+  [[class.method]]
+  name = "copy_also"
+  doc = "Add another kind to what this program last copied, for programs that understand that one and not the other: a picture and, with it, its caption as text/plain;charset=utf-8, say. Whoever pastes takes the kind it likes best. A kind given twice keeps the later data. It may follow copy_data or text copied from a text field; if the clipboard has since passed to another program it starts afresh, as copy_data does."
+  args = [{ name = "kind", type = "str" }, { name = "data", type = "bytes" }]
+
+  [[class.method]]
+  name = "quit"
+  doc = "Ask run to return, or dispatch to report false."
+
+  [[class.method]]
+  name = "shutdown"
+  doc = "Destroy every object and release all callbacks. Posted work that has not been done is dropped, and its destroy notifier is called."
+
+  [[class.method]]
+  name = "abi_version"
+  doc = "The ABI version of the loaded library."
+  returns = "u32"
+
+[[class]]
+name = "Widget"
+abstract = true
+doc = "Base of everything that can be placed in a window, menus included. Its functions accept any handle."
+
+  [[class.method]]
+  name = "destroy"
+  doc = "Destroy the widget and everything inside it. Its handle becomes invalid."
+
+  [[class.property]]
+  name = "enabled"
+  type = "bool"
+  doc = "Disabled widgets are drawn greyed and ignore the pointer and the keyboard."
+
+  [[class.method]]
+  name = "set_context_menu"
+  doc = "Give the widget a context menu: it pops up when the widget, or anything inside it, is clicked with the right button, or with the context-menu key while it has the keyboard. A window can carry one for everything in it. The menu belongs to the widget from then on. A text field without one of its own pops up Cut, Copy, Paste and Select All."
+  args = [{ name = "menu", type = "Menu" }]
+
+  [[class.method]]
+  name = "set_typeface"
+  doc = "Set the widget's text in another of the bundled typefaces. Labels, buttons, checkboxes, text fields and text areas have one; other widgets refuse it as the wrong type. A widget is the size its text needs in its typeface."
+  args = [{ name = "face", type = "Typeface" }]
+
+  [[class.method]]
+  name = "set_min_size"
+  doc = "Say how small the widget may be, at the least, in pixels. It is still as large as its kind makes it where that is larger, so this can make a button taller but not narrower than its label needs. Nought either way leaves that way to the widget."
+  args = [{ name = "width", type = "i32" }, { name = "height", type = "i32" }]
+
+  [[class.method]]
+  name = "set_stretch"
+  doc = "Say whether the widget takes up spare room when its window is larger than its content needs. Without this it goes by kind: lists, tables, tree views, text areas, scroll views and tab views grow both ways; one-line text fields and progress bars grow across; sliders and scroll bars grow along their length; a stack grows if anything in it does; the rest keep their natural size. A widget told to grow does so along the stack it is in, so an empty label makes a spring that pushes its neighbours apart; one told not to keeps its natural size both ways."
+  args = [{ name = "value", type = "bool" }]
+
+  [[class.method]]
+  name = "focus"
+  doc = "Give the widget the keyboard. Only text fields, buttons and checkboxes that are enabled and in a window can take it."
+
+[[class]]
+name = "Window"
+base = "Widget"
+doc = "A top-level window. The desktop draws its title bar and frame."
+
+  [class.constructor]
+  doc = "Create a hidden window with the given content size in pixels."
+  args = [
+      { name = "title", type = "str" },
+      { name = "width", type = "i32" },
+      { name = "height", type = "i32" },
+  ]
+
+  [[class.property]]
+  name = "title"
+  type = "str"
+  access = "w"
+  doc = "Text shown in the title bar."
+
+  [[class.property]]
+  name = "resizable"
+  type = "bool"
+  access = "w"
+  doc = "Whether the user may change the window's size. Windows can be resized unless this is turned off, which suits a small tool that is all of a piece. Set it before the window is first shown."
+
+  [[class.property]]
+  name = "busy"
+  type = "bool"
+  access = "w"
+  doc = "Whether the window is waiting on something the program is doing. While it is, the pointer over it is an hourglass; the window still answers the pointer and the keyboard."
+
+  [[class.property]]
+  name = "tag"
+  type = "str"
+  access = "w"
+  doc = "A name by which the desktop can know this window again another day, so as to put it back where it was, at the size it was. It is not shown to anyone, so it is not translated, and it should be the same each time the program shows the same thing: a document's path, say, or \"preferences\". Set it before the window is first shown. Desktops that do not remember windows ignore it."
+
+  [[class.method]]
+  name = "set_content"
+  doc = "Place a widget in the window; it fills the content area."
+  args = [{ name = "content", type = "Widget" }]
+
+  [[class.method]]
+  name = "set_menu_bar"
+  doc = "Give the window a menu bar. It is drawn across the top and takes its height from the content area."
+  args = [{ name = "bar", type = "MenuBar" }]
+
+  [[class.method]]
+  name = "show"
+  doc = "Make the window visible."
+
+  [[class.method]]
+  name = "snapshot"
+  doc = "Render the window content to a PNG file, magnified by an integer scale. An open menu is included, and the picture grows to fit it. Works with every backend."
+  args = [{ name = "path", type = "str" }, { name = "scale", type = "i32" }]
+
+  [[class.method]]
+  name = "click_at"
+  doc = "Test hook: press and release the pointer at a point in the content area. An open menu is reached at the place it hangs, even outside the window."
+  args = [{ name = "x", type = "i32" }, { name = "y", type = "i32" }]
+
+  [[class.method]]
+  name = "popup_menu"
+  doc = "Pop a menu up with its corner at a point in the content area. The menu may be free-standing or a context menu, not one in a menu bar or a submenu. Its items raise activated as usual."
+  args = [{ name = "menu", type = "Menu" }, { name = "x", type = "i32" }, { name = "y", type = "i32" }]
+
+  [[class.method]]
+  name = "context_click_at"
+  doc = "Test hook: press the right button at a point in the content area."
+  args = [{ name = "x", type = "i32" }, { name = "y", type = "i32" }]
+
+  [[class.method]]
+  name = "hold_modifiers"
+  doc = "Test hook: say which Modifier keys are held during the clicks that follow. Pass 0 to let them go."
+  args = [{ name = "modifiers", type = "u32" }]
+
+  [[class.method]]
+  name = "press_key"
+  doc = "Test hook: press a key in the window, with any combination of Modifier bits."
+  args = [{ name = "key", type = "Key" }, { name = "modifiers", type = "u32" }]
+
+  [[class.method]]
+  name = "type_text"
+  doc = "Test hook: type text into the window as if from the keyboard."
+  args = [{ name = "text", type = "str" }]
+
+  [[class.event]]
+  name = "files_dropped"
+  doc = "Files were dragged from another program, or from a list whose items stand for files, and dropped on the window. The handler is given their paths, one per line, and whether the user asked for copies (by holding Control, on most desktops) rather than for the files to be moved. What is done with them is up to the handler. Without a handler the window does not accept files."
+  args = [{ name = "paths", type = "str" }, { name = "copy", type = "bool" }]
+
+  [[class.method]]
+  name = "paste_data"
+  doc = "Ask for what is on the clipboard as a given kind (a media type such as image/png). The answer arrives a moment later as data_pasted, with nothing in it if the clipboard holds nothing of that kind."
+  args = [{ name = "kind", type = "str" }]
+
+  [[class.method]]
+  name = "accept_drops"
+  doc = "Say that things of a given kind (a media type such as image/png) may be dragged from other programs and dropped on the window. Call it once for each kind, the one liked best first. What is dropped arrives as data_dropped."
+  args = [{ name = "kind", type = "str" }]
+
+  [[class.event]]
+  name = "data_pasted"
+  doc = "The answer to paste_data: the kind asked for, and what the clipboard held of that kind, which is nothing if it held none. The data is lent for the length of the call."
+  args = [{ name = "kind", type = "str" }, { name = "data", type = "bytes" }]
+
+  [[class.event]]
+  name = "data_dropped"
+  doc = "Something of a kind named with accept_drops was dragged from another program and dropped on the window: its kind, the thing itself, and where in the window's content it was let go. The data is lent for the length of the call."
+  args = [{ name = "kind", type = "str" }, { name = "data", type = "bytes" }, { name = "x", type = "i32" }, { name = "y", type = "i32" }]
+
+  [[class.event]]
+  name = "close_requested"
+  doc = "The user asked to close the window. Without a handler the application quits."
+
+[[class]]
+name = "Stack"
+base = "Widget"
+doc = "Lays out its children in a row or a column."
+
+  [class.constructor]
+  doc = "Create an empty stack."
+  args = [{ name = "orientation", type = "Orientation" }]
+
+  [[class.method]]
+  name = "add"
+  doc = "Append a child. A widget can have only one parent."
+  args = [{ name = "child", type = "Widget" }]
+
+  [[class.property]]
+  name = "spacing"
+  type = "i32"
+  access = "w"
+  doc = "Gap between children, in pixels."
+
+  [[class.property]]
+  name = "padding"
+  type = "i32"
+  access = "w"
+  doc = "Margin around the children, in pixels."
+
+  [[class.property]]
+  name = "align"
+  type = "Align"
+  access = "w"
+  doc = "Placement of children across the axis."
+
+[[class]]
+name = "Label"
+base = "Widget"
+doc = "A line of text."
+
+  [class.constructor]
+  doc = "Create a label."
+  args = [{ name = "text", type = "str" }]
+
+  [[class.property]]
+  name = "text"
+  type = "str"
+  access = "w"
+  doc = "The text shown."
+
+[[class]]
+name = "Button"
+base = "Widget"
+doc = "A push button."
+
+  [class.constructor]
+  doc = "Create a button."
+  args = [{ name = "label", type = "str" }]
+
+  [[class.property]]
+  name = "label"
+  type = "str"
+  access = "w"
+  doc = "The button's caption."
+
+  [[class.property]]
+  name = "is_default"
+  type = "bool"
+  access = "w"
+  doc = "Mark the default button of a dialog: it gets the heavy outline and answers the Return key."
+
+  [[class.property]]
+  name = "is_cancel"
+  type = "bool"
+  access = "w"
+  doc = "Mark the button that answers the Escape key."
+
+  [[class.event]]
+  name = "clicked"
+  doc = "The button was pressed, with the pointer or from the keyboard."
+
+[[class]]
+name = "Checkbox"
+base = "Widget"
+doc = "A box that is either checked or not, with a caption."
+
+  [class.constructor]
+  doc = "Create an unchecked checkbox."
+  args = [{ name = "label", type = "str" }]
+
+  [[class.property]]
+  name = "checked"
+  type = "bool"
+  doc = "Whether the box is checked."
+
+  [[class.event]]
+  name = "toggled"
+  doc = "The user changed the box."
+  args = [{ name = "checked", type = "bool" }]
+
+[[class]]
+name = "TextField"
+base = "Widget"
+doc = "One line of editable text."
+
+  [class.constructor]
+  doc = "Create a text field holding the given text."
+  args = [{ name = "text", type = "str" }]
+
+  [[class.property]]
+  name = "text"
+  type = "str"
+  doc = "The text in the field. Setting it does not raise changed."
+
+  [[class.property]]
+  name = "placeholder"
+  type = "str"
+  access = "w"
+  doc = "Greyed text shown while the field is empty."
+
+  [[class.property]]
+  name = "min_width"
+  type = "i32"
+  access = "w"
+  doc = "The narrowest the field may be laid out, in pixels."
+
+  [[class.property]]
+  name = "password"
+  type = "bool"
+  access = "w"
+  doc = "Show a bullet in place of each character. A password cannot be copied, cut or dragged out, input methods are kept away from it, and assistive technology is not told what it holds. Not available on a text area."
+
+  [[class.method]]
+  name = "select_all"
+  doc = "Select all of the text."
+
+  [[class.method]]
+  name = "copy"
+  doc = "Copy the selected text to the clipboard. With nothing selected the clipboard is left alone."
+
+  [[class.method]]
+  name = "cut"
+  doc = "Copy the selected text to the clipboard and delete it. Raises changed."
+
+  [[class.method]]
+  name = "paste"
+  doc = "Replace the selection with the clipboard's text. Raises changed; on a display the text may arrive a moment after this returns."
+
+  [[class.event]]
+  name = "changed"
+  doc = "The user edited the text. The handler is given the text as it now stands."
+  args = [{ name = "text", type = "str" }]
+
+  [[class.event]]
+  name = "submitted"
+  doc = "The user pressed Return in the field. The handler is given the text. The default button, if any, is pressed as well."
+  args = [{ name = "text", type = "str" }]
+
+[[class]]
+name = "TextArea"
+base = "TextField"
+doc = "Several lines of editable text, wrapped at word gaps to the width of the area. It is a TextField: every TextField function and event works on it, except that Return starts a new line, so it never raises submitted and does not press the default button."
+
+  [class.constructor]
+  doc = "Create a text area holding the given text. Line breaks in the text are kept."
+  args = [{ name = "text", type = "str" }]
+
+  [[class.property]]
+  name = "rows"
+  type = "i32"
+  access = "w"
+  doc = "The height of the area, in lines of text. Longer text scrolls."
+
+[[class]]
+name = "RadioButton"
+base = "Widget"
+doc = "One of a group of choices, of which one at most is chosen. Radio buttons that share a parent (the same Stack) are a group. The arrow keys move through the group, choosing as they go."
+
+  [class.constructor]
+  doc = "Create an unchosen radio button."
+  args = [{ name = "label", type = "str" }]
+
+  [[class.property]]
+  name = "label"
+  type = "str"
+  access = "w"
+  doc = "The button's caption."
+
+  [[class.property]]
+  name = "checked"
+  type = "bool"
+  doc = "Whether this is the chosen one. Setting it true unchooses the others in its group. Setting it does not raise chosen."
+
+  [[class.event]]
+  name = "chosen"
+  doc = "The user chose this button. Choosing the one already chosen raises nothing."
+
+[[class]]
+name = "Slider"
+base = "Widget"
+doc = "A number picked by position: a knob that slides along a groove. Its value runs from 0 to max; a vertical slider has its largest value at the top."
+
+  [class.constructor]
+  doc = "Create a slider with a value of 0 and a max of 100."
+  args = [{ name = "orientation", type = "Orientation" }]
+
+  [[class.property]]
+  name = "value"
+  type = "i32"
+  doc = "Where the knob is, from 0 to max. Setting it does not raise changed; a value out of range is brought into range."
+
+  [[class.property]]
+  name = "max"
+  type = "i32"
+  doc = "The largest value, at least 1."
+
+  [[class.property]]
+  name = "step"
+  type = "i32"
+  access = "w"
+  doc = "How far an arrow key or a notch of the wheel moves the value."
+
+  [[class.property]]
+  name = "length"
+  type = "i32"
+  access = "w"
+  doc = "The length of the slider in pixels. It is always 16 pixels thick."
+
+  [[class.event]]
+  name = "changed"
+  doc = "The user moved the knob."
+  args = [{ name = "value", type = "i32" }]
+
+[[class]]
+name = "ListBox"
+base = "Widget"
+doc = "Rows of text, one of which may be selected. It scrolls when there are more rows than fit. The arrow keys move the selection, and typing a letter jumps to the next row that starts with it."
+
+  [class.constructor]
+  doc = "Create an empty list box, five rows high."
+
+  [[class.method]]
+  name = "add"
+  doc = "Append a row."
+  args = [{ name = "label", type = "str" }]
+
+  [[class.method]]
+  name = "clear"
+  doc = "Remove every row."
+
+  [[class.property]]
+  name = "selected"
+  type = "i32"
+  doc = "The index of the selected row, counting from 0; -1 when none is. Setting it scrolls the row into view and does not raise changed."
+
+  [[class.property]]
+  name = "multiple"
+  type = "bool"
+  access = "w"
+  doc = "Let several items be selected at once: Control with a click adds or removes one, Shift with a click or an arrow stretches the selection, a drag stretches it, and Control+A takes everything. selected then gives the item last selected."
+
+  [[class.property]]
+  name = "editable"
+  type = "bool"
+  access = "w"
+  doc = "Let the user edit an item's text in place. Return then edits the current item, as renaming a file does, where it would otherwise open it; a double click still opens it."
+
+  [[class.method]]
+  name = "is_selected"
+  doc = "Whether an item is selected. With multiple selection several may be."
+  args = [{ name = "index", type = "i32" }]
+  returns = "bool"
+
+  [[class.method]]
+  name = "set_item_selected"
+  doc = "Select or unselect one item, leaving the others as they are where several may be selected. Does not raise changed."
+  args = [{ name = "index", type = "i32" }, { name = "selected", type = "bool" }]
+
+  [[class.method]]
+  name = "set_icon"
+  doc = "Give an item a small picture before its label. Once any item has one, every label moves over so that they line up."
+  args = [{ name = "index", type = "i32" }, { name = "icon", type = "Icon" }]
+
+  [[class.method]]
+  name = "set_file"
+  doc = "Say that an item stands for a file, by its full path; an empty path takes that away. Such an item can be dragged out of its list, even one whose rows cannot be rearranged, and dropped on another window or program, which is offered the file. A window with a files_dropped handler hears of it that way."
+  args = [{ name = "index", type = "i32" }, { name = "path", type = "str" }]
+
+  [[class.method]]
+  name = "set_drag_data"
+  doc = "Give an item something to carry when it is dragged out of its list: `kind` says what it is, as a media type such as image/png, and `data` is the thing itself. Such an item can be dragged out even of a list whose rows cannot be rearranged, and a program that accepts the kind is given the data where it is dropped. An empty kind takes it away."
+  args = [{ name = "index", type = "i32" }, { name = "kind", type = "str" }, { name = "data", type = "bytes" }]
+
+  [[class.method]]
+  name = "add_drag_data"
+  doc = "Give an item another kind to carry when it is dragged out, besides what set_drag_data gave it: where it is dropped takes the kind it likes best. A kind given twice keeps the later data."
+  args = [{ name = "index", type = "i32" }, { name = "kind", type = "str" }, { name = "data", type = "bytes" }]
+
+  [[class.method]]
+  name = "set_picture"
+  doc = "Give an item a picture of your own in place of a stock icon. The picture is drawn in text, one line for each row of pixels: X or # is black, a full stop is white, and anything else lets the row show through. Up to 14 pixels each way. An empty string takes the picture away."
+  args = [{ name = "index", type = "i32" }, { name = "art", type = "str" }]
+
+  [[class.method]]
+  name = "set_picture_file"
+  doc = "Give an item a picture read from a PNG file of up to 14 pixels each way. It is reduced to one bit: dark pixels become black, light ones white, and transparent ones let the row show through."
+  args = [{ name = "index", type = "i32" }, { name = "path", type = "str" }]
+
+  [[class.method]]
+  name = "remove"
+  doc = "Remove an item. Items after it move down by one index. In a tree view, whatever hangs from it goes too. Does not raise removed."
+  args = [{ name = "index", type = "i32" }]
+
+  [[class.property]]
+  name = "accepts_rows"
+  type = "bool"
+  access = "w"
+  doc = "Let rows dragged out of another list be dropped here: from the same window, another window of the program, or a list in another press program. The rows leave that list, which must be reorderable, and join this one, keeping their text and pictures. A tree view can take rows too: dropped onto an item they hang from it, dropped between two they go there. An item dragged out of a tree takes its whole branch: into another tree the branch keeps its shape, into a plain list it is laid out flat."
+
+  [[class.property]]
+  name = "reorderable"
+  type = "bool"
+  access = "w"
+  doc = "Let the user drag a row to a new place: press it and pull it up or down, and a line shows where it will land. Where several rows are selected, pulling one moves them all. Items keep their indices; only the order they are shown in changes. In a tree view an item can also be dropped onto another, to hang from it, and takes along whatever hangs from it. Rows dragged onto something that takes text, here or in another program, arrive as their labels."
+
+  [[class.method]]
+  name = "move_item"
+  doc = "Move an item to a place among the rows as shown, counting from 0. A sorted table stops being sorted. Does not raise moved."
+  args = [{ name = "index", type = "i32" }, { name = "position", type = "i32" }]
+
+  [[class.method]]
+  name = "position_of"
+  doc = "Where an item is among the rows as shown, counting from 0; -1 if it is folded away in a tree."
+  args = [{ name = "index", type = "i32" }]
+  returns = "i32"
+
+  [[class.method]]
+  name = "edit"
+  doc = "Start editing an item's text in place, whether or not the list is editable. In a table, column says which cell; elsewhere pass 0."
+  args = [{ name = "index", type = "i32" }, { name = "column", type = "i32" }]
+
+  [[class.property]]
+  name = "rows"
+  type = "i32"
+  access = "w"
+  doc = "The height of the list, in rows."
+
+  [[class.property]]
+  name = "min_width"
+  type = "i32"
+  access = "w"
+  doc = "The narrowest the list may be laid out, scroll bar included, in pixels."
+
+  [[class.event]]
+  name = "changed"
+  doc = "The user selected a different row."
+  args = [{ name = "index", type = "i32" }]
+
+  [[class.event]]
+  name = "activated"
+  doc = "The user opened a row: a double click, or Return. The default button, if any, is pressed as well after Return."
+  args = [{ name = "index", type = "i32" }]
+
+  [[class.event]]
+  name = "moved"
+  doc = "The user dragged an item to a new place. index is the item, unchanged; position is where it now is among the rows."
+  args = [{ name = "index", type = "i32" }, { name = "position", type = "i32" }]
+
+  [[class.event]]
+  name = "removed"
+  doc = "The user dragged an item out of this list into another. index is the index it had; items after it have moved down by one. When several leave together the highest index is reported first, so each index is right as it is reported."
+  args = [{ name = "index", type = "i32" }]
+
+  [[class.event]]
+  name = "received"
+  doc = "The user dropped an item here from another list. index is its index in this list, which is the last; position is where it is among the rows."
+  args = [{ name = "index", type = "i32" }, { name = "position", type = "i32" }]
+
+  [[class.event]]
+  name = "edited"
+  doc = "The user edited an item's text in place and kept the change. The list already holds the new text; column is 0 except in a table."
+  args = [{ name = "index", type = "i32" }, { name = "column", type = "i32" }, { name = "text", type = "str" }]
+
+[[class]]
+name = "Table"
+base = "ListBox"
+doc = "A list box with columns under a row of headings. It is a ListBox: rows are added with ListBox.add, with the cells of a row separated by tab characters, and every ListBox function and event works on it."
+
+  [class.constructor]
+  doc = "Create an empty table with no columns."
+
+  [[class.method]]
+  name = "add_column"
+  doc = "Add a column: its heading and its width in pixels. A cell too long for its column is cut short. The user can drag the edge between two headings to change a width."
+  args = [{ name = "title", type = "str" }, { name = "width", type = "i32" }]
+
+  [[class.property]]
+  name = "sortable"
+  type = "bool"
+  access = "w"
+  doc = "Let the user sort the rows by clicking a column's heading; a second click turns the order round. Cells that start with numbers are ordered as numbers. Sorting changes the order rows are shown in, never their indices."
+
+  [[class.method]]
+  name = "sort_by"
+  doc = "Sort by a column, smallest first or largest first, or with -1 show the rows in the order they were added."
+  args = [{ name = "column", type = "i32" }, { name = "ascending", type = "bool" }]
+
+[[class]]
+name = "IconView"
+base = "ListBox"
+doc = "A list box that shows its items as large pictures with their names beneath, in rows that fill its width, as a folder's window does. It is a ListBox: every ListBox function and event works on it. An item's picture goes by its icon (a folder, a document or an application), or is the program's own picture drawn double size. In a label with tabs only what comes before the first is shown. The arrow keys go from icon to icon. With set_reorderable on, the user can put icons where they like."
+
+  [class.constructor]
+  doc = "Create an empty icon view, three rows of icons high."
+
+  [[class.method]]
+  name = "set_position"
+  doc = "Put an item's icon at a place in the view, measured in pixels from the top left of all the icons (not of the view, once it has been scrolled). A negative place puts it back in line with the rest. Clearing the view forgets every place."
+  args = [{ name = "index", type = "i32" }, { name = "x", type = "i32" }, { name = "y", type = "i32" }]
+
+  [[class.event]]
+  name = "placed"
+  doc = "The user dragged an icon to a new place in the view, which they can do once ListBox.set_reorderable has been turned on for it. index is the item; x and y are where it now is, as for set_position. Several selected icons dragged together are each reported. The order of the items does not change."
+  args = [{ name = "index", type = "i32" }, { name = "x", type = "i32" }, { name = "y", type = "i32" }]
+
+[[class]]
+name = "TreeView"
+base = "ListBox"
+doc = "A list box whose rows hang from one another and can be folded away. It is a ListBox: an item is known by its index, in the order items were added, and every ListBox function and event works on it. ListBox.add adds an item at the top level. Right and Left unfold and fold from the keyboard."
+
+  [class.constructor]
+  doc = "Create an empty tree view."
+
+  [[class.method]]
+  name = "add_child"
+  doc = "Add an item under another, given by its index, or at the top level with -1. Returns the new item's index. Items start folded."
+  args = [{ name = "parent", type = "i32" }, { name = "label", type = "str" }]
+  returns = "i32"
+
+  [[class.method]]
+  name = "parent_of"
+  doc = "The index of the item an item hangs from, or -1 at the top level. It changes when the user drags the item elsewhere in a reorderable tree."
+  args = [{ name = "index", type = "i32" }]
+  returns = "i32"
+
+  [[class.method]]
+  name = "set_expanded"
+  doc = "Unfold or fold an item to show or hide what hangs from it."
+  args = [{ name = "index", type = "i32" }, { name = "expanded", type = "bool" }]
+
+[[class]]
+name = "ProgressBar"
+base = "Widget"
+doc = "Shows how far along some work is. It fills from the left as value goes from 0 to max."
+
+  [class.constructor]
+  doc = "Create a progress bar with a value of 0 and a max of 100."
+
+  [[class.property]]
+  name = "value"
+  type = "i32"
+  doc = "How much is done, from 0 to max. A value out of range is brought into range."
+
+  [[class.property]]
+  name = "max"
+  type = "i32"
+  doc = "The value that means finished, at least 1."
+
+  [[class.property]]
+  name = "busy"
+  type = "bool"
+  access = "w"
+  doc = "Show moving stripes in place of an amount, for work whose length is not known."
+
+  [[class.property]]
+  name = "length"
+  type = "i32"
+  access = "w"
+  doc = "The length of the bar in pixels."
+
+[[class]]
+name = "TabView"
+base = "Widget"
+doc = "Several pages of widgets in the space of one, with a row of tabs along the top to choose between them. Left and Right turn the pages from the keyboard."
+
+  [class.constructor]
+  doc = "Create a tab view with no pages."
+
+  [[class.method]]
+  name = "add"
+  doc = "Add a page: the word on its tab, and the widget (usually a Stack) shown when it is chosen."
+  args = [{ name = "title", type = "str" }, { name = "content", type = "Widget" }]
+
+  [[class.property]]
+  name = "selected"
+  type = "i32"
+  doc = "The index of the page showing; -1 when there are no pages. Setting it does not raise changed."
+
+  [[class.event]]
+  name = "changed"
+  doc = "The user turned to a different page."
+  args = [{ name = "index", type = "i32" }]
+
+[[class]]
+name = "PopupButton"
+base = "Widget"
+doc = "A box showing one of a list of choices. Pressing it pops the whole list up over it, with the current choice under the pointer: drag to another and let go, or click and then click. From the keyboard, Space pops the list up."
+
+  [class.constructor]
+  doc = "Create a pop-up button with no choices."
+
+  [[class.method]]
+  name = "add"
+  doc = "Append a choice. The first one added starts as the current choice."
+  args = [{ name = "label", type = "str" }]
+
+  [[class.method]]
+  name = "clear"
+  doc = "Remove every choice."
+
+  [[class.property]]
+  name = "selected"
+  type = "i32"
+  doc = "The index of the current choice, counting from 0; -1 when there are no choices. Setting it does not raise changed."
+
+  [[class.event]]
+  name = "changed"
+  doc = "The user picked a different choice. Picking the current one again raises nothing."
+  args = [{ name = "index", type = "i32" }]
+
+[[class]]
+name = "ScrollView"
+base = "Widget"
+doc = "A framed opening onto a widget that may be larger than the space it is given. It has a scroll bar down its right-hand side, and one along the bottom when the content is too wide. A widget inside that takes the keyboard is scrolled into view."
+
+  [class.constructor]
+  doc = "Create an empty scroll view, 200 by 120 pixels."
+
+  [[class.method]]
+  name = "set_content"
+  doc = "Put a widget in the view; usually a Stack of others. It is laid out at the size it asks for, or the size of the opening if that is larger."
+  args = [{ name = "content", type = "Widget" }]
+
+  [[class.property]]
+  name = "width"
+  type = "i32"
+  access = "w"
+  doc = "The width the view asks for, frame and scroll bar included, in pixels."
+
+  [[class.property]]
+  name = "height"
+  type = "i32"
+  access = "w"
+  doc = "The height the view asks for, frame included, in pixels."
+
+  [[class.property]]
+  name = "scroll_x"
+  type = "i32"
+  doc = "How far the content is scrolled to the left, in pixels. A value past the end is brought back."
+
+  [[class.property]]
+  name = "scroll_y"
+  type = "i32"
+  doc = "How far the content is scrolled up, in pixels. A value past the end is brought back."
+
+[[class]]
+name = "ScrollBar"
+base = "Widget"
+doc = "A scroll bar: an arrow at each end and a box that slides between them. Its value runs from 0 to max. It scrolls nothing by itself; connect changed and move your content. A text area has one of its own."
+
+  [class.constructor]
+  doc = "Create a scroll bar with a value of 0, a max of 100 and a page of 10."
+  args = [{ name = "orientation", type = "Orientation" }]
+
+  [[class.property]]
+  name = "value"
+  type = "i32"
+  doc = "Where the box is, from 0 to max. Setting it does not raise changed; a value out of range is brought into range."
+
+  [[class.property]]
+  name = "max"
+  type = "i32"
+  doc = "The largest value: how far the content can scroll. With a max of 0 there is nothing to scroll and the bar goes blank."
+
+  [[class.property]]
+  name = "page"
+  type = "i32"
+  access = "w"
+  doc = "How much is in view at once, in the units of value. It sets the size of the box, and a click in the track moves by a page less a step."
+
+  [[class.property]]
+  name = "step"
+  type = "i32"
+  access = "w"
+  doc = "How far an arrow, or one notch of the wheel's three, moves the value."
+
+  [[class.property]]
+  name = "length"
+  type = "i32"
+  access = "w"
+  doc = "The length of the bar in pixels. It is always 16 pixels thick."
+
+  [[class.event]]
+  name = "changed"
+  doc = "The user moved the box, with an arrow, the track, a drag or the wheel."
+  args = [{ name = "value", type = "i32" }]
+
+[[class]]
+name = "MenuBar"
+base = "Widget"
+doc = "The row of menu titles across the top of a window. Attach it with Window.set_menu_bar."
+
+  [class.constructor]
+  doc = "Create an empty menu bar."
+
+  [[class.method]]
+  name = "add"
+  doc = "Append a menu. A menu can be in only one bar."
+  args = [{ name = "menu", type = "Menu" }]
+
+[[class]]
+name = "Menu"
+base = "Widget"
+doc = "A pull-down menu. A disabled menu has a greyed title and cannot be pulled down."
+
+  [class.constructor]
+  doc = "Create an empty menu."
+  args = [{ name = "title", type = "str" }]
+
+  [[class.property]]
+  name = "title"
+  type = "str"
+  access = "w"
+  doc = "The word shown in the menu bar."
+
+  [[class.method]]
+  name = "add"
+  doc = "Append an item. An item can be in only one menu."
+  args = [{ name = "item", type = "MenuItem" }]
+
+  [[class.method]]
+  name = "add_separator"
+  doc = "Append a dividing line."
+
+[[class]]
+name = "MenuItem"
+base = "Widget"
+doc = "A command in a menu. A disabled item is greyed and cannot be chosen."
+
+  [class.constructor]
+  doc = "Create a menu item."
+  args = [{ name = "label", type = "str" }]
+
+  [[class.property]]
+  name = "label"
+  type = "str"
+  access = "w"
+  doc = "The item's text."
+
+  [[class.property]]
+  name = "checked"
+  type = "bool"
+  doc = "Show a check mark beside the item. Choosing the item does not change it."
+
+  [[class.property]]
+  name = "shortcut"
+  type = "str"
+  access = "w"
+  doc = "One character that, typed with Control, chooses the item; empty for none. In a text field, Control with A, C, X or V edits the text instead."
+
+  [[class.method]]
+  name = "set_submenu"
+  doc = "Hang a submenu off the item. It opens beside the item when the item is pointed at, and the item no longer raises activated. The submenu's own title is not shown. A menu can hang in only one place."
+  args = [{ name = "menu", type = "Menu" }]
+
+  [[class.event]]
+  name = "activated"
+  doc = "The user chose the item, from the menu or with its shortcut."
