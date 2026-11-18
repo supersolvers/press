@@ -52,6 +52,27 @@ pub struct Metrics {
     pub menu_item_height: i32,
     /// Room kept to the right of a menu and below it for its shadow.
     pub menu_shadow: i32,
+    /// Height of the title bar of a window that draws its own frame, its
+    /// top edge included. Nothing here leaves the frame to the desktop.
+    pub frame_title: i32,
+    /// How thick the frame is along the sides and the bottom of a window.
+    pub frame_border: i32,
+    /// The buttons in a title bar: their size, the room between them, how
+    /// far the first stands from the side of the frame, and how far below
+    /// the middle of the title bar they sit.
+    pub frame_button_width: i32,
+    pub frame_button_height: i32,
+    pub frame_button_gap: i32,
+    pub frame_button_inset: i32,
+    pub frame_button_rise: i32,
+    /// Which buttons are at the left of a title bar and which at the
+    /// right: four bits for each, the one nearest the side of the frame in
+    /// the lowest four. 1 closes, 2 minimizes, 3 zooms.
+    pub frame_left: i32,
+    pub frame_right: i32,
+    /// Not nothing: the menu bar stays in the window, even on a desktop
+    /// that offers to show it across the top of the screen.
+    pub menu_in_window: i32,
 }
 
 /// The colours a style decides, as ARGB. The engine draws words and small
@@ -128,6 +149,17 @@ pub enum PartKind {
     Header = 21,
     /// One heading of a table, before its words.
     HeaderCell = 22,
+    /// The frame of a window that draws its own: the title bar with the
+    /// window's title, and the edges. The rectangle is the whole window,
+    /// see-through until drawn on; `a` is the height of the title bar and
+    /// `b` the thickness of the edges, and the content is laid over the
+    /// rest afterwards. `ENABLED` for the window in front; `CHECKED` for
+    /// one made as large as it can be.
+    Frame = 23,
+    /// A button in a title bar: `a` is 1 for the one that closes, 2 for
+    /// the one that minimizes, 3 for the one that zooms. `HOT`, `HELD`,
+    /// `ENABLED` and `CHECKED` as for the frame.
+    FrameButton = 24,
 }
 
 /// What state a part is in: these are added together in [`Part::state`].
@@ -269,6 +301,17 @@ impl OneBit {
         menu_bar_height: 20,
         menu_item_height: 16,
         menu_shadow: 1,
+        // its frame is the desktop's, and its menu bar goes where the desktop likes
+        frame_title: 0,
+        frame_border: 0,
+        frame_button_width: 0,
+        frame_button_height: 0,
+        frame_button_gap: 0,
+        frame_button_inset: 0,
+        frame_button_rise: 0,
+        frame_left: 0,
+        frame_right: 0,
+        menu_in_window: 0,
     };
 
     pub const PALETTE: Palette = Palette { window: WHITE, text: BLACK, paper: WHITE, ink: BLACK, menu: WHITE, menu_text: BLACK };
@@ -533,6 +576,21 @@ impl Style for OneBit {
             }
             PartKind::Header => canvas.fill(Rect::new(rect.x, rect.y + rect.h - 1, rect.w, 1), BLACK),
             PartKind::HeaderCell => {}
+            PartKind::Frame => {
+                // a plain frame for a style that asks for one and draws none
+                canvas.fill(rect, WHITE);
+                canvas.frame(rect, BLACK);
+                canvas.fill(Rect::new(rect.x, rect.y + part.a - 1, rect.w, 1), BLACK);
+                let tw = p.font.width(part.text);
+                p.font.draw(canvas, part.text, rect.x + (rect.w - tw) / 2, rect.y + (part.a - line) / 2, BLACK);
+            }
+            PartKind::FrameButton => {
+                canvas.fill(rect, WHITE);
+                canvas.frame(rect, BLACK);
+                if held {
+                    canvas.invert(rect.inset(1));
+                }
+            }
         }
         true
     }

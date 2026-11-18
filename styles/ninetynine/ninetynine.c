@@ -297,6 +297,51 @@ static void popup(const press_part *p, box r) {
         ring((box){r.x - 3, r.y - 3, r.w + 6, r.h + 6});
 }
 
+/* A window's frame: a black line round a rim of plate, lit from the top
+ * left, with the title in the middle of its top and ridges running out
+ * from the title either way, to take hold of. Behind others it is plain. */
+static void frame(const press_part *p, box r) {
+    int active = has(p, PRESS_STATE_ENABLED), line = line_height();
+    box inner = {r.x + p->b - 1, r.y + p->a - 1, r.w - 2 * p->b + 2, r.h - p->a - p->b + 2};
+    fill(r, active ? rgb(0xcccccc) : PLATE);
+    if (active) lit_edge(inset(r, 1), LIT, DEEP);
+    outline(r, BLACK);
+    /* the content sits in a black line of its own */
+    outline(inner, BLACK);
+    if (active) lit_edge((box){inner.x - 1, inner.y - 1, inner.w + 2, inner.h + 2}, DEEP, LIT);
+    int wide = text_width(p->text), tx = r.x + (r.w - wide) / 2, ty = r.y + (p->a - 1 - line) / 2 + 1;
+    if (active) {
+        for (int y = r.y + 5; y < r.y + p->a - 5; y += 2) {
+            fill((box){r.x + 6, y, r.w - 12, 1}, LIT);
+            fill((box){r.x + 6, y + 1, r.w - 12, 1}, DEEP);
+        }
+        fill((box){tx - 6, r.y + 3, wide + 12, p->a - 6}, rgb(0xcccccc));
+    }
+    words(p->text, tx, ty, active ? BLACK : rgb(0x888888));
+}
+
+/* The boxes in the title bar: close at the left; at the right, zoom and
+ * the one that rolls the window up. Behind others a window shows none. */
+static void frame_button(const press_part *p, box r) {
+    if (!has(p, PRESS_STATE_ENABLED)) return;
+    int held = has(p, PRESS_STATE_HELD);
+    /* a gap in the ridges for it to sit in */
+    fill((box){r.x - 2, r.y - 1, r.w + 4, r.h + 2}, rgb(0xcccccc));
+    lit_edge(r, DEEP, LIT);
+    fill(inset(r, 1), held ? PRESSED : PLATE);
+    outline(inset(r, 1), BLACK);
+    if (!held) lit_edge(inset(r, 2), LIT, SHADE);
+    if (p->a == PRESS_FRAME_ZOOM) {
+        /* a smaller box in its corner */
+        fill((box){r.x + 2, r.y + 7, 6, 1}, BLACK);
+        fill((box){r.x + 7, r.y + 2, 1, 6}, BLACK);
+    } else if (p->a == PRESS_FRAME_MINIMIZE) {
+        /* lines across it: the window rolled up into its title */
+        fill((box){r.x + 2, r.y + 5, r.w - 4, 1}, BLACK);
+        fill((box){r.x + 2, r.y + 7, r.w - 4, 1}, BLACK);
+    }
+}
+
 static int32_t draw(const press_part *p, const press_surface *surface) {
     box r = {p->x, p->y, p->width, p->height};
     on = surface;
@@ -366,6 +411,8 @@ static int32_t draw(const press_part *p, const press_surface *surface) {
         lit_edge((box){r.x, r.y, r.w - 1, r.h - 1}, LIT, SHADE);
         fill((box){r.x + r.w - 1, r.y, 1, r.h}, BLACK);
         break;
+    case PRESS_PART_FRAME: frame(p, r); break;
+    case PRESS_PART_FRAME_BUTTON: frame_button(p, r); break;
     default: return 0;
     }
     return 1;
@@ -386,6 +433,17 @@ static void metrics(press_metrics *m) {
     m->popup_height = 20;
     m->menu_item_height = 17;
     m->menu_shadow = 2;
+    /* a frame of its own; its menus go to the top of the screen where a desktop has them there */
+    m->frame_title = 22;
+    m->frame_border = 6;
+    m->frame_button_width = 13;
+    m->frame_button_height = 13;
+    m->frame_button_gap = 5;
+    m->frame_button_inset = 9;
+    m->frame_button_rise = 0;
+    m->frame_left = 0x1;   /* close */
+    m->frame_right = 0x32; /* zoom, then roll up, nearest the edge */
+    m->menu_in_window = 0;
 }
 
 static void palette(press_palette *p) {

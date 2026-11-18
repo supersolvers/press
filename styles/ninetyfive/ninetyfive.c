@@ -199,9 +199,17 @@ static uint32_t between(uint32_t dark, uint32_t light_, uint32_t c) {
 }
 
 static void select_in(box r) {
+    /* a menu is of the face's grey, not white: anything as light as that is paper */
+    uint32_t face = ((FACE >> 16) & 0xff) * 77 + ((FACE >> 8) & 0xff) * 150 + (FACE & 0xff) * 29;
     for (int y = r.y; y < r.y + r.h; y++)
-        for (int x = r.x; x < r.x + r.w; x++)
-            px(x, y, between(WHITE, NAVY, at(x, y)));
+        for (int x = r.x; x < r.x + r.w; x++) {
+            uint32_t c = at(x, y), out = 0xff000000u;
+            for (int shift = 0; shift <= 16; shift += 8) {
+                uint32_t v = ((c >> shift) & 0xff) * 65280u / face;
+                out |= (v > 255 ? 255 : v) << shift;
+            }
+            px(x, y, between(WHITE, NAVY, out));
+        }
 }
 
 static void dim_in(box r) {
@@ -340,6 +348,70 @@ static void popup(const press_part *p, box r) {
         dotted((box){r.x + 3, r.y + 3, r.w - 6 - 17, r.h - 6});
 }
 
+/* A colour part of the way from one to another: `at` of `of`. */
+static uint32_t part_way(uint32_t from, uint32_t to, int at_, int of) {
+    uint32_t out = 0xff000000u;
+    if (of < 1) of = 1;
+    for (int shift = 0; shift <= 16; shift += 8) {
+        int a = (int)((from >> shift) & 0xff), b = (int)((to >> shift) & 0xff);
+        out |= (uint32_t)(a + (b - a) * at_ / of) << shift;
+    }
+    return out;
+}
+
+/* A window's frame: a raised edge all round, and a bar of colour across
+ * the top with the title in it, in white. */
+static void frame(const press_part *p, box r) {
+    int active = has(p, PRESS_STATE_ENABLED);
+    box bar = {r.x + p->b, r.y + p->b, r.w - 2 * p->b, p->a - p->b - 1};
+    fill(r, FACE);
+    edge(r, LIGHT, DARK);
+    edge(inset(r, 1), HILITE, SHADOW);
+#ifdef STYLE_TITLE_FADE
+    /* the colour of the bar runs out towards the right */
+    for (int x = 0; x < bar.w; x++)
+        fill((box){bar.x + x, bar.y, 1, bar.h}, part_way(active ? NAVY : SHADOW, active ? STYLE_TITLE_FADE : STYLE_TITLE_FADE_IDLE, x, bar.w - 1));
+#else
+    fill(bar, active ? NAVY : SHADOW);
+#endif
+    words(p->text, bar.x + 3, bar.y + (bar.h - on->line_height(on->ctx)) / 2, active ? WHITE : part_way(WHITE, FACE, 3, 4));
+}
+
+/* The buttons at the right of the bar: put away, make large, close. */
+static void frame_button(const press_part *p, box r) {
+    int held = has(p, PRESS_STATE_HELD);
+    int x = r.x + held, y = r.y + held;
+    if (held) {
+        fill(r, FACE);
+        edge(r, DARK, HILITE);
+        edge(inset(r, 1), SHADOW, LIGHT);
+    } else {
+        raised(r);
+    }
+    switch (p->a) {
+    case PRESS_FRAME_CLOSE:
+        for (int i = 0; i < 7; i++) {
+            fill((box){x + 4 + i, y + 3 + i, 2, 1}, BLACK);
+            fill((box){x + 10 - i, y + 3 + i, 2, 1}, BLACK);
+        }
+        break;
+    case PRESS_FRAME_MINIMIZE: fill((box){x + 4, y + r.h - 5, 6, 2}, BLACK); break;
+    default:
+        if (has(p, PRESS_STATE_CHECKED)) {
+            /* one window in front of another: put it back as it was */
+            edge((box){x + 5, y + 2, 7, 6}, BLACK, BLACK);
+            fill((box){x + 5, y + 2, 7, 2}, BLACK);
+            fill((box){x + 3, y + 5, 7, 6}, FACE);
+            edge((box){x + 3, y + 5, 7, 6}, BLACK, BLACK);
+            fill((box){x + 3, y + 5, 7, 2}, BLACK);
+        } else {
+            edge((box){x + 3, y + 2, 10, 9}, BLACK, BLACK);
+            fill((box){x + 3, y + 2, 10, 2}, BLACK);
+        }
+        break;
+    }
+}
+
 static int32_t draw(const press_part *p, const press_surface *surface) {
     box r = {p->x, p->y, p->width, p->height};
     on = surface;
@@ -387,6 +459,8 @@ static int32_t draw(const press_part *p, const press_surface *surface) {
         break;
     case PRESS_PART_HEADER: fill(r, FACE); break;
     case PRESS_PART_HEADER_CELL: raised(r); break;
+    case PRESS_PART_FRAME: frame(p, r); break;
+    case PRESS_PART_FRAME_BUTTON: frame_button(p, r); break;
     default: return 0;
     }
     return 1;
@@ -402,6 +476,17 @@ static void metrics(press_metrics *m) {
     m->field_inset_y = 4;
     m->progress_height = 16;
     m->slider_thick = 20;
+    /* a frame of its own, with its menus in it */
+    m->frame_title = 23;
+    m->frame_border = 4;
+    m->frame_button_width = 16;
+    m->frame_button_height = 14;
+    m->frame_button_gap = 0;
+    m->frame_button_inset = 6;
+    m->frame_button_rise = 2;
+    m->frame_left = 0;
+    m->frame_right = 0x231; /* put away, make large, close */
+    m->menu_in_window = 1;
 #ifdef STYLE_METRICS
     STYLE_METRICS(m);
 #endif

@@ -215,6 +215,53 @@ static void popup(const press_part *p, box r) {
     words(p->text, r.x + 9, r.y + (r.h - line_height()) / 2, BLACK);
 }
 
+/* A window's frame: a title bar shaded from light to grey with the title
+ * in its middle, its top corners rounded off, and a hair's breadth of line
+ * round the rest. */
+static void frame(const press_part *p, box r) {
+    int active = has(p, PRESS_STATE_ENABLED), line = line_height();
+    uint32_t top = active ? rgb(0xf2f2f2) : rgb(0xf6f6f6), bottom = active ? rgb(0xc6c6c6) : rgb(0xe4e4e4), edge = active ? rgb(0x6e6e6e) : rgb(0x9a9a9a);
+    round_fill((box){r.x, r.y, r.w, p->a + 8}, 5, edge, edge);
+    fill((box){r.x, r.y + p->a, r.w, r.h - p->a}, edge);
+    box shape = {r.x + 1, r.y + 1, r.w - 2, p->a + 8};
+    for (int y = r.y + 1; y < r.y + p->a - 1; y++) {
+        uint32_t c = mix(top, bottom, (float)(y - r.y - 1) / (p->a - 3));
+        for (int x = r.x + 1; x < r.x + r.w - 1; x++) {
+            float cover = covered(outside(shape, 4, x, y));
+            if (cover > 0) blend(x, y, c, cover);
+        }
+    }
+    fill((box){r.x + 1, r.y + 1, r.w - 2, 1}, with_alpha(WHITE, 0.6f));
+    fill((box){r.x + 1, r.y + p->a - 1, r.w - 2, 1}, active ? rgb(0x8a8a8a) : rgb(0xb4b4b4));
+    words(p->text, r.x + (r.w - text_width(p->text)) / 2, r.y + (p->a - line) / 2, active ? BLACK : GREY);
+}
+
+/* The three beads at the left of the title bar: red closes, amber puts
+ * away, green zooms. Behind others they are clear; under the pointer each
+ * shows what it does. */
+static void frame_button(const press_part *p, box r) {
+    static const gel_of RED = {0xfff6a096u, 0xffe2463cu, 0xffffb4a0u, 0xff8c2a22u};
+    static const gel_of AMBER = {0xfffbe08cu, 0xffe8a920u, 0xffffe9a0u, 0xff93691au};
+    static const gel_of GREEN = {0xffb8ec9cu, 0xff58bb3cu, 0xffccf5b0u, 0xff35781fu};
+    gel_of g = !has(p, PRESS_STATE_ENABLED) && !has(p, PRESS_STATE_HOT) ? CLEAR : p->a == PRESS_FRAME_CLOSE ? RED : p->a == PRESS_FRAME_MINIMIZE ? AMBER : GREEN;
+    gel(r, r.w / 2.0f, g, has(p, PRESS_STATE_HELD) ? -0.0f : 0);
+    if (has(p, PRESS_STATE_HELD))
+        round_fill(r, r.w / 2.0f, with_alpha(BLACK, 0.25f), with_alpha(BLACK, 0.25f));
+    if (has(p, PRESS_STATE_HOT)) {
+        int cx = r.x + r.w / 2, cy = r.y + r.h / 2;
+        uint32_t ink = with_alpha(BLACK, 0.65f);
+        if (p->a == PRESS_FRAME_CLOSE) {
+            for (int i = -2; i <= 2; i++) {
+                blend(cx + i, cy + i, ink, 1);
+                blend(cx - i, cy + i, ink, 1);
+            }
+        } else {
+            fill_over((box){cx - 3, cy, 7, 1}, ink);
+            if (p->a == PRESS_FRAME_ZOOM) fill_over((box){cx, cy - 3, 1, 7}, ink);
+        }
+    }
+}
+
 static int32_t draw(const press_part *p, const press_surface *surface) {
     box r = {p->x, p->y, p->width, p->height};
     on = surface;
@@ -270,6 +317,8 @@ static int32_t draw(const press_part *p, const press_surface *surface) {
         fill((box){r.x, r.y + r.h - 1, r.w, 1}, rgb(0xa5a5a5));
         break;
     case PRESS_PART_HEADER_CELL: fill((box){r.x + r.w - 1, r.y + 2, 1, r.h - 5}, rgb(0xc4c4c4)); break;
+    case PRESS_PART_FRAME: frame(p, r); break;
+    case PRESS_PART_FRAME_BUTTON: frame_button(p, r); break;
     default: return 0;
     }
     return 1;
@@ -296,6 +345,17 @@ static void metrics(press_metrics *m) {
     m->menu_bar_height = 22;
     m->menu_item_height = 18;
     m->menu_shadow = 9;
+    /* a frame of its own; its menus go to the top of the screen where a desktop has them there */
+    m->frame_title = 22;
+    m->frame_border = 1;
+    m->frame_button_width = 13;
+    m->frame_button_height = 13;
+    m->frame_button_gap = 7;
+    m->frame_button_inset = 8;
+    m->frame_button_rise = 0;
+    m->frame_left = 0x321; /* close, put away, zoom */
+    m->frame_right = 0;
+    m->menu_in_window = 0;
 }
 
 static void palette(press_palette *p) {
@@ -322,7 +382,7 @@ static int32_t typeface(uint32_t face, press_type *out) {
     return 1;
 }
 
-static const press_style style = {PRESS_STYLE_ABI, "twothousandfive", metrics, palette, draw, PRESS_WANTS_PULSE, typeface};
+static const press_style style = {PRESS_STYLE_ABI, "twothousandfive", metrics, palette, draw, PRESS_WANTS_PULSE | PRESS_WANTS_HOVER, typeface};
 
 const press_style *press_style_entry(void) {
     return &style;

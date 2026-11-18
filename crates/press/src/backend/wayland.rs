@@ -102,7 +102,7 @@ use smithay_client_toolkit::{
     shell::{
         xdg::{
             popup::{Popup, PopupConfigure, PopupHandler},
-            window::{Window, WindowConfigure, WindowDecorations, WindowHandler},
+            window::{DecorationMode, Window, WindowConfigure, WindowDecorations, WindowHandler},
             XdgPositioner, XdgShell, XdgSurface,
         },
         WaylandSurface,
@@ -292,14 +292,16 @@ impl Units {
 /// may be, in the compositor's units.
 fn limit(window: &Window, handle: Handle, units: Units) {
     // a window of one size says so by having its least and its most the same
+    // its own frame, if it has one, is part of what the compositor calls the window
+    let (l, t, r, b) = with(|rt| Ok(rt.ui.frame_insets(handle))).unwrap_or_default();
     if let Some((fw, fh)) = with(|rt| Ok(rt.ui.window_fixed_size(handle)?)).ok().flatten() {
-        let only = Some((units.out(fw) as u32, units.out(fh) as u32));
+        let only = Some((units.out(fw + l + r) as u32, units.out(fh + t + b) as u32));
         window.set_min_size(only);
         window.set_max_size(only);
         return;
     }
     let (mw, mh) = with(|rt| Ok(rt.ui.window_min_size(handle)?)).unwrap_or((64, 32));
-    window.set_min_size(Some((units.out(mw) as u32, units.out(mh) as u32)));
+    window.set_min_size(Some((units.out(mw + l + r) as u32, units.out(mh + t + b) as u32)));
 }
 
 /// Say how a buffer just drawn for these units is to be shown: at a whole
@@ -342,6 +344,11 @@ struct Surface {
     _fraction: Option<WpFractionalScaleV1>,
     /// The size the compositor gave the window, in its own (logical) units.
     size: Option<(i32, i32)>,
+    /// How far the window's own frame reaches past its content, in engine
+    /// pixels: left, top, right, bottom. Nothing where the frame is the desktop's.
+    inset: (i32, i32, i32, i32),
+    /// The compositor has made it as large as it can be.
+    zoomed: bool,
     /// Whether the window has asked the compositor to fill the screen, or
     /// been told by it that it does.
     full: bool,
@@ -423,6 +430,9 @@ struct State {
     /// Serial of the latest input event; the compositor wants one before it
     /// lets a client set the clipboard.
     serial: u32,
+    /// The seat the pointer is of, which a window being moved or made
+    /// larger by its own frame names to the compositor.
+    seat: Option<wl_seat::WlSeat>,
     data_manager: Option<DataDeviceManagerState>,
     data_device: Option<DataDevice>,
     /// Present while this application owns the clipboard, with its text.
@@ -598,6 +608,7 @@ pub fn start(wake: Arc<OwnedFd>) -> Result<Session, Status> {
         repeat_timing: Some((500, 33)),
         now: 0,
         serial: 0,
+        seat: None,
         data_manager: DataDeviceManagerState::bind(&globals, &qh).ok(),
         data_device: None,
         copy_source: None,
@@ -851,7 +862,10 @@ impl State {
                 }
                 None => {
                     let surface = self.compositor.create_surface(qh);
-                    let window = self.xdg_shell.create_window(surface, WindowDecorations::RequestServer, qh);
+                    // a window whose style has a frame of its own asks the desktop for none
+                    let inset = with(|rt| Ok(rt.ui.frame_insets(w.handle))).unwrap_or_default();
+                    let decorations = if inset.1 > 0 { WindowDecorations::RequestClient } else { WindowDecorations::RequestServer };
+                    let window = self.xdg_shell.create_window(surface, decorations, qh);
                     window.set_title(w.title.clone());
                     window.set_app_id("org.press.app");
                     // the name it is to be known by goes before anything is shown,
@@ -871,7 +885,9 @@ impl State {
                     // inactive until the compositor hands it the keyboard
                     let _ = with(|rt| Ok(rt.ui.window_set_active(w.handle, false)?));
                     // Hand the window's menus to the desktop's menu bar if it has one.
-                    let published = match (&self.appmenu_manager, &mut self.menu_bus) {
+                    // (unless its style keeps its menus in the window)
+                    let keeps_menus = with(|rt| Ok(rt.ui.menu_in_window())).unwrap_or(false);
+                    let published = match (self.appmenu_manager.as_ref().filter(|_| !keeps_menus), &mut self.menu_bus) {
                         (Some(manager), Some(bus)) => bus.name().zip(bus.serve(w.handle, self.assist.clone(), self.wake.clone())).map(|(name, published)| {
                             let address = manager.create(window.wl_surface(), qh, ());
                             address.set_address(name, published.path.clone());
@@ -901,6 +917,8 @@ impl State {
                         viewport,
                         _fraction: fraction,
                         size: None,
+                        inset,
+                        zoomed: false,
                         full,
                     });
                 }
@@ -914,22 +932,24 @@ impl State {
             while s.menus.len() > same {
                 s.menus.pop(); // dropping a popup removes it from the screen; the newest goes first
             }
-            let units = s.units;
+            let (units, inset) = (s.units, s.inset);
             for rect in want.into_iter().skip(same) {
+                // the engine measures from the corner of the content, the compositor from the frame's
+                let placed = Rect::new(rect.x + inset.0, rect.y + inset.1, rect.w, rect.h);
                 let Ok(positioner) = XdgPositioner::new(&self.xdg_shell) else { break };
                 positioner.set_size(units.out(rect.w), units.out(rect.h));
                 // the anchor has to lie inside the window; a submenu's corner may not
                 let (w, h) = s.size.unwrap_or((i32::MAX, i32::MAX));
-                let (ax, ay) = (units.at(rect.x).clamp(0, (w - 1).max(0)), units.at(rect.y).clamp(0, (h - 1).max(0)));
+                let (ax, ay) = (units.at(placed.x).clamp(0, (w - 1).max(0)), units.at(placed.y).clamp(0, (h - 1).max(0)));
                 positioner.set_anchor_rect(ax, ay, 1, 1);
-                positioner.set_offset(units.at(rect.x) - ax, units.at(rect.y) - ay);
+                positioner.set_offset(units.at(placed.x) - ax, units.at(placed.y) - ay);
                 positioner.set_anchor(Anchor::TopLeft);
                 positioner.set_gravity(Gravity::BottomRight);
                 positioner.set_constraint_adjustment(ConstraintAdjustment::SlideX | ConstraintAdjustment::SlideY);
                 match Popup::new(s.window.xdg_surface(), &positioner, qh, &self.compositor, &self.xdg_shell) {
                     Ok(popup) => {
                         let viewport = self.viewporter.as_ref().map(|v| v.get_viewport(popup.wl_surface(), qh, ()));
-                        s.menus.push(MenuSurface { popup, rect, at: (units.at(rect.x), units.at(rect.y)), buffer: None, configured: false, viewport });
+                        s.menus.push(MenuSurface { popup, rect, at: (units.at(placed.x), units.at(placed.y)), buffer: None, configured: false, viewport });
                     }
                     Err(_) => break,
                 }
@@ -955,7 +975,8 @@ impl State {
 
     fn draw(&mut self) {
         for s in self.surfaces.iter_mut().filter(|s| s.configured && s.needs_draw) {
-            let Ok(canvas) = with(|rt| Ok(rt.ui.render(s.handle)?)) else { continue };
+            let Ok(canvas) = with(|rt| Ok(rt.ui.render_framed(s.handle)?)) else { continue };
+            s.inset = with(|rt| Ok(rt.ui.frame_insets(s.handle))).unwrap_or_default();
             let (units, k) = (s.units, s.units.k);
             // The buffer is exactly the size the compositor gave the window,
             // in the screen's own pixels, even when that is not a whole
@@ -963,7 +984,8 @@ impl State {
             let size = s.size.unwrap_or((units.out(canvas.width), units.out(canvas.height)));
             let (w, h) = (units.device(size.0), units.device(size.1));
             let Ok((buffer, bytes)) = self.pool.create_buffer(w, h, w * 4, wl_shm::Format::Argb8888) else { continue };
-            magnify(bytes, w, h, &canvas, k, press_core::WHITE);
+            // beyond a frame of its own a window is see-through, as outside its corners
+            magnify(bytes, w, h, &canvas, k, if s.inset.1 > 0 { press_core::TRANSPARENT } else { press_core::WHITE });
             let surface = s.window.wl_surface();
             present(surface, s.viewport.as_ref(), units, size);
             surface.damage_buffer(0, 0, w, h);
@@ -1014,7 +1036,7 @@ impl State {
                 if let Some(m) = s.menus.iter().rev().find(|m| Rect::new(m.at.0, m.at.1, u.out(m.rect.w), u.out(m.rect.h)).contains(px, py)) {
                     return Some((s.handle, u.engine(x - m.at.0 as f64) + m.rect.x, u.engine(y - m.at.1 as f64) + m.rect.y, u));
                 }
-                return Some((s.handle, u.engine(x), u.engine(y), u));
+                return Some((s.handle, u.engine(x) - s.inset.0, u.engine(y) - s.inset.1, u));
             }
         }
         None
@@ -1088,8 +1110,8 @@ impl State {
         let window = self.ime_surface.as_ref().and_then(|s| self.handle_for(s)).filter(|w| Some(*w) == self.key_focus);
         let units = window.and_then(|w| self.surfaces.iter().find(|s| s.handle == w)).map_or(Units::whole(self.zoom, 1), |s| s.units);
         let caret = window
-            .and_then(|w| with(|rt| Ok(rt.ui.ime_target(w))).ok().flatten())
-            .map(|r| Rect::new(units.at(r.x), units.at(r.y), units.out(r.w), units.out(r.h)));
+            .and_then(|w| with(|rt| Ok(rt.ui.ime_target(w).map(|r| (r, rt.ui.frame_insets(w))))).ok().flatten())
+            .map(|(r, inset)| Rect::new(units.at(r.x + inset.0), units.at(r.y + inset.1), units.out(r.w), units.out(r.h)));
         if caret == self.ime_caret {
             return;
         }
@@ -1337,8 +1359,22 @@ impl WindowHandler for State {
             s.size = Some((w, h));
             // as many engine pixels as fit whole in the screen pixels given
             let u = s.units;
-            let _ = with(|rt| Ok(rt.ui.window_resize(s.handle, u.device(w) / u.k, u.device(h) / u.k)?));
+            let (l, t, r, b) = with(|rt| Ok(rt.ui.frame_insets(s.handle))).unwrap_or_default();
+            let _ = with(|rt| Ok(rt.ui.window_resize(s.handle, (u.device(w) / u.k - l - r).max(1), (u.device(h) / u.k - t - b).max(1))?));
         }
+        // a desktop that will draw the frame whatever it is asked is let: one frame is enough
+        if configure.decoration_mode == DecorationMode::Server && s.inset.1 > 0 {
+            let _ = with(|rt| {
+                rt.ui.set_own_frames(false);
+                Ok(())
+            });
+            s.inset = (0, 0, 0, 0);
+        }
+        s.zoomed = configure.is_maximized();
+        let _ = with(|rt| {
+            rt.ui.window_set_zoomed(s.handle, s.zoomed);
+            Ok(())
+        });
         // whether it fills the screen is the compositor's to say, whatever was asked
         s.full = configure.is_fullscreen();
         self.pending.push(Pending::FullScreen { window: s.handle, on: s.full });
@@ -1426,7 +1462,52 @@ impl PointerHandler for State {
                 PointerEventKind::Release { button: BTN_LEFT, .. } => PointerKind::Release,
                 _ => continue,
             };
+            // a window with a frame of its own: the frame has first refusal
+            let framed = self.surfaces.iter().find(|s| s.handle == window && s.window.wl_surface() == &event.surface).map(|s| s.inset).filter(|inset| inset.1 > 0);
+            if let Some(inset) = framed {
+                match with(|rt| Ok(rt.ui.frame_pointer(window, x + inset.0, y + inset.1, kind))) {
+                    Ok(press_core::FrameAct::Inside(..)) | Err(_) => {}
+                    Ok(act) => {
+                        self.frame_act(window, act);
+                        continue;
+                    }
+                }
+            }
             self.pending.push(Pending::Pointer { window, x, y, kind });
+        }
+    }
+}
+
+impl State {
+    /// Do what the user asked of a window by its own frame.
+    fn frame_act(&mut self, window: Handle, act: press_core::FrameAct) {
+        use press_core::FrameAct;
+        use smithay_client_toolkit::reexports::protocols::xdg::shell::client::xdg_toplevel::ResizeEdge;
+        let Some(s) = self.surfaces.iter_mut().find(|s| s.handle == window) else { return };
+        s.needs_draw = true;
+        let toplevel = s.window.xdg_toplevel();
+        match (act, &self.seat) {
+            // the serial of the press shows the compositor it is the user's doing
+            (FrameAct::Move, Some(seat)) => toplevel._move(seat, self.serial),
+            (FrameAct::Resize { left, right, top, bottom }, Some(seat)) => {
+                let edge = match (left, right, top, bottom) {
+                    (true, _, true, _) => ResizeEdge::TopLeft,
+                    (_, true, true, _) => ResizeEdge::TopRight,
+                    (true, _, _, true) => ResizeEdge::BottomLeft,
+                    (_, true, _, true) => ResizeEdge::BottomRight,
+                    (true, ..) => ResizeEdge::Left,
+                    (_, true, ..) => ResizeEdge::Right,
+                    (_, _, true, _) => ResizeEdge::Top,
+                    _ => ResizeEdge::Bottom,
+                };
+                toplevel.resize(seat, self.serial, edge);
+            }
+            (FrameAct::Close, _) => self.pending.push(Pending::Close { window }),
+            (FrameAct::Minimize, _) => s.window.set_minimized(),
+            (FrameAct::Zoom, _) => {
+                if s.zoomed { s.window.unset_maximized() } else { s.window.set_maximized() }
+            }
+            _ => {}
         }
     }
 }
@@ -1437,6 +1518,7 @@ impl SeatHandler for State {
     }
     fn new_seat(&mut self, _: &Connection, _: &QueueHandle<Self>, _: wl_seat::WlSeat) {}
     fn new_capability(&mut self, _: &Connection, qh: &QueueHandle<Self>, seat: wl_seat::WlSeat, capability: Capability) {
+        self.seat.get_or_insert_with(|| seat.clone());
         if self.data_device.is_none() {
             self.data_device = self.data_manager.as_ref().map(|m| m.get_data_device(qh, &seat));
         }
@@ -1804,7 +1886,8 @@ impl State {
         s.menus.clear(); // they were sized for the old scale, and are hung again
         limit(&s.window, s.handle, units);
         if let Some((w, h)) = s.size {
-            let _ = with(|rt| Ok(rt.ui.window_resize(s.handle, units.device(w) / units.k, units.device(h) / units.k)?));
+            let (l, t, r, b) = with(|rt| Ok(rt.ui.frame_insets(s.handle))).unwrap_or_default();
+            let _ = with(|rt| Ok(rt.ui.window_resize(s.handle, (units.device(w) / units.k - l - r).max(1), (units.device(h) / units.k - t - b).max(1))?));
         }
         self.cursor_shown = None;
     }

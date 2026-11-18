@@ -162,6 +162,9 @@ pub fn init() -> Result<(), Status> {
             if let Some(style) = crate::style::choose() {
                 ui.set_style(style);
             }
+            // a style with a frame of its own has windows draw theirs, unless
+            // the user would have every frame be the desktop's
+            ui.set_own_frames(std::env::var("PRESS_FRAME").map_or(true, |v| v != "desktop"));
             *slot = Some(Runtime {
                 ui,
                 callbacks: HashMap::new(),

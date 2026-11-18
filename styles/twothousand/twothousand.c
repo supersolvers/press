@@ -21,6 +21,9 @@
 #define DARK 0xff404040u   /* the outer shade is not quite black */
 #define NAVY 0xff0a246au   /* what is selected */
 #define STYLE_SMOOTH_TYPE 1
+/* The title bar's blue runs out to a pale one at the right, and its grey to silver. */
+#define STYLE_TITLE_FADE 0xffa6caf0u
+#define STYLE_TITLE_FADE_IDLE 0xffc0c0c0u
 
 /* Rows and menus a little taller, for type that is. */
 #define STYLE_METRICS(m) \

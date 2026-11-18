@@ -345,6 +345,48 @@ public protocol App {
     associatedtype Body: Scene
     @SceneBuilder var body: Body { get }
     init()
+    /// How the program looks: its controls, its type, its windows' frames
+    /// and where its menus are. A program that says nothing looks as the
+    /// desktop it is on would have it.
+    ///
+    ///     static var style: Style { .twoThousandOne }
+    static var style: Style { get }
+}
+
+/// A look for a program: one of the styles that come with PRESS, or
+/// another by its name or the path of its library.
+///
+/// A style with a frame of its own has the program's windows draw their
+/// title bars and edges themselves, on any desktop that will let them, so
+/// the whole window is the program's. `PRESS_STYLE` in the program's
+/// environment, which is the user saying otherwise for one run, takes the
+/// place of what the program says.
+public struct Style: Hashable, Sendable {
+    /// The name the style is looked for by; nil for the desktop's choice.
+    public let name: String?
+
+    /// A style by its name (looked for as `libpress_style_NAME.so` where
+    /// styles are kept) or by the path of its library.
+    public static func named(_ name: String) -> Style { Style(name: name) }
+
+    /// Whatever the desktop has chosen for every program.
+    public static let desktop = Style(name: nil)
+    /// Black and white, in the manner of the first Macintosh.
+    public static let oneBit = Style(name: "one-bit")
+    /// Grey and bevelled, in the manner of the middle 1990s.
+    public static let ninetyFive = Style(name: "ninetyfive")
+    /// Platinum, in the manner of the end of the 1990s.
+    public static let ninetyNine = Style(name: "ninetynine")
+    /// In the manner of 2000: Ninety-Five in a warmer grey, with smooth type.
+    public static let twoThousand = Style(name: "twothousand")
+    /// In the manner of 2001: rounded, shaded, blue.
+    public static let twoThousandOne = Style(name: "twothousandone")
+    /// In the manner of 2005: gel, stripes and soft shadows.
+    public static let twoThousandFive = Style(name: "twothousandfive")
+}
+
+extension App {
+    public static var style: Style { .desktop }
 }
 
 extension App {
@@ -449,6 +491,10 @@ extension Runtime {
     func run<A: App>(_ type: A.Type) {
         do {
             try PressCore.App.initialize()
+            if let name = type.style.name {
+                // a style that cannot be had is said so by the engine, and the program looks as it did
+                try? PressCore.App.setStyle(name)
+            }
             let host = AppHost(A())
             launch(host)
             // For looking at a program without a screen: draw the first

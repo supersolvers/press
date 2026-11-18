@@ -32,7 +32,7 @@ extern "C" {
 #endif
 
 /* The version of this interface, for press_style.abi. */
-#define PRESS_STYLE_ABI 2
+#define PRESS_STYLE_ABI 3
 
 /* Sizes, in pixels. */
 typedef struct press_metrics {
@@ -57,7 +57,28 @@ typedef struct press_metrics {
     int32_t menu_bar_height;  /* a window's menu bar, the rule under it included */
     int32_t menu_item_height;
     int32_t menu_shadow;      /* room kept right of a menu and below it for its shadow */
+    /* from version 3: a window's own frame. With frame_title nothing, the
+     * frame is left to the desktop the program is on. */
+    int32_t frame_title;      /* height of the title bar, its top edge included */
+    int32_t frame_border;     /* thickness of the frame along the sides and the bottom */
+    int32_t frame_button_width;
+    int32_t frame_button_height;
+    int32_t frame_button_gap;   /* between two buttons */
+    int32_t frame_button_inset; /* from the side of the frame to the first button */
+    int32_t frame_button_rise;  /* how far below the middle of the title bar they sit */
+    int32_t frame_left;       /* the buttons at the left of the title bar and at the right: */
+    int32_t frame_right;      /* four bits each, the one nearest the side of the frame lowest.
+                                 PRESS_FRAME_CLOSE, _MINIMIZE, _ZOOM: 0x231 at the right is
+                                 minimize, zoom, close as read from the left */
+    int32_t menu_in_window;   /* not 0: the menu bar stays in the window on every desktop */
 } press_metrics;
+
+/* The buttons of a title bar. */
+enum {
+    PRESS_FRAME_CLOSE = 1,
+    PRESS_FRAME_MINIMIZE = 2,
+    PRESS_FRAME_ZOOM = 3
+};
 
 /* Colours, as 0xAARRGGBB. The engine draws words and small marks itself,
  * in these. */
@@ -102,7 +123,16 @@ enum {
     PRESS_PART_MENU_SEPARATOR = 19, /* a dividing line, in the room of one item */
     PRESS_PART_VIEW_FRAME = 20,     /* the box round a scroll view */
     PRESS_PART_HEADER = 21,         /* the row of headings over a table, before the headings */
-    PRESS_PART_HEADER_CELL = 22     /* one heading, before its words */
+    PRESS_PART_HEADER_CELL = 22,    /* one heading, before its words */
+    PRESS_PART_FRAME = 23,          /* the frame of a window that draws its own: the title bar with
+                                       the title, and the edges. The rectangle is the whole window,
+                                       see-through until drawn on (leave its corners so to round
+                                       them); the content is laid over the middle afterwards.
+                                       a: the title bar's height; b: the edges' thickness.
+                                       ENABLED for the window in front; CHECKED for one made as
+                                       large as it can be */
+    PRESS_PART_FRAME_BUTTON = 24    /* a button in a title bar. a: PRESS_FRAME_CLOSE and so on.
+                                       HOT, HELD; ENABLED and CHECKED as for the frame */
 };
 
 /* States, added together in press_part.state. */

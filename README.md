@@ -24,6 +24,8 @@ import Press
 
 @main
 struct Hello: App {
+    static var style: Style { .twoThousandOne }
+
     var body: some Scene {
         WindowGroup("Hello") {
             Text("Hello from PRESS.").padding(16)
@@ -31,6 +33,13 @@ struct Hello: App {
     }
 }
 ```
+
+The program says how it looks, and that is how it looks wherever it is
+run: its controls, its type, the frame and title bar of its windows, and
+where its menus are. A program that says nothing looks as the desktop it
+is on would have it.
+
+![The same dialog as five programs, each in a style of its own, frame and all](docs/frames.png)
 
 There are three layers, and each can be used without the one above it:
 
@@ -162,6 +171,9 @@ The engine knows what a button is: where it is, what it says, whether the
 pointer is down on it. A style knows what a button looks like. The engine
 asks the style in use for these things:
 
+- whether its windows have **frames of their own**, how tall the title
+  bar is and how thick the edges, which buttons the title bar has and at
+  which end, and whether the menu bar stays in the window;
 - its **sizes**: how tall a button is, how large a checkbox, how far a text
   field's words stand from its edge, how thick a scroll bar is, how tall a
   row of a list, a tab, a menu's items and the menu bar are, and how much
@@ -176,7 +188,7 @@ asks the style in use for these things:
 - and, each time a window is drawn, to **draw each part** of it: a button
   with its label, the well round a list, a scroll bar, a tab, a menu's
   frame and shadow, the mark of what is selected, the look of what is out
-  of use.
+  of use, a window's title bar and the buttons in it.
 
 Whatever a style does not draw is drawn in black and white, so a style can
 be written a part at a time and is never left with holes in it.
@@ -198,6 +210,7 @@ written as to be worn:
 | ![A table, tabs and progress bars in Ninety-Five](docs/ninetyfive.png) | ![The same in Two Thousand and One](docs/twothousandone.png) |
 | ![The same in Two Thousand and Five](docs/twothousandfive.png) | ![Menus in Two Thousand and Five](docs/twothousandfive-menus.png) |
 | ![The same in Ninety-Nine](docs/ninetynine.png) | ![Menus in Ninety-Nine](docs/ninetynine-menus.png) |
+| ![Menus in Two Thousand and One](docs/twothousandone-menus.png) | |
 | ![The same in Two Thousand](docs/twothousand.png) | |
 
 They are drawn here from nothing, in the manner of what they recall: no
@@ -206,12 +219,38 @@ type they ask for the faces those desktops had, where the machine happens
 to have them, and take the nearest thing fontconfig offers where it does
 not (DejaVu Sans, on most).
 
-**Choosing one.** `PRESS_STYLE=ninetyfive` in a program's environment
-dresses that program; the first line of `~/.config/press/style` dresses
-every program that has no such variable. Either is a name or the path of
-a library. With neither, or `one-bit`, the interface is black and white. A
-style that cannot be loaded is said so once on standard error, and the
-program runs in black and white.
+**Choosing one.** A program chooses for itself: in Press, `static var
+style: Style` on its `App` (`.ninetyFive`, `.ninetyNine`, `.twoThousand`,
+`.twoThousandOne`, `.twoThousandFive`, `.oneBit`, or `.named("...")` for
+any other); in C, `press_app_set_style` after `press_app_init`, and
+`App.set_style` in Python. A program that does not choose wears what the
+desktop has chosen for every program, which is the first line of
+`~/.config/press/style`, and failing that black and white. The user has
+the last word for one run: `PRESS_STYLE=ninetyfive` in a program's
+environment dresses it so whatever it or the desktop says. Each of these
+is a name or the path of a library. A style that cannot be loaded is said
+so once on standard error, and the program looks as it did.
+
+**Windows with frames of their own.** A style may have a frame: the five
+that come as libraries all do. A program wearing one draws its windows
+whole, title bar, edges, buttons and all, and asks the desktop to draw
+nothing round them. Dragging the title bar moves the window, dragging an
+edge or a corner changes its size, the buttons close it, put it away and
+zoom it, and so does a double click on the title bar. Black and white has
+no frame of its own: its windows wear the desktop's.
+
+![Three windows on a Wayland desktop. One uses the desktop frame and two draw their own](docs/styles-on-ode.png)
+
+This works on any Wayland desktop that lets a program draw its own frame. A desktop that insists on drawing the
+frame is let, and the window is then content alone. `PRESS_FRAME=desktop`
+in a program's environment asks for that everywhere.
+
+A style also says whether its menus stay in the window. Those in the
+manner of desktops that kept them there do (Ninety-Five, Two Thousand, Two
+Thousand and One); those in the manner of desktops with one menu bar
+across the top of the screen (Ninety-Nine, Two Thousand and Five, and
+black and white) hand their menus to a desktop that has such a bar, and
+keep them in the window where there is none.
 
 **Writing one.** A style is a shared library named
 `libpress_style_NAME.so` that exports one function, `press_style_entry`,
@@ -226,8 +265,8 @@ five. A style is looked for in the folders named in `PRESS_STYLE_PATH`, in
 `~/.local/lib/press/styles`, and in `/usr/local/lib/press/styles` and
 `/usr/lib/press/styles`.
 
-The interface is at its second version. A style made for the first is
-still worn as it was written.
+The interface is at its third version. A style made for an earlier one is
+still worn as it was written, in the desktop's frame.
 
 A Rust program that embeds the engine can dress it directly:
 `press_core::Style` is the same interface as a trait, and
@@ -235,10 +274,13 @@ A Rust program that embeds the engine can dress it directly:
 
 **What a style does not decide yet.**
 
-- A window's frame and title bar, which belong to the desktop it is on:
-- The manners that go with a look: where the menu bar is, which way round
-  OK and Cancel go, which key is the command key, where a scroll bar keeps
-  its arrows.
+- The rest of the manners that go with a look: which way round OK and
+  Cancel go, which key is the command key, where a scroll bar keeps its
+  arrows. Where the menu bar is, and where the title bar keeps its
+  buttons, it does decide.
+- A window's shadow, and the pointer's shape over the edges of a frame.
+- Toolbars, status bars, group boxes, tooltips, and pictures in colour on
+  buttons and in lists: the engine has none of these yet, in any style.
 - A few sizes: the room round a menu's words and a tab's, the cell of an
   icon view, the border of a menu, which is one pixel.
 - Smooth things are drawn a pixel to a pixel and then magnified whole, so

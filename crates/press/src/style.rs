@@ -14,10 +14,10 @@ use std::ffi::{c_char, c_void, CStr, CString};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-/// The version of the interface below. A library made for the first
+/// The version of the interface below. A library made for an earlier
 /// version is still worn, as it was written; one made for any other but
 /// these is not used.
-pub const ABI: u32 = 2;
+pub const ABI: u32 = 3;
 
 /// A part to draw, as a style library is handed it. See
 /// [`press_core::PartKind`] for what the numbers mean for each kind.
@@ -157,6 +157,16 @@ impl Style for Foreign {
             menu_bar_height: m.menu_bar_height.clamp(8, 128),
             menu_item_height: m.menu_item_height.clamp(8, 128),
             menu_shadow: m.menu_shadow.clamp(0, 32),
+            frame_title: if self.raw.abi >= 3 { m.frame_title.clamp(0, 96) } else { 0 },
+            frame_border: m.frame_border.clamp(0, 32),
+            frame_button_width: m.frame_button_width.clamp(0, 96),
+            frame_button_height: m.frame_button_height.clamp(0, 96),
+            frame_button_gap: m.frame_button_gap.clamp(0, 64),
+            frame_button_inset: m.frame_button_inset.clamp(0, 64),
+            frame_button_rise: m.frame_button_rise.clamp(-32, 32),
+            frame_left: m.frame_left & 0xffff,
+            frame_right: m.frame_right & 0xffff,
+            menu_in_window: i32::from(self.raw.abi >= 3 && m.menu_in_window != 0),
         }
     }
 
@@ -289,18 +299,31 @@ fn chosen() -> Option<String> {
     text.lines().next().map(|l| l.trim().to_string())
 }
 
+/// A style by its name, or by the path of its library.
+pub fn named(named: &str) -> Result<Arc<dyn Style>, String> {
+    if named == "one-bit" {
+        return Ok(Arc::new(press_core::OneBit));
+    }
+    if named.contains('/') {
+        return load(Path::new(named));
+    }
+    let file = format!("libpress_style_{named}.so");
+    match folders().into_iter().map(|d| d.join(&file)).find(|p| p.is_file()) {
+        Some(path) => load(&path),
+        None => Err("no library of that name was found".into()),
+    }
+}
+
+/// Whether the user has said, for this run, which style to wear: that is
+/// not for the program to change.
+pub fn fixed_by_user() -> bool {
+    std::env::var_os("PRESS_STYLE").is_some()
+}
+
 /// The style the interface should wear, if not the one it was born with.
 pub fn choose() -> Option<Arc<dyn Style>> {
     let named = chosen().filter(|n| !n.is_empty() && n != "one-bit")?;
-    let found = if named.contains('/') {
-        load(Path::new(&named))
-    } else {
-        let file = format!("libpress_style_{named}.so");
-        match folders().into_iter().map(|d| d.join(&file)).find(|p| p.is_file()) {
-            Some(path) => load(&path),
-            None => Err("no library of that name was found".into()),
-        }
-    };
+    let found = self::named(&named);
     match found {
         Ok(style) => Some(style),
         Err(why) => {

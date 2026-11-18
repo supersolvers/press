@@ -222,6 +222,74 @@ static void popup(const press_part *p, box r) {
     arrow(drop.x + drop.w / 2, drop.y + drop.h / 2, 4, 1, SKY_INK);
 }
 
+/* A window's frame: blue, deep at the edges and light along the top of
+ * the title bar, with the top corners rounded off and the title in white.
+ * Behind others it is paler. */
+static void frame(const press_part *p, box r) {
+    int active = has(p, PRESS_STATE_ENABLED), line = line_height();
+    uint32_t deep = active ? rgb(0x0a3fcf) : rgb(0x7a8fd0), mid = active ? rgb(0x0f62e8) : rgb(0x8ba3e0), high = active ? rgb(0x4d9bff) : rgb(0xa9bdf0);
+    /* the whole shape, rounded at the top only */
+    round_fill((box){r.x, r.y, r.w, p->a + 8}, 7, deep, deep);
+    fill((box){r.x, r.y + p->a, r.w, r.h - p->a}, deep);
+    box bar = {r.x + 1, r.y + 1, r.w - 2, p->a - 1};
+    for (int y = 0; y < bar.h; y++) {
+        float t = (float)y / (bar.h - 1);
+        uint32_t c = t < 0.12f ? mix(high, mid, t / 0.12f) : t < 0.85f ? mix(mid, mix(mid, deep, 0.35f), (t - 0.12f) / 0.73f) : mix(mix(mid, deep, 0.35f), deep, (t - 0.85f) / 0.15f);
+        for (int x = bar.x; x < bar.x + bar.w; x++) {
+            float cover = covered(outside((box){r.x + 1, r.y + 1, r.w - 2, p->a + 8}, 6, x, bar.y + y));
+            if (cover > 0) blend(x, bar.y + y, c, cover);
+        }
+    }
+    /* the edges: a lighter line just inside the dark one */
+    fill((box){r.x + 1, r.y + p->a, 1, r.h - p->a - 1}, mid);
+    fill((box){r.x + r.w - 2, r.y + p->a, 1, r.h - p->a - 1}, mid);
+    fill((box){r.x + 1, r.y + r.h - 2, r.w - 2, 1}, mid);
+    int ty = r.y + (p->a - line) / 2 + 1;
+    words(p->text, r.x + 9, ty + 1, with_alpha(rgb(0x0a1883), active ? 0.9f : 0.3f));
+    words(p->text, r.x + 8, ty, active ? WHITE : rgb(0xd8e4f8));
+}
+
+/* The buttons at the right of the title bar: squares of blue gel with a
+ * white sign, and the one that closes red. */
+static void frame_button(const press_part *p, box r) {
+    int active = has(p, PRESS_STATE_ENABLED), held = has(p, PRESS_STATE_HELD), hot = has(p, PRESS_STATE_HOT);
+    uint32_t top, bottom;
+    if (p->a == PRESS_FRAME_CLOSE) {
+        top = held ? rgb(0xa8301c) : hot ? rgb(0xf28a72) : rgb(0xe8674b);
+        bottom = held ? rgb(0xc8432a) : rgb(0xc03418);
+    } else {
+        top = held ? rgb(0x1c3fb0) : hot ? rgb(0x7fb2ff) : rgb(0x4d8cf5);
+        bottom = held ? rgb(0x2f5fd8) : rgb(0x1c50c8);
+    }
+    if (!active) {
+        top = mix(top, rgb(0xb8c4e8), 0.55f);
+        bottom = mix(bottom, rgb(0xb8c4e8), 0.55f);
+    }
+    round_box(r, 3, top, bottom, WHITE);
+    int cx = r.x + r.w / 2, cy = r.y + r.h / 2;
+    switch (p->a) {
+    case PRESS_FRAME_CLOSE:
+        for (int i = -4; i <= 4; i++) {
+            fill((box){cx + i - 1, cy + i, 3, 1}, WHITE);
+            fill((box){cx - i - 1, cy + i, 3, 1}, WHITE);
+        }
+        break;
+    case PRESS_FRAME_MINIMIZE: fill((box){cx - 5, cy + 3, 8, 3}, WHITE); break;
+    default:
+        if (has(p, PRESS_STATE_CHECKED)) {
+            outline((box){cx - 2, cy - 5, 8, 7}, WHITE);
+            fill((box){cx - 2, cy - 5, 8, 2}, WHITE);
+            fill((box){cx - 5, cy - 1, 8, 7}, bottom);
+            outline((box){cx - 5, cy - 1, 8, 7}, WHITE);
+            fill((box){cx - 5, cy - 1, 8, 2}, WHITE);
+        } else {
+            outline((box){cx - 5, cy - 5, 11, 11}, WHITE);
+            fill((box){cx - 5, cy - 5, 11, 3}, WHITE);
+        }
+        break;
+    }
+}
+
 static int32_t draw(const press_part *p, const press_surface *surface) {
     box r = {p->x, p->y, p->width, p->height};
     on = surface;
@@ -275,6 +343,8 @@ static int32_t draw(const press_part *p, const press_surface *surface) {
         fill((box){r.x + r.w - 2, r.y + 3, 1, r.h - 7}, rgb(0xc7c5b2));
         fill((box){r.x + r.w - 1, r.y + 3, 1, r.h - 7}, WHITE);
         break;
+    case PRESS_PART_FRAME: frame(p, r); break;
+    case PRESS_PART_FRAME_BUTTON: frame_button(p, r); break;
     default: return 0;
     }
     return 1;
@@ -301,6 +371,17 @@ static void metrics(press_metrics *m) {
     m->menu_bar_height = 20;
     m->menu_item_height = 19;
     m->menu_shadow = 4;
+    /* a frame of its own, with its menus in it */
+    m->frame_title = 29;
+    m->frame_border = 4;
+    m->frame_button_width = 21;
+    m->frame_button_height = 21;
+    m->frame_button_gap = 2;
+    m->frame_button_inset = 6;
+    m->frame_button_rise = 1;
+    m->frame_left = 0;
+    m->frame_right = 0x231; /* put away, make large, close */
+    m->menu_in_window = 1;
 }
 
 static void palette(press_palette *p) {

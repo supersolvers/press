@@ -90,6 +90,20 @@ pub fn app_shutdown() -> Result {
     Ok(())
 }
 
+pub fn app_set_style(name: &str) -> Result {
+    if crate::style::fixed_by_user() {
+        return Ok(()); // the user has said otherwise for this run
+    }
+    let style = crate::style::named(name.trim()).map_err(|why| {
+        eprintln!("press: the style \"{name}\" is not in use: {why}");
+        Status::InvalidArgument
+    })?;
+    with(|rt| {
+        rt.ui.set_style(style);
+        Ok(())
+    })
+}
+
 pub fn app_abi_version() -> Result<u32> {
     Ok(ABI_VERSION)
 }
@@ -207,19 +221,22 @@ pub fn window_snapshot(this: Handle, path: &str, scale: i32) -> Result {
         return Err(Status::InvalidArgument);
     }
     let canvas = with(|rt| {
-        let window = rt.ui.render(this)?;
+        // with its own frame, if it has one: the picture is of the window as it is shown
+        let window = rt.ui.render_framed(this)?;
+        let (left, top, ..) = rt.ui.frame_insets(this);
         // an open menu hangs over the window and may reach past its edges
         let popups = rt.ui.popups(this);
-        if popups.is_empty() {
+        if popups.is_empty() && top == 0 {
             return Ok(window);
         }
-        let right = popups.iter().map(|p| p.rect.x + p.rect.w).max().unwrap_or(0);
-        let bottom = popups.iter().map(|p| p.rect.y + p.rect.h).max().unwrap_or(0);
+        let right = popups.iter().map(|p| left + p.rect.x + p.rect.w).max().unwrap_or(0);
+        let bottom = popups.iter().map(|p| top + p.rect.y + p.rect.h).max().unwrap_or(0);
+        // on white, which shows through where a frame's corners are rounded off
         let mut whole = press_core::Canvas::new(window.width.max(right), window.height.max(bottom));
         whole.blit(&window, 0, 0);
         for (index, at) in popups.iter().enumerate() {
             if let Some(menu) = rt.ui.render_popup(this, index) {
-                whole.blit(&menu, at.rect.x, at.rect.y);
+                whole.blit(&menu, left + at.rect.x, top + at.rect.y);
             }
         }
         Ok(whole)

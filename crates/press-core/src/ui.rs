@@ -25,6 +25,8 @@ mod controls;
 mod dnd;
 pub use dnd::settle_copies;
 mod field;
+mod frame;
+pub use frame::FrameAct;
 mod list;
 mod menu;
 mod more;
@@ -376,6 +378,16 @@ pub struct Ui {
     painting: Option<Handle>,
     /// The throb of a default button last drawn.
     pulse: u64,
+    /// Windows draw their own frames, where the style has one.
+    own_frames: bool,
+    /// The button of a title bar the pointer is over, and the one it went
+    /// down on: the window, and which button.
+    frame_hot: Option<(Handle, u8)>,
+    frame_held: Option<(Handle, u8)>,
+    /// When and where a title bar was last clicked, to know a double click.
+    frame_click: (u64, i32, i32),
+    /// The windows that have been made as large as they can be.
+    zoomed: Vec<Handle>,
     font: Font,
     /// The typefaces not being worn just now, kept with what they have
     /// already drawn, and the one that is (`font`).
@@ -2926,5 +2938,73 @@ mod style_tests {
         canvas.set(1, 0, crate::canvas::TRANSPARENT);
         canvas.blend(1, 0, BLACK, 64);
         assert_eq!(canvas.get(1, 0), 64 << 24);
+    }
+
+    /// A style with a frame of its own: a title bar with a button at each end.
+    struct Framed;
+
+    impl Style for Framed {
+        fn name(&self) -> &str {
+            "framed"
+        }
+        fn metrics(&self) -> Metrics {
+            Metrics { frame_title: 20, frame_border: 3, frame_button_width: 12, frame_button_height: 12, frame_button_inset: 5, frame_left: 0x1, frame_right: 0x3, menu_in_window: 1, ..OneBit::METRICS }
+        }
+        fn palette(&self) -> Palette {
+            OneBit::PALETTE
+        }
+        fn draw(&self, _: &Part, _: &mut Painter) -> bool {
+            false
+        }
+    }
+
+    #[test]
+    fn a_window_draws_its_own_frame_where_the_style_has_one_and_the_display_can_show_it() {
+        let mut ui = Ui::natural();
+        let (window, _) = dialog(&mut ui);
+        ui.set_style(std::sync::Arc::new(Framed));
+        // until a display says it can show such a window, the frame is the desktop's
+        assert_eq!(ui.frame_insets(window), (0, 0, 0, 0));
+        assert_eq!(ui.render_framed(window).unwrap().width, 200);
+        ui.set_own_frames(true);
+        assert_eq!(ui.frame_insets(window), (3, 20, 3, 3));
+        assert!(ui.menu_in_window());
+        let canvas = ui.render_framed(window).unwrap();
+        assert_eq!((canvas.width, canvas.height), (206, 123));
+        // the content is where it was, further in by the frame
+        let content = ui.render(window).unwrap();
+        assert_eq!(canvas.get(3 + 50, 20 + 50), content.get(50, 50));
+        // black and white has no frame of its own
+        ui.set_style(std::sync::Arc::new(OneBit));
+        assert_eq!(ui.frame_insets(window), (0, 0, 0, 0));
+    }
+
+    #[test]
+    fn a_frame_is_moved_by_its_title_closed_by_its_box_and_stretched_by_its_edges() {
+        let mut ui = Ui::natural();
+        let (window, button) = dialog(&mut ui);
+        ui.set_style(std::sync::Arc::new(Framed));
+        ui.set_own_frames(true);
+        ui.render_framed(window).unwrap();
+        // in the content, a point is the content's, measured from its corner
+        assert_eq!(ui.frame_pointer(window, 3 + 10, 20 + 10, PointerKind::Move), FrameAct::Inside(10, 10));
+        // the title bar takes hold of the window; twice on it zooms
+        assert_eq!(ui.frame_pointer(window, 100, 10, PointerKind::Press), FrameAct::Move);
+        assert_eq!(ui.frame_pointer(window, 100, 10, PointerKind::Press), FrameAct::Zoom);
+        // the close box is at the left, and acts when let go on it
+        let (which, close) = ui.frame_buttons(window)[0];
+        assert_eq!((which, close.x), (frame::CLOSE, 5));
+        assert_eq!(ui.frame_pointer(window, close.x + 2, close.y + 2, PointerKind::Press), FrameAct::Nothing);
+        assert_eq!(ui.frame_pointer(window, close.x + 2, close.y + 2, PointerKind::Release), FrameAct::Close);
+        // let go elsewhere, it does nothing
+        ui.frame_pointer(window, close.x + 2, close.y + 2, PointerKind::Press);
+        assert_eq!(ui.frame_pointer(window, 100, 60, PointerKind::Release), FrameAct::Nothing);
+        // the bottom right corner stretches both ways, the right edge one
+        assert_eq!(ui.frame_pointer(window, 205, 122, PointerKind::Press), FrameAct::Resize { left: false, right: true, top: false, bottom: true });
+        assert_eq!(ui.frame_pointer(window, 205, 60, PointerKind::Press), FrameAct::Resize { left: false, right: true, top: false, bottom: false });
+        // a press that began on a button in the content stays the content's when it strays over the frame
+        let r = ui.nodes.get(button).unwrap().rect;
+        ui.pointer(window, r.x + 2, r.y + 2, PointerKind::Press).unwrap();
+        assert!(matches!(ui.frame_pointer(window, 100, 10, PointerKind::Move), FrameAct::Inside(..)));
     }
 }

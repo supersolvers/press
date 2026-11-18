@@ -227,6 +227,9 @@ PRESS_API press_status_t press_app_shutdown(void);
 /** The ABI version of the loaded library. */
 PRESS_API press_status_t press_app_abi_version(uint32_t *out);
 
+/** Choose how the program looks: the name of a style (ninetyfive, say, looked for as libpress_style_ninetyfive.so where styles are kept), the path of a style's library, or one-bit for black and white. A style with a frame of its own has the program's windows draw their title bars and edges themselves, and one that keeps its menus in the window keeps them there on any desktop. Call it after init and before making windows. It takes the place of the desktop's choice of style; PRESS_STYLE in the program's environment, which is the user saying otherwise for one run, takes the place of this. A style that cannot be had is refused with INVALID_ARGUMENT, and the program looks as it did. */
+PRESS_API press_status_t press_app_set_style(const char *name, size_t name_len);
+
 /* ---- Widget: Base of everything that can be placed in a window, menus included. Its functions accept any handle. */
 
 /** Destroy the widget and everything inside it. Its handle becomes invalid. */
