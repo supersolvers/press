@@ -286,6 +286,8 @@ static void palette(press_palette *p) {
     p->ink = WHITE;
     p->menu = WHITE;
     p->menu_text = BLUE;
+    p->pointer = 0xffee4400u; /* the arrow is red, edged in black */
+    p->pointer_edge = 0xff000000u;
 }
 
 /* That machine wrote in one face with every letter the same width: the

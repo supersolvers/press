@@ -1152,7 +1152,7 @@ impl State {
         if self.cursor_shown == Some((cursor, units)) {
             return;
         }
-        let image = cursor.image();
+        let Ok(image) = with(|rt| Ok(rt.ui.cursor_image(cursor))) else { return };
         let (canvas, size) = units.fitted(image.canvas.scaled(units.k));
         let (w, h) = (canvas.width, canvas.height);
         let Ok((buffer, bytes)) = self.pool.create_buffer(w, h, w * 4, wl_shm::Format::Argb8888) else { return };

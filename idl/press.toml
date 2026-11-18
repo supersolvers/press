@@ -958,6 +958,16 @@ doc = "A white box of a size the program chooses, for the program to draw on wit
   args = [{ name = "x", type = "i32" }, { name = "y", type = "i32" }, { name = "width", type = "i32" }, { name = "height", type = "i32" }, { name = "bits", type = "bytes" }]
 
   [[class.method]]
+  name = "set_color"
+  doc = "Draw what follows in a colour, 0xRRGGBB: lines, boxes outlined and filled, and words. A picture draws in black until told otherwise, and again once it is cleared."
+  args = [{ name = "rgb", type = "u32" }]
+
+  [[class.method]]
+  name = "fill_color"
+  doc = "Fill a box with one colour, 0xRRGGBB. It covers what was there, as fill does; lines, boxes and words lie on it wherever in the order they were drawn."
+  args = [{ name = "x", type = "i32" }, { name = "y", type = "i32" }, { name = "width", type = "i32" }, { name = "height", type = "i32" }, { name = "rgb", type = "u32" }]
+
+  [[class.method]]
   name = "photo"
   doc = "Lay down a picture in colour with its top left corner at a point: `rgb` is rows of `width` pixels, three bytes each, red, green and blue. press is black and white, and this is its one exception, for what is a photograph by nature, such as a camera's picture; offer it in black and white too. It covers what was there, as image does."
   args = [{ name = "x", type = "i32" }, { name = "y", type = "i32" }, { name = "width", type = "i32" }, { name = "height", type = "i32" }, { name = "rgb", type = "bytes" }]

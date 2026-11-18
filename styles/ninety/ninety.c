@@ -378,6 +378,8 @@ static void palette(press_palette *p) {
     p->ink = BLACK;
     p->menu = WHITE;
     p->menu_text = BLACK;
+    p->pointer = 0xffffffffu; /* the arrow is white, edged in black */
+    p->pointer_edge = 0xff000000u;
 }
 
 static const press_style style = {PRESS_STYLE_ABI, "ninety", metrics, palette, draw, 0, NULL};

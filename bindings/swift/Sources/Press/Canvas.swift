@@ -1,13 +1,40 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Drawing: a canvas is a picture the program draws on with lines, boxes
-// and words, in black and white.
+// and words: in black and white and the greys made of them, or in colour.
 import Foundation
 import PressCore
 
-/// Black, white, or a grey made of the two: half and half, or light.
+/// Black, white, or a grey made of the two: half and half, or light. Or a
+/// colour, for a program that is not keeping to black and white.
 public struct Color: Hashable, Sendable {
     /// An 8 by 8 tile, a byte a row, or nil for solid black.
     let pattern: [UInt8]?
+    /// A colour, 0xRRGGBB, drawn as it is in place of black or a pattern.
+    var rgb: UInt32? = nil
+
+    /// A colour from how much red, green and blue it has, each from 0 to 1.
+    public init(red: Double, green: Double, blue: Double) {
+        let part = { (v: Double) in UInt32((min(max(v, 0), 1) * 255).rounded()) }
+        self.init(pattern: nil, rgb: part(red) << 16 | part(green) << 8 | part(blue))
+    }
+
+    init(pattern: [UInt8]?, rgb: UInt32? = nil) {
+        self.pattern = pattern
+        self.rgb = rgb
+    }
+
+    public static let red = Color(pattern: nil, rgb: 0xff3b30)
+    public static let orange = Color(pattern: nil, rgb: 0xff9500)
+    public static let yellow = Color(pattern: nil, rgb: 0xffcc00)
+    public static let green = Color(pattern: nil, rgb: 0x34c759)
+    public static let mint = Color(pattern: nil, rgb: 0x00c7be)
+    public static let teal = Color(pattern: nil, rgb: 0x30b0c7)
+    public static let cyan = Color(pattern: nil, rgb: 0x32ade6)
+    public static let blue = Color(pattern: nil, rgb: 0x007aff)
+    public static let indigo = Color(pattern: nil, rgb: 0x5856d6)
+    public static let purple = Color(pattern: nil, rgb: 0xaf52de)
+    public static let pink = Color(pattern: nil, rgb: 0xff2d55)
+    public static let brown = Color(pattern: nil, rgb: 0xa2845e)
 
     public static let black = Color(pattern: nil)
     public static let primary = Color(pattern: nil)
@@ -109,7 +136,8 @@ public struct GraphicsContext {
         }
     }
 
-    /// Draw the lines of a path, one pixel thick. Lines are always black.
+    /// Draw the lines of a path, one pixel thick: in the colour given if
+    /// it is a colour, and otherwise in black.
     public func stroke(_ path: Path, with shading: Shading = .color(.black), lineWidth: CGFloat = 1) {
         stroke(path, with: shading, style: StrokeStyle(lineWidth: lineWidth))
     }
@@ -118,6 +146,14 @@ public struct GraphicsContext {
         let line: LineStyle = style.dash.isEmpty ? .solid : (style.dash[0] <= 1 ? .dotted : .dashed)
         var start: CGPoint?
         var current: CGPoint?
+        if let rgb = shading.color.rgb {
+            try? picture.setColor(rgb)
+        }
+        defer {
+            if shading.color.rgb != nil {
+                try? picture.setColor(0)
+            }
+        }
         func draw(_ from: CGPoint, _ to: CGPoint) {
             try? picture.line(pixels(from.x), y0: pixels(from.y), x1: pixels(to.x), y1: pixels(to.y), style: line)
         }
@@ -154,12 +190,14 @@ public struct GraphicsContext {
         }
     }
 
-    /// Fill the boxes of a path with black, white or grey. Only boxes can
-    /// be filled.
+    /// Fill the boxes of a path with black, white, a grey or a colour.
+    /// Only boxes can be filled.
     public func fill(_ path: Path, with shading: Shading = .color(.black)) {
         for case .rect(let rect) in path.elements {
             let (x, y, width, height) = (pixels(rect.minX), pixels(rect.minY), pixels(rect.width), pixels(rect.height))
-            if let pattern = shading.color.pattern {
+            if let rgb = shading.color.rgb {
+                try? picture.fillColor(x, y: y, width: width, height: height, rgb: rgb)
+            } else if let pattern = shading.color.pattern {
                 try? picture.fill(x, y: y, width: width, height: height, pattern: pattern)
             } else {
                 try? picture.box(x, y: y, width: width, height: height, filled: true)

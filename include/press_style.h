@@ -32,7 +32,7 @@ extern "C" {
 #endif
 
 /* The version of this interface, for press_style.abi. */
-#define PRESS_STYLE_ABI 6
+#define PRESS_STYLE_ABI 7
 
 /* Sizes, in pixels. */
 typedef struct press_metrics {
@@ -110,6 +110,9 @@ typedef struct press_palette {
     /* from version 6 */
     uint32_t tip;             /* a word of help beside the pointer, where not on the paper */
     uint32_t tip_text;
+    /* from version 7 */
+    uint32_t pointer;         /* the pointer's arrow, where not black */
+    uint32_t pointer_edge;    /* and the edge round it, where not white */
 } press_palette;
 
 /* The parts a window is drawn from. */

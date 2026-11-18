@@ -528,6 +528,8 @@ static void palette(press_palette *p) {
     p->menu_text = BLACK;
     p->tip = 0xffffffe1u; /* a word of help is on pale yellow */
     p->tip_text = 0xff000000u;
+    p->pointer = 0xffffffffu; /* the arrow is white, edged in black */
+    p->pointer_edge = 0xff000000u;
 }
 
 #ifndef STYLE_TYPEFACE

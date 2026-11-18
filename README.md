@@ -319,7 +319,11 @@ twelve. A style is looked for in the folders named in `PRESS_STYLE_PATH`, in
 `~/.local/lib/press/styles`, and in `/usr/local/lib/press/styles` and
 `/usr/lib/press/styles`.
 
-The interface is at its sixth version. A style made for an earlier one is
+A style may say what colours the pointer's arrow is, in its palette: white
+edged with black in the styles of 1990, 1995, 2000 and 2001, red in that
+of 1985, and black edged with white where nothing is said.
+
+The interface is at its seventh version. A style made for an earlier one is
 still worn as it was written, in the desktop's frame.
 
 A Rust program that embeds the engine can dress it directly:
@@ -330,10 +334,8 @@ A Rust program that embeds the engine can dress it directly:
 
 - The rest of the manners that go with a look: which way round OK and
   Cancel go, and which key is the command key.
-- A window's shadow, and the shape of the pointer away from the edges of
-  a frame, which is the engine's own everywhere.
-- A word of help is drawn inside its window, so it cannot reach past the
-  window's edge; and a spin of a stepper's arrows held down does not repeat.
+- A window's shadow, and the shape of the pointer: a style gives the
+  arrow its colours, but its outline is the engine's own everywhere.
 - A few sizes: the room round a menu's words and a tab's, and the cell of an
   icon view.
 - Smooth things are drawn a pixel to a pixel and then magnified whole, so
@@ -342,9 +344,9 @@ A Rust program that embeds the engine can dress it directly:
   them at the screen's own fineness is not done.
 - Letters are placed on whole pixels and are not hinted, so small sizes
   are a little softer than those desktops drew them.
-- What a program draws itself on a `Canvas` or a `Picture` is its own, and
-  is one bit deep (a photo apart) whatever the style, though its words are
-  in the style's type.
+- What a program draws itself on a `Canvas` or a `Picture` is its own:
+  black on white unless the program asks for colours, whatever the
+  style, though its words are in the style's type.
 
 ## The ABI
 
@@ -717,6 +719,12 @@ pointer has gone outside, and so is the wheel turned over it.
 `description` says in words what it shows, for screen readers. The
 Calculator's graphs are drawn on one.
 
+A picture draws in black until `press_picture_set_color` gives it a
+colour, 0xRRGGBB, for the lines, boxes and words that follow;
+`press_picture_fill_color` fills a box with one colour, covering what was
+there. Black and white is a choice here as it is for the styles: a
+program that keeps to it need never call either.
+
 `press_picture_fill` fills a box with a pattern of black and white, an
 8 by 8 tile given as eight bytes, which is how shades and stand-ins for
 colours are made on a screen with neither; it covers what was there, so
@@ -1028,7 +1036,7 @@ for different things. `examples/swift` has this dialog with its menus as
 | Programs' furniture | `GroupBox`, `Stepper`, `.help`, `.buttonStyle(.borderless)`; and not in SwiftUI: `Toolbar { }` and `StatusBar(panels:) { }` for the top and foot of a window's column, `ComboBox(_:text:choices:)`, whose choices may change, and `Button(_:png:action:)` and `Label(_:png:)` for a button and a row of a list with a picture in colour |
 | Controls | `Text`, `Label`, `Button`, `Toggle`, `TextField`, `SecureField`, `TextEditor` (with a `TextSelection` binding, or without), `Slider`, `ProgressView`, `Picker` (as a pop-up or with `.pickerStyle(.radioGroup)`) |
 | Collections | `List` with one selection or a set, `Table` with `TableColumn` |
-| Drawing | `Canvas` with `Path`, `stroke`, `fill` and `draw`; words drawn in their own `.font`; a one-bit `Image(bitmap:width:height:)`; `.onTapGesture(count:)` and `.gesture(DragGesture(...).onChanged {}.onEnded {})`; `.onScroll {}` for the wheel, and `.onKeyboard(typed:pressed:)` to take the keyboard, or `.onKeyboard(typed:down:)` to hear every key; `.onRightButton {}` and `.onMiddleButton {}` for the other buttons; `.frame(minWidth:maxWidth: .infinity, ...)` for a canvas that grows with its window, drawn at the room it is given, with `.onResize {}` to hear of it |
+| Drawing | `Canvas` with `Path`, `stroke`, `fill` and `draw`; `Color.black`, `.white` and the greys made of them, or a colour: `.red`, `.blue` and the rest, or `Color(red:green:blue:)`; words drawn in their own `.font`; a one-bit `Image(bitmap:width:height:)`; `.onTapGesture(count:)` and `.gesture(DragGesture(...).onChanged {}.onEnded {})`; `.onScroll {}` for the wheel, and `.onKeyboard(typed:pressed:)` to take the keyboard, or `.onKeyboard(typed:down:)` to hear every key; `.onRightButton {}` and `.onMiddleButton {}` for the other buttons; `.frame(minWidth:maxWidth: .infinity, ...)` for a canvas that grows with its window, drawn at the room it is given, with `.onResize {}` to hear of it |
 | Menus | `CommandMenu`, `CommandGroup`, `.contextMenu`; inside them `Button`, `Toggle`, `Picker`, `Menu`, `Divider`, `Section`; `if` and `if`/`else` among commands |
 | Modifiers | `.disabled`, `.font`, `.bold`, `.monospaced` (on a `Text`, giving a `Text`), `.focused`, `.keyboardShortcut`, `.onSubmit`, `.onAppear`, `.onDisappear`, `.onChange(of:)`, `.task`, `.tag`, `.tabItem`, `.navigationTitle`, `.fullScreen(isOn:)`, `.environment` |
 | Actions | `@Environment(\.dismiss)`, `@Environment(\.openWindow)` |

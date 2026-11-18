@@ -739,6 +739,12 @@ PRESS_API press_status_t press_picture_fill(press_picture_t self, int32_t x, int
 /** Lay down a picture of your own making, a pixel a bit, with its top left corner at a point: `bits` is rows of `width` pixels, each row padded to whole bytes, the leftmost pixel in the top bit of a byte, set for black. It covers what was there, as fill does. For a scene drawn pixel by pixel, such as shading or a game's world, this is one call where dots would be thousands. */
 PRESS_API press_status_t press_picture_image(press_picture_t self, int32_t x, int32_t y, int32_t width, int32_t height, const uint8_t *bits, size_t bits_len);
 
+/** Draw what follows in a colour, 0xRRGGBB: lines, boxes outlined and filled, and words. A picture draws in black until told otherwise, and again once it is cleared. */
+PRESS_API press_status_t press_picture_set_color(press_picture_t self, uint32_t rgb);
+
+/** Fill a box with one colour, 0xRRGGBB. It covers what was there, as fill does; lines, boxes and words lie on it wherever in the order they were drawn. */
+PRESS_API press_status_t press_picture_fill_color(press_picture_t self, int32_t x, int32_t y, int32_t width, int32_t height, uint32_t rgb);
+
 /** Lay down a picture in colour with its top left corner at a point: `rgb` is rows of `width` pixels, three bytes each, red, green and blue. press is black and white, and this is its one exception, for what is a photograph by nature, such as a camera's picture; offer it in black and white too. It covers what was there, as image does. */
 PRESS_API press_status_t press_picture_photo(press_picture_t self, int32_t x, int32_t y, int32_t width, int32_t height, const uint8_t *rgb, size_t rgb_len);
 

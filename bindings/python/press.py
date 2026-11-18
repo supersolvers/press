@@ -1145,6 +1145,16 @@ class Picture(Widget):
         _lib.press_picture_image.argtypes = [ctypes.c_uint64, ctypes.c_int32, ctypes.c_int32, ctypes.c_int32, ctypes.c_int32, ctypes.c_char_p, ctypes.c_size_t]
         _check(_lib.press_picture_image(self.handle, x, y, width, height, *_b(bits)))
 
+    def set_color(self, rgb):
+        """Draw what follows in a colour, 0xRRGGBB: lines, boxes outlined and filled, and words. A picture draws in black until told otherwise, and again once it is cleared."""
+        _lib.press_picture_set_color.argtypes = [ctypes.c_uint64, ctypes.c_uint32]
+        _check(_lib.press_picture_set_color(self.handle, rgb))
+
+    def fill_color(self, x, y, width, height, rgb):
+        """Fill a box with one colour, 0xRRGGBB. It covers what was there, as fill does; lines, boxes and words lie on it wherever in the order they were drawn."""
+        _lib.press_picture_fill_color.argtypes = [ctypes.c_uint64, ctypes.c_int32, ctypes.c_int32, ctypes.c_int32, ctypes.c_int32, ctypes.c_uint32]
+        _check(_lib.press_picture_fill_color(self.handle, x, y, width, height, rgb))
+
     def photo(self, x, y, width, height, rgb):
         """Lay down a picture in colour with its top left corner at a point: `rgb` is rows of `width` pixels, three bytes each, red, green and blue. press is black and white, and this is its one exception, for what is a photograph by nature, such as a camera's picture; offer it in black and white too. It covers what was there, as image does."""
         _lib.press_picture_photo.argtypes = [ctypes.c_uint64, ctypes.c_int32, ctypes.c_int32, ctypes.c_int32, ctypes.c_int32, ctypes.c_char_p, ctypes.c_size_t]

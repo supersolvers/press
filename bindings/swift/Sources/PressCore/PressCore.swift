@@ -1477,6 +1477,16 @@ public class Picture: Widget {
         try _check(press_picture_image(handle, Int32(clamping: x), Int32(clamping: y), Int32(clamping: width), Int32(clamping: height), bits, bits.count))
     }
 
+    /// Draw what follows in a colour, 0xRRGGBB: lines, boxes outlined and filled, and words. A picture draws in black until told otherwise, and again once it is cleared.
+    public func setColor(_ rgb: UInt32) throws {
+        try _check(press_picture_set_color(handle, rgb))
+    }
+
+    /// Fill a box with one colour, 0xRRGGBB. It covers what was there, as fill does; lines, boxes and words lie on it wherever in the order they were drawn.
+    public func fillColor(_ x: Int, y: Int, width: Int, height: Int, rgb: UInt32) throws {
+        try _check(press_picture_fill_color(handle, Int32(clamping: x), Int32(clamping: y), Int32(clamping: width), Int32(clamping: height), rgb))
+    }
+
     /// Lay down a picture in colour with its top left corner at a point: `rgb` is rows of `width` pixels, three bytes each, red, green and blue. press is black and white, and this is its one exception, for what is a photograph by nature, such as a camera's picture; offer it in black and white too. It covers what was there, as image does.
     public func photo(_ x: Int, y: Int, width: Int, height: Int, rgb: [UInt8]) throws {
         try _check(press_picture_photo(handle, Int32(clamping: x), Int32(clamping: y), Int32(clamping: width), Int32(clamping: height), rgb, rgb.count))

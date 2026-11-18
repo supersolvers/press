@@ -120,6 +120,9 @@ pub struct Palette {
     /// A word of help beside the pointer.
     pub tip: u32,
     pub tip_text: u32,
+    /// The pointer's arrow, and the edge round it.
+    pub pointer: u32,
+    pub pointer_edge: u32,
 }
 
 /// The pieces a window is drawn from.
@@ -407,7 +410,7 @@ impl EightyFour {
         menu_border: 1,
     };
 
-    pub const PALETTE: Palette = Palette { window: WHITE, text: BLACK, paper: WHITE, ink: BLACK, menu: WHITE, menu_text: BLACK, list: WHITE, list_ink: BLACK, pane: WHITE, tip: WHITE, tip_text: BLACK };
+    pub const PALETTE: Palette = Palette { window: WHITE, text: BLACK, paper: WHITE, ink: BLACK, menu: WHITE, menu_text: BLACK, list: WHITE, list_ink: BLACK, pane: WHITE, tip: WHITE, tip_text: BLACK, pointer: BLACK, pointer_edge: WHITE };
 
     /// How far the focus ring stands off a control.
     const RING_GAP: i32 = 3;

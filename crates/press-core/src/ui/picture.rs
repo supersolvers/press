@@ -35,6 +35,11 @@ pub(super) enum Mark {
     /// is a photograph by nature, such as a camera's picture. Pixels as the
     /// canvas keeps them, opaque, rows of `rect.w`.
     Photo { rect: Rect, pixels: std::rc::Rc<Vec<u32>> },
+    /// What follows is drawn in this colour: lines, boxes and words.
+    Ink(u32),
+    /// A box filled with one colour, covering what was there as a
+    /// pattern does.
+    Tint { rect: Rect, color: u32 },
     /// Words, in the picture's typeface unless they have one of their own.
     Words { x: i32, y: i32, text: String, face: Option<Face> },
 }
@@ -91,6 +96,22 @@ impl Ui {
             return Err(Error::InvalidArgument);
         }
         self.mark(h, Mark::Box { rect: Rect::new(x, y, w, h_), filled })
+    }
+
+    /// Draw what follows in a colour, 0xRRGGBB: lines, boxes outlined and
+    /// filled, and words. A picture draws in black until told otherwise,
+    /// and again once it is cleared.
+    pub fn picture_set_color(&mut self, h: Handle, rgb: u32) -> Result<()> {
+        self.mark(h, Mark::Ink(0xff00_0000 | rgb))
+    }
+
+    /// Fill a box with one colour, 0xRRGGBB. It covers what was there, as
+    /// a pattern does, and what is drawn after lies on it.
+    pub fn picture_fill_color(&mut self, h: Handle, x: i32, y: i32, w: i32, h_: i32, rgb: u32) -> Result<()> {
+        if w < 0 || h_ < 0 {
+            return Err(Error::InvalidArgument);
+        }
+        self.mark(h, Mark::Tint { rect: Rect::new(x, y, w, h_), color: 0xff00_0000 | rgb })
     }
 
     /// Fill a box with a pattern: eight bytes, a row of the tile each, the
@@ -362,6 +383,13 @@ impl Ui {
                         }
                     }
                 }
+                Mark::Tint { rect: r, color } => {
+                    for y in r.y.max(0)..(r.y + r.h).min(rect.h) {
+                        for x in r.x.max(0)..(r.x + r.w).min(rect.w) {
+                            canvas.set(rect.x + x, rect.y + y, *color);
+                        }
+                    }
+                }
                 Mark::Photo { rect: r, pixels } => {
                     for y in r.y.max(0)..(r.y + r.h).min(rect.h) {
                         let row = &pixels[(y - r.y) as usize * r.w as usize..][..r.w as usize];
@@ -374,14 +402,16 @@ impl Ui {
             }
         }
         // everything is kept inside the picture's own box
+        let color = std::cell::Cell::new(BLACK);
         let mut ink = |x: i32, y: i32| {
             if (0..rect.w).contains(&x) && (0..rect.h).contains(&y) {
-                canvas.set(rect.x + x, rect.y + y, BLACK);
+                canvas.set(rect.x + x, rect.y + y, color.get());
             }
         };
         let mut words = Vec::new();
         for mark in &marks {
             match mark {
+                Mark::Ink(to) => color.set(*to),
                 Mark::Line { from, to, style } => line(*from, *to, *style, &mut ink),
                 Mark::Box { rect: r, filled: true } => {
                     for y in r.y..r.y + r.h {
@@ -397,8 +427,8 @@ impl Ui {
                     line((r.x, r.y), (r.x, y1), LineStyle::Solid, &mut ink);
                     line((x1, r.y), (x1, y1), LineStyle::Solid, &mut ink);
                 }
-                Mark::Box { .. } | Mark::Fill { .. } | Mark::Image { .. } | Mark::Photo { .. } => {}
-                Mark::Words { x, y, text, face } => words.push((*x, *y, text.clone(), *face)),
+                Mark::Box { .. } | Mark::Fill { .. } | Mark::Image { .. } | Mark::Photo { .. } | Mark::Tint { .. } => {}
+                Mark::Words { x, y, text, face } => words.push((*x, *y, text.clone(), *face, color.get())),
             }
         }
         if !words.is_empty() {
@@ -411,8 +441,8 @@ impl Ui {
                 }
             }
             let own = self.nodes.get(h).and_then(|n| n.face).unwrap_or_default();
-            for (x, y, text, face) in &words {
-                self.wearing(face.unwrap_or(own), |ui| ui.font.draw(&mut sheet, text, *x, *y, BLACK));
+            for (x, y, text, face, color) in &words {
+                self.wearing(face.unwrap_or(own), |ui| ui.font.draw(&mut sheet, text, *x, *y, *color));
             }
             for y in 0..rect.h {
                 for x in 0..rect.w {
@@ -661,6 +691,27 @@ mod tests {
         let ev = ui.layout_events();
         assert_eq!(ev[0].args.iter().map(Value::as_i32).collect::<Vec<_>>(), vec![300, 200]);
         assert_eq!(ui.picture_set_size(pic, 0, 5), Err(Error::InvalidArgument));
+    }
+
+    #[test]
+    fn a_picture_draws_in_colour_when_it_is_told_to() {
+        let (mut ui, win, pic) = setup();
+        let r = { ui.render(win).unwrap(); ui.nodes.get(pic).unwrap().rect };
+        // black until told otherwise; a filled box in one colour lies under the lines
+        ui.picture_line(pic, 0, 0, 9, 0, LineStyle::Solid).unwrap();
+        ui.picture_set_color(pic, 0xcc2200).unwrap();
+        ui.picture_line(pic, 0, 2, 9, 2, LineStyle::Solid).unwrap();
+        ui.picture_box(pic, 20, 20, 4, 4, true).unwrap();
+        ui.picture_fill_color(pic, 0, 2, 5, 5, 0x2060c0).unwrap();
+        let c = ui.render(win).unwrap();
+        assert_eq!(c.get(r.x + 3, r.y), BLACK);
+        assert_eq!(c.get(r.x + 3, r.y + 2), 0xffcc2200);
+        assert_eq!(c.get(r.x + 21, r.y + 21), 0xffcc2200);
+        assert_eq!(c.get(r.x + 3, r.y + 4), 0xff2060c0);
+        // cleared, it draws in black again
+        ui.picture_clear(pic).unwrap();
+        ui.picture_line(pic, 0, 0, 9, 0, LineStyle::Solid).unwrap();
+        assert_eq!(ui.render(win).unwrap().get(r.x + 3, r.y), BLACK);
     }
 
     #[test]

@@ -142,7 +142,15 @@ const HOURGLASS: &[&str] = &[
 ];
 
 impl Cursor {
+    /// The picture of the shape, in black edged with white.
     pub fn image(self) -> CursorImage {
+        self.image_in(BLACK, WHITE)
+    }
+
+    /// The picture of the shape, the arrow in the colours a style has for
+    /// it. The other shapes are black edged with white in every style.
+    pub fn image_in(self, fill: u32, edge: u32) -> CursorImage {
+        let (fill, edge) = if self == Cursor::Arrow { (fill, edge) } else { (BLACK, WHITE) };
         // hot spots are given in the shape's own coordinates
         let (shape, hot) = match self {
             Cursor::Arrow => (ARROW, (0, 0)),
@@ -162,9 +170,9 @@ impl Cursor {
         for y in -1..=shape.len() as i32 {
             for x in -1..=width {
                 if black(x, y) {
-                    canvas.set(x + 1, y + 1, BLACK);
+                    canvas.set(x + 1, y + 1, fill);
                 } else if (-1..=1).any(|dy| (-1..=1).any(|dx| black(x + dx, y + dy))) {
-                    canvas.set(x + 1, y + 1, WHITE);
+                    canvas.set(x + 1, y + 1, edge);
                 }
             }
         }
@@ -208,6 +216,10 @@ mod tests {
             }
             assert!(c.pixels.iter().zip(&outside).all(|(p, out)| *p != TRANSPARENT || *out), "{cursor:?} has a hole");
         }
+        // a style may have the arrow in its own colours; the other shapes stay as they are
+        let (red, text) = (Cursor::Arrow.image_in(0xffee4400, BLACK), Cursor::Text.image_in(0xffee4400, BLACK));
+        assert!(red.canvas.pixels.contains(&0xffee4400) && !red.canvas.pixels.contains(&WHITE));
+        assert!(text.canvas.pixels == Cursor::Text.image().canvas.pixels);
         assert_eq!(Cursor::Arrow.image().canvas.pixels[{ let i = Cursor::Arrow.image(); (i.hot.1 * i.canvas.width + i.hot.0) as usize }], BLACK);
     }
 }

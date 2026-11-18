@@ -17,7 +17,7 @@ use std::sync::Arc;
 /// The version of the interface below. A library made for an earlier
 /// version is still worn, as it was written; one made for any other but
 /// these is not used.
-pub const ABI: u32 = 6;
+pub const ABI: u32 = 7;
 
 /// A part to draw, as a style library is handed it. See
 /// [`press_core::PartKind`] for what the numbers mean for each kind.
@@ -205,7 +205,7 @@ impl Style for Foreign {
     fn palette(&self) -> Palette {
         // what a style leaves unsaid of the later colours follows what it
         // says of the earlier: lists are on the paper, a pane is of the window
-        let mut p = Palette { list: 0, list_ink: 0, pane: 0, tip: 0, tip_text: 0, ..press_core::EightyFour::PALETTE };
+        let mut p = Palette { list: 0, list_ink: 0, pane: 0, tip: 0, tip_text: 0, pointer: 0, pointer_edge: 0, ..press_core::EightyFour::PALETTE };
         if let Some(f) = self.raw.palette {
             unsafe { f(&mut p) };
         }
@@ -217,6 +217,9 @@ impl Style for Foreign {
             // a word of help is on the paper, in its ink, unless the style says
             tip: if self.raw.abi >= 6 && p.tip != 0 { p.tip } else { p.paper },
             tip_text: if self.raw.abi >= 6 && p.tip_text != 0 { p.tip_text } else { p.ink },
+            // the pointer is black edged with white unless the style says
+            pointer: if self.raw.abi >= 7 && p.pointer != 0 { p.pointer } else { press_core::BLACK },
+            pointer_edge: if self.raw.abi >= 7 && p.pointer_edge != 0 { p.pointer_edge } else { press_core::WHITE },
             ..p
         }
     }

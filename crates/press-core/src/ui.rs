@@ -2405,6 +2405,11 @@ impl Ui {
         Ok(out)
     }
 
+    /// The picture of a pointer shape, as the style being worn has it.
+    pub fn cursor_image(&self, cursor: Cursor) -> crate::cursor::CursorImage {
+        cursor.image_in(self.look.pal.pointer, self.look.pal.pointer_edge)
+    }
+
     /// The pointer shape for a position in a window: an hourglass while
     /// the window is busy, an I-beam over text that can be edited and while
     /// a selection is being dragged, otherwise the arrow.

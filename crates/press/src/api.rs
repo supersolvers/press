@@ -1031,6 +1031,14 @@ pub fn picture_image(this: Handle, x: i32, y: i32, width: i32, height: i32, bits
     with(|rt| Ok(rt.ui.picture_image(this, x, y, width, height, bits)?))
 }
 
+pub fn picture_set_color(this: Handle, rgb: u32) -> Result {
+    with(|rt| Ok(rt.ui.picture_set_color(this, rgb & 0xff_ffff)?))
+}
+
+pub fn picture_fill_color(this: Handle, x: i32, y: i32, width: i32, height: i32, rgb: u32) -> Result {
+    with(|rt| Ok(rt.ui.picture_fill_color(this, x, y, width, height, rgb & 0xff_ffff)?))
+}
+
 pub fn picture_photo(this: Handle, x: i32, y: i32, width: i32, height: i32, rgb: &[u8]) -> Result {
     with(|rt| Ok(rt.ui.picture_photo(this, x, y, width, height, rgb)?))
 }
