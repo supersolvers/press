@@ -134,12 +134,12 @@ impl Ui {
             *slot = Some(menu);
         }
         // placed so the current choice lies exactly over the box
-        let y = rect.y - selected as i32 * self.look.m.menu_item_height;
+        let y = rect.y - selected as i32 * self.look.m.menu_item_height - (self.look.m.menu_border - 1);
         self.open_popup(window, menu, rect.x, y, Some(h));
         if let Some(open) = &mut self.menu_open {
             open.held = held;
             open.opening = held;
-            open.min_inner = rect.w - 3;
+            open.min_inner = rect.w - 1 - 2 * self.look.m.menu_border;
             open.levels[0].hot = current;
         }
     }

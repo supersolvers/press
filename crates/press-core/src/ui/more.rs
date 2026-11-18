@@ -186,11 +186,16 @@ impl Ui {
     }
 
     /// Each tab's area along the top.
-    fn tab_rects(&mut self, h: Handle) -> Vec<Rect> {
+    pub(super) fn tab_rects(&mut self, h: Handle) -> Vec<Rect> {
         let Some(node) = self.nodes.get(h) else { return Vec::new() };
         let Kind::Tabs { pages, .. } = &node.kind else { return Vec::new() };
         let (rect, titles) = (node.rect, pages.iter().map(|p| p.0.clone()).collect::<Vec<_>>());
         let mut x = rect.x + TAB_INDENT;
+        if self.look.m.tab_align == 1 {
+            // in the middle of the view's top
+            let all: i32 = titles.iter().map(|title| self.font.width(title) + 2 * TAB_PAD - 1).sum::<i32>() + 1;
+            x = rect.x + ((rect.w - all) / 2).max(0);
+        }
         titles
             .iter()
             .map(|title| {
@@ -235,16 +240,23 @@ impl Ui {
         let (tabs, pane, phase) = (self.tab_rects(h), Self::tab_pane(rect, self.look.m.tab_height), self.ants_step_public());
         // the tabs behind first, then the pane over their feet, then the chosen
         // tab, which the style joins to the pane
+        // the tab the pointer is over, for a style that lights it
+        let hot = if self.hover == Some(h) && self.hover_piece > 0 { Some(self.hover_piece as usize - 1) } else { None };
+        // where each stands in the row, so that a style can join neighbours: 1 first, 2 last, 3 both
+        let place = |i: usize| i32::from(i == 0) + 2 * i32::from(i + 1 == tabs.len());
         for i in (0..tabs.len()).filter(|i| *i != selected) {
-            self.part(canvas, Part::new(PartKind::Tab, tabs[i]).text(&titles[i]));
+            self.part(canvas, Part::new(PartKind::Tab, tabs[i]).text(&titles[i]).numbers(place(i), 0, 0).when(state::HOT, hot == Some(i)));
         }
         self.part(canvas, Part::new(PartKind::TabPane, pane));
         if let Some(r) = tabs.get(selected).copied() {
-            let part = Part::new(PartKind::Tab, r).text(&titles[selected]).phase(phase);
-            self.part(canvas, part.when(state::FRONT, true).when(state::FOCUSED, live));
+            let part = Part::new(PartKind::Tab, r).text(&titles[selected]).phase(phase).numbers(place(selected), 0, 0);
+            self.part(canvas, part.when(state::FRONT, true).when(state::FOCUSED, live).when(state::HOT, hot == Some(selected)));
         }
         if let Some(page) = self.tab_page(h) {
+            // the page lies on the pane, which may not be of the window's colour
+            let was = std::mem::replace(&mut self.ground, self.look.pal.pane);
             self.paint(page, canvas, enabled, ctx);
+            self.ground = was;
         }
     }
 
@@ -268,6 +280,11 @@ impl Ui {
             }
             _ => Vec::new(),
         }
+    }
+
+    /// The tab a point is over, if any.
+    pub(super) fn tab_at(&mut self, h: Handle, x: i32, y: i32) -> Option<usize> {
+        self.tab_rects(h).iter().position(|r| r.contains(x, y))
     }
 
     /// The pointer went down on a tab view's row of tabs.

@@ -33,7 +33,7 @@
         (m)->menu_bar_height = 20; \
         (m)->popup_height = 21; \
         (m)->tab_height = 21; \
-        (m)->menu_shadow = 1; \
+        (m)->menu_shadow = 0; \
     } while (0)
 
 static int32_t typeface(uint32_t face, press_type *out) {
@@ -46,10 +46,16 @@ static int32_t typeface(uint32_t face, press_type *out) {
     case PRESS_FACE_READING: strcpy(out->family, sans); out->size = 11; break;
     case PRESS_FACE_FIXED: strcpy(out->family, fixed); out->size = 11; break;
     case PRESS_FACE_TITLE: strcpy(out->family, fixed); out->size = 14; out->bold = 1; break;
+    case PRESS_FACE_FRAME: strcpy(out->family, sans); out->size = 11; out->bold = 1; break;
     default: return 0;
     }
+    /* that desktop drew its letters in whole pixels, with no greys at their edges */
+    out->crisp = 1;
     return 1;
 }
 #define STYLE_TYPEFACE typeface
+/* A title in the menu bar stands out under the pointer: the engine is to say when it is there. */
+#define STYLE_FLAT_MENU_BAR 1
+#define STYLE_WANTS PRESS_WANTS_HOVER
 
 #include "../ninetyfive/ninetyfive.c"

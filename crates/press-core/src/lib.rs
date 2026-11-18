@@ -19,5 +19,5 @@ pub use cursor::{Cursor, CursorImage};
 pub use font::{Face, Font, Type};
 pub use canvas::{Canvas, Rect, BLACK, TRANSPARENT, WHITE};
 pub use slots::Handle;
-pub use style::{Metrics, OneBit, Painter, Palette, Part, PartKind, Style};
+pub use style::{Metrics, EightyFour, Painter, Palette, Part, PartKind, Style};
 pub use ui::{FrameAct, Icon, LineStyle, MenuEntry, AccessNode, AccessRole, AccessRun, AccessTree, Align, PopupInfo, Emitted, Error, Key, Mods, Orientation, PointerKind, Ui, Value, WindowInfo};

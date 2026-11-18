@@ -280,7 +280,7 @@ impl Ui {
         let (edit, placeholder) = (edit.clone(), placeholder.clone());
         let line = self.font.line_height();
         let (paper, ink) = (self.look.pal.paper, self.look.pal.ink);
-        self.part(canvas, Part::new(PartKind::Well, rect).when(state::FOCUSED, live));
+        self.part(canvas, Part::new(PartKind::Well, rect).numbers(if shape.multiline { 2 } else { 0 }, 0, 0).when(state::FOCUSED, live));
         if inner.w <= 0 || inner.h <= 0 {
             return;
         }
@@ -348,10 +348,10 @@ impl Ui {
                 }
                 // the text sits one pixel in: the band starts in that margin and runs
                 // to the last column of the last letter, which is one further
-                self.part(&mut clip, Part::new(PartKind::Select, Rect::new(x0 - slide, band.y, x1 - x0 + 1, band.h)));
+                self.part(&mut clip, Part::new(PartKind::Select, Rect::new(x0 - slide, band.y, x1 - x0 + 1, band.h)).numbers(1, 0, 0));
             }
             if live && selection.is_none() && row == caret_row && self.caret_on() {
-                clip.fill(Rect::new(caret_x - slide, band.y, 1, band.h), ink);
+                self.part(&mut clip, Part::new(PartKind::Caret, Rect::new(caret_x - slide, band.y, 1, band.h)).ink(ink));
             }
         }
         canvas.blit(&clip, inner.x, inner.y);

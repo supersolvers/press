@@ -11,9 +11,17 @@ first Macintosh. It is one choice among others: a style is a small library
 of its own, chosen when a program starts, and the same program is drawn in
 any of them without being built again.
 
-| One bit | Ninety-Five |
+| Eighty-Four | Ninety-Five |
 | --- | --- |
 | ![The gallery example in black and white](docs/press.png) | ![The same program, in the manner of the middle 1990s](docs/press-ninetyfive.png) |
+| **Eighty-Five** | **Eighty-Nine** |
+| ![The same program, in the manner of 1985](docs/press-eightyfive.png) | ![The same program, in the manner of 1989](docs/press-eightynine.png) |
+| **Eighty-Eight** | **Ninety-Three** |
+| ![The same program, in the manner of 1988](docs/press-eightyeight.png) | ![The same program, in the manner of 1993](docs/press-ninetythree.png) |
+| **Ninety-Eight** | |
+| ![The same program, in the manner of 1998](docs/press-ninetyeight.png) | |
+| **Ninety** | **Two Thousand and Four** |
+| ![The same program, in the manner of 1990](docs/press-ninety.png) | ![The same program, in the manner of 2004](docs/press-twothousandfour.png) |
 | **Ninety-Nine** | **Two Thousand** |
 | ![The same program, in the manner of the end of the 1990s](docs/press-ninetynine.png) | ![The same program, in the manner of 2000](docs/press-twothousand.png) |
 | **Two Thousand and One** | **Two Thousand and Five** |
@@ -40,6 +48,15 @@ where its menus are. A program that says nothing looks as the desktop it
 is on would have it.
 
 ![The same dialog as five programs, each in a style of its own, frame and all](docs/frames.png)
+
+![And as four more](docs/frames-more.png)
+
+![And three more: lozenges and brackets, slate and rose, and a title that is a tab](docs/frames-three.png)
+
+A title bar need not be a bar. A style may say it is a tab, as wide as the
+title and its buttons need, on the top left corner of the window; the
+strip beside it is then no part of the window, and what is behind shows
+there.
 
 There are three layers, and each can be used without the one above it:
 
@@ -152,9 +169,16 @@ its headers and the styles under `PREFIX` (`/usr/local`).
 | `include/press_style.h` | The interface a style is written against (by hand) |
 | `idl/press.toml` | The interface definition: enums, classes, methods, properties, events |
 | `crates/press-idl` | Parses the definition; generates the C header, Rust exports and the Python and Swift bindings |
-| `crates/press-core` | The engine: handles, widget tree, layout, input, text, and the style interface with the one-bit style. No platform or FFI code |
+| `crates/press-core` | The engine: handles, widget tree, layout, input, text, and the style interface with the built-in style, Eighty-Four. No platform or FFI code |
 | `crates/press` | `libpress.so`: the generated exports, their implementation, the display backends, and the loader of styles |
 | `styles/ninetyfive` | A style in the manner of the middle 1990s, in C, as a library of its own: grey, bevelled, in the engine's own pixel type |
+| `styles/eightyfive` | A style in the manner of the home computer workbench of 1985: four colours and no shading |
+| `styles/eightyeight` | A style in the manner of the open workstation look of 1988: lozenges, a lift on a cable, brackets at a window's corners |
+| `styles/ninetythree` | A style in the manner of the common desktop of 1993: heavy bevels in slate blue, a frame in rose |
+| `styles/ninetyeight` | A style in the manner of the media desktop of 1998: the title a yellow tab on the window's corner |
+| `styles/eightynine` | A style in the manner of the workstation of 1989: four greys, slabs and hollows, black title bars |
+| `styles/ninety` | A style in the manner of the office desktops of 1990: grey buttons on white windows |
+| `styles/twothousandfour` | A style in the manner of the free desktop of 2004: parchment, tan and orange, smooth type |
 | `styles/ninetynine` | A style in the manner of the platinum desktops of the end of the 1990s: black outlines and rounded corners in shades of grey, in the engine's own pixel type |
 | `styles/twothousand` | A style in the manner of 2000: Ninety-Five told other colours, sizes and smooth type, in forty lines |
 | `styles/twothousandone` | A style in the manner of 2001: rounded and shaded, with a glow under the pointer and smooth type |
@@ -179,27 +203,51 @@ asks the style in use for these things:
   row of a list, a tab, a menu's items and the menu bar are, and how much
   room a menu's shadow wants;
 - its **colours**: what a window is made of, what paper and ink are in a
-  text field, what a menu is;
-- its **type**: for each of the engine's six families, one of the machine's
-  typefaces and a size, to be drawn smooth from its outlines, or nothing,
+  text field, what a list is on where that is not the same paper, what
+  the pages of a tab view lie on, what a menu is;
+- its **type**: for each of the engine's six families, and for the title
+  of a window, one of the machine's typefaces and a size, drawn smooth
+  from its outlines or in whole pixels as screens once drew them; or
+  another of the engine's own families to stand in its place; or nothing,
   to keep the family in its own pixels;
+- its **manners**: how a menu's shortcuts are written (with the sign of
+  the command key, or as Ctrl+ and the letter), whether a scroll bar has
+  an arrow at each end or both together at the far one, whether tabs
+  stand at the left or in the middle, how thick the edge of a menu is,
+  what two clicks on a title bar do (zoom the window, roll it up into its
+  title, put it away), and which buttons a title bar has: to close, to
+  put away, to zoom, to roll up, and one for a menu of the window's own;
 - what it **wants** of the engine: to be told when the pointer is over a
-  button, to have a default button drawn again twenty times a second;
+  button, a tab, a table's heading, a title in the menu bar or a part of
+  a scroll bar; to have a default button drawn again twenty times a
+  second. A style that wants neither costs nothing: the engine draws
+  again only when something a style has asked to hear of has changed;
 - and, each time a window is drawn, to **draw each part** of it: a button
   with its label, the well round a list, a scroll bar, a tab, a menu's
-  frame and shadow, the mark of what is selected, the look of what is out
-  of use, a window's title bar and the buttons in it.
+  frame and shadow, the mark of what is selected (told whether it is a
+  row, words or a menu's item), the look of what is out of use, a
+  window's title bar and the buttons in it, and the small marks: the tick
+  and the arrow in a menu, the arrow in a table's heading, the mark
+  before a row of a tree that folds, the caret.
 
 Whatever a style does not draw is drawn in black and white, so a style can
 be written a part at a time and is never left with holes in it.
 
-Six come with PRESS. `one-bit` is built into the engine. The other five
+Thirteen come with PRESS, each named for its year. `eightyfour`, black and white
+in the manner of the first Macintosh, is built into the engine. The other twelve
 are libraries of their own, and are there as much to show how a style is
 written as to be worn:
 
 | | |
 | --- | --- |
 | `ninetyfive` | Grey and bevelled, in the manner of the middle 1990s. Whole pixels and the engine's own type: what a style can be with nothing smooth in it |
+| `eightyfive` | In the manner of the home computer workbench of 1985: blue, white, black and orange, and nothing else. No shading and no round corners; what is chosen or held turns to its opposite colour, blue to orange and white to black. Words are white on blue; menus are the other way about |
+| `eightyeight` | In the manner of the open workstation look of 1988, which went its own way in nearly everything: buttons are lozenges, a button that opens a menu carries a small triangle, one choice among several is a row of boxes with the chosen one in a heavy line, a line to type on is a line and no box, a scroll bar is a lift on a cable, and a window has brackets at its corners to take hold of |
+| `ninetythree` | In the manner of the common desktop of the workstations of 1993: slate blue, everything two pixels out of the ground or two pixels into it, a check box that is pressed in when on, a diamond for a choice among several, a black line right round what has the keyboard, and the frame of the window in front in rose |
+| `ninetyeight` | In the manner of the media desktop of 1998: quiet grey, thin dark lines, blue under the label of what has the keyboard, and a window whose title is not a bar but a yellow tab, as wide as the title needs, on its top left corner |
+| `eightynine` | In the manner of the workstation of 1989: black, two greys and white. Everything is a slab of light grey standing out of the page or a hollow pressed into it; title bars are black; the button Return presses carries the sign of that key |
+| `ninety` | In the manner of the office desktops of 1990: white windows, grey buttons in black lines with their corners off, a cross in a check box, navy for the title bar and for what is selected, and a thick grey band round the window to take hold of |
+| `twothousandfour` | In the manner of the free desktop of the autumn of 2004: parchment windows, title bars of tan shading to brown, orange for what is selected and for work done, plain shapes with thin dark edges, smooth type |
 | `ninetynine` | Platinum, in the manner of the end of the 1990s: the black-and-white Macintosh in shades of grey. Black outlines, rounded corners, faces lit from the top left; lavender for what is selected in a list and deep blue in a menu. Whole pixels and the engine's own type, which was drawn for a desktop like it |
 | `twothousand` | In the manner of 2000: Ninety-Five in a warmer grey and a deeper blue, with smooth type. It is written as that: its colours, sizes and typefaces, and then Ninety-Five's file for the rest |
 | `twothousandone` | In the manner of 2001: buttons rounded and shaded from top to bottom, gold where the pointer is, blue for what is selected, green in the progress bar, smooth type, a shadow under menus |
@@ -211,7 +259,11 @@ written as to be worn:
 | ![The same in Two Thousand and Five](docs/twothousandfive.png) | ![Menus in Two Thousand and Five](docs/twothousandfive-menus.png) |
 | ![The same in Ninety-Nine](docs/ninetynine.png) | ![Menus in Ninety-Nine](docs/ninetynine-menus.png) |
 | ![Menus in Two Thousand and One](docs/twothousandone-menus.png) | |
-| ![The same in Two Thousand](docs/twothousand.png) | |
+| ![The same in Two Thousand](docs/twothousand.png) | ![The same in Two Thousand and Four](docs/twothousandfour.png) |
+| ![The same in Eighty-Five](docs/eightyfive.png) | ![Menus in Eighty-Five](docs/eightyfive-menus.png) |
+| ![The same in Eighty-Nine](docs/eightynine.png) | ![The same in Ninety](docs/ninety.png) |
+| ![The same in Eighty-Eight](docs/eightyeight.png) | ![The same in Ninety-Three](docs/ninetythree.png) |
+| ![The same in Ninety-Eight](docs/ninetyeight.png) | ![Menus in Ninety-Eight](docs/ninetyeight-menus.png) |
 
 They are drawn here from nothing, in the manner of what they recall: no
 picture, colour table or font of Apple's or Microsoft's is in them. For
@@ -220,8 +272,9 @@ to have them, and take the nearest thing fontconfig offers where it does
 not (DejaVu Sans, on most).
 
 **Choosing one.** A program chooses for itself: in Press, `static var
-style: Style` on its `App` (`.ninetyFive`, `.ninetyNine`, `.twoThousand`,
-`.twoThousandOne`, `.twoThousandFive`, `.oneBit`, or `.named("...")` for
+style: Style` on its `App` (`.eightyFour`, `.eightyFive`, `.eightyEight`,
+`.eightyNine`, `.ninety`, `.ninetyThree`, `.ninetyFive`, `.ninetyEight`, `.ninetyNine`, `.twoThousand`, `.twoThousandOne`,
+`.twoThousandFour`, `.twoThousandFive`, or `.named("...")` for
 any other); in C, `press_app_set_style` after `press_app_init`, and
 `App.set_style` in Python. A program that does not choose wears what the
 desktop has chosen for every program, which is the first line of
@@ -231,7 +284,7 @@ environment dresses it so whatever it or the desktop says. Each of these
 is a name or the path of a library. A style that cannot be loaded is said
 so once on standard error, and the program looks as it did.
 
-**Windows with frames of their own.** A style may have a frame: the five
+**Windows with frames of their own.** A style may have a frame: the twelve
 that come as libraries all do. A program wearing one draws its windows
 whole, title bar, edges, buttons and all, and asks the desktop to draw
 nothing round them. Dragging the title bar moves the window, dragging an
@@ -246,10 +299,11 @@ frame is let, and the window is then content alone. `PRESS_FRAME=desktop`
 in a program's environment asks for that everywhere.
 
 A style also says whether its menus stay in the window. Those in the
-manner of desktops that kept them there do (Ninety-Five, Two Thousand, Two
-Thousand and One); those in the manner of desktops with one menu bar
-across the top of the screen (Ninety-Nine, Two Thousand and Five, and
-black and white) hand their menus to a desktop that has such a bar, and
+manner of desktops that kept them there do (Eighty-Eight, Eighty-Nine,
+Ninety, Ninety-Three, Ninety-Five, Ninety-Eight, Two Thousand, Two Thousand and One, Two Thousand and Four);
+those in the manner of desktops with one menu bar across the top of the
+screen (Eighty-Five, Ninety-Nine, Two Thousand and Five, and black and
+white) hand their menus to a desktop that has such a bar, and
 keep them in the window where there is none.
 
 **Writing one.** A style is a shared library named
@@ -260,12 +314,12 @@ colour with alpha, and the engine's own hand for words, and may put
 anything there. `styles/ninetyfive/ninetyfive.c` is one in four hundred
 lines of C; the two smooth ones share their drawing, `styles/common/smooth.h`,
 which another style is free to take or leave. `make styles` builds all
-five. A style is looked for in the folders named in `PRESS_STYLE_PATH`, in
+twelve. A style is looked for in the folders named in `PRESS_STYLE_PATH`, in
 `styles/` beside `libpress.so` and beside it, in
 `~/.local/lib/press/styles`, and in `/usr/local/lib/press/styles` and
 `/usr/lib/press/styles`.
 
-The interface is at its third version. A style made for an earlier one is
+The interface is at its fifth version. A style made for an earlier one is
 still worn as it was written, in the desktop's frame.
 
 A Rust program that embeds the engine can dress it directly:
@@ -275,14 +329,13 @@ A Rust program that embeds the engine can dress it directly:
 **What a style does not decide yet.**
 
 - The rest of the manners that go with a look: which way round OK and
-  Cancel go, which key is the command key, where a scroll bar keeps its
-  arrows. Where the menu bar is, and where the title bar keeps its
-  buttons, it does decide.
-- A window's shadow, and the pointer's shape over the edges of a frame.
+  Cancel go, and which key is the command key.
+- A window's shadow, and the shape of the pointer away from the edges of
+  a frame, which is the engine's own everywhere.
 - Toolbars, status bars, group boxes, tooltips, and pictures in colour on
   buttons and in lists: the engine has none of these yet, in any style.
-- A few sizes: the room round a menu's words and a tab's, the cell of an
-  icon view, the border of a menu, which is one pixel.
+- A few sizes: the room round a menu's words and a tab's, and the cell of an
+  icon view.
 - Smooth things are drawn a pixel to a pixel and then magnified whole, so
   on a screen magnified two or three times (`PRESS_SCALE`, or a display
   that asks for it) they are as coarse as the pixels are large. Drawing
@@ -292,9 +345,6 @@ A Rust program that embeds the engine can dress it directly:
 - What a program draws itself on a `Canvas` or a `Picture` is its own, and
   is one bit deep (a photo apart) whatever the style, though its words are
   in the style's type.
-- The pointer over a tab, a table's heading or a scroll bar is not told to
-  a style, only over buttons, checkboxes, radio buttons, pop-ups and
-  sliders.
 
 ## The ABI
 

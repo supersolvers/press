@@ -142,19 +142,13 @@ static void radio(const press_part *p, box r) {
 }
 
 /* What is selected. On paper it is tinted, and the words stay black; in a
- * menu, which is grey, it goes deep blue and the words white. Which this
- * is, is told from what most of the top row is made of. */
-static void select_in(box r) {
-    int grey = 0, white = 0;
-    for (int x = r.x; x < r.x + r.w; x++) {
-        uint32_t c = at(x, r.y);
-        grey += c == PLATE;
-        white += c == WHITE;
-    }
+ * menu, which is grey, it goes deep blue and the words white. */
+static void select_in(const press_part *p, box r) {
+    int menu = p->a == 2;
     for (int y = r.y; y < r.y + r.h; y++) {
         for (int x = r.x; x < r.x + r.w; x++) {
             uint32_t c = at(x, y);
-            if (grey > white) {
+            if (menu) {
                 if (c == PLATE) px(x, y, ROYAL);
                 else if (c == BLACK) px(x, y, WHITE);
             } else if (c == WHITE) {
@@ -303,12 +297,15 @@ static void popup(const press_part *p, box r) {
 static void frame(const press_part *p, box r) {
     int active = has(p, PRESS_STATE_ENABLED), line = line_height();
     box inner = {r.x + p->b - 1, r.y + p->a - 1, r.w - 2 * p->b + 2, r.h - p->a - p->b + 2};
+    int rolled = has(p, PRESS_STATE_HELD);
     fill(r, active ? rgb(0xcccccc) : PLATE);
     if (active) lit_edge(inset(r, 1), LIT, DEEP);
     outline(r, BLACK);
-    /* the content sits in a black line of its own */
-    outline(inner, BLACK);
-    if (active) lit_edge((box){inner.x - 1, inner.y - 1, inner.w + 2, inner.h + 2}, DEEP, LIT);
+    /* the content sits in a black line of its own; rolled up, there is none to */
+    if (!rolled) {
+        outline(inner, BLACK);
+        if (active) lit_edge((box){inner.x - 1, inner.y - 1, inner.w + 2, inner.h + 2}, DEEP, LIT);
+    }
     int wide = text_width(p->text), tx = r.x + (r.w - wide) / 2, ty = r.y + (p->a - 1 - line) / 2 + 1;
     if (active) {
         for (int y = r.y + 5; y < r.y + p->a - 5; y += 2) {
@@ -335,7 +332,7 @@ static void frame_button(const press_part *p, box r) {
         /* a smaller box in its corner */
         fill((box){r.x + 2, r.y + 7, 6, 1}, BLACK);
         fill((box){r.x + 7, r.y + 2, 1, 6}, BLACK);
-    } else if (p->a == PRESS_FRAME_MINIMIZE) {
+    } else if (p->a == PRESS_FRAME_ROLL) {
         /* lines across it: the window rolled up into its title */
         fill((box){r.x + 2, r.y + 5, r.w - 4, 1}, BLACK);
         fill((box){r.x + 2, r.y + 7, r.w - 4, 1}, BLACK);
@@ -358,7 +355,7 @@ static int32_t draw(const press_part *p, const press_surface *surface) {
         if (has(p, PRESS_STATE_FOCUSED)) outline(r, ROYAL);
         else lit_edge(r, SHADE, LIT);
         break;
-    case PRESS_PART_SELECT: select_in(r); break;
+    case PRESS_PART_SELECT: select_in(p, r); break;
     case PRESS_PART_DIM: dim_in(r); break;
     case PRESS_PART_FOCUS: ring(r); break;
     case PRESS_PART_SLIDER: slider(p, r); break;
@@ -442,8 +439,9 @@ static void metrics(press_metrics *m) {
     m->frame_button_inset = 9;
     m->frame_button_rise = 0;
     m->frame_left = 0x1;   /* close */
-    m->frame_right = 0x32; /* zoom, then roll up, nearest the edge */
+    m->frame_right = 0x34; /* zoom, then roll up, nearest the edge */
     m->menu_in_window = 0;
+    m->frame_double = 1;   /* two clicks on the title roll the window up */
 }
 
 static void palette(press_palette *p) {

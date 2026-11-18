@@ -74,6 +74,9 @@ pub(super) enum EditAction {
     SelectAll,
     /// Not editing at all: one of a pop-up button's choices, by its index.
     Pick(usize),
+    /// Nor this: something asked of a window from its frame's own menu, by
+    /// the number of the title bar's button that does the same.
+    Frame(u8),
 }
 
 /// A menu's outline and the area of each of its items, in window coordinates.
@@ -104,8 +107,13 @@ pub struct MenuEntry {
     pub is_menu: bool,
 }
 
-fn shortcut_text(key: char) -> String {
-    format!("\u{2318}{}", key.to_uppercase())
+/// How a shortcut is written beside its item, as the style would have it.
+fn shortcut_text(key: char, form: i32) -> String {
+    match form {
+        1 => format!("Ctrl+{}", key.to_uppercase()),
+        2 => format!("^{}", key.to_uppercase()),
+        _ => format!("\u{2318}{}", key.to_uppercase()),
+    }
 }
 
 impl Ui {
@@ -394,7 +402,7 @@ impl Ui {
             if let Kind::MenuItem { action: Some(action), .. } = &node.kind {
                 node.enabled = match action {
                     EditAction::Cut | EditAction::Copy => selected && !secret,
-                    EditAction::Paste | EditAction::Pick(_) => true,
+                    EditAction::Paste | EditAction::Pick(_) | EditAction::Frame(_) => true,
                     EditAction::SelectAll => !empty,
                 };
             }
@@ -556,6 +564,14 @@ impl Ui {
         out
     }
 
+    /// The menu whose title in a window's own menu bar a point is over.
+    pub(super) fn bar_title_at(&mut self, window: Handle, x: i32, y: i32) -> Option<Handle> {
+        if self.menu_bar_of(window).is_none() || self.bar_is_external(window) {
+            return None;
+        }
+        self.bar_titles(window).into_iter().find(|(_, rect)| rect.contains(x, y)).map(|(menu, _)| menu)
+    }
+
     /// Lay a menu out with its top-left corner at a point.
     fn layout(&mut self, menu: Handle, x: i32, y: i32, min_inner: i32) -> Layout {
         let items = self.items_of(menu);
@@ -567,17 +583,18 @@ impl Ui {
                 if has_sub {
                     key_w = key_w.max(ARROW_WIDTH); // the arrow sits where a shortcut would
                 } else if let Some(key) = shortcut {
-                    key_w = key_w.max(self.font.width(&shortcut_text(key)));
+                    key_w = key_w.max(self.font.width(&shortcut_text(key, self.look.m.shortcut_form)));
                 }
             }
         }
         let inner = ITEM_LEFT + label_w + if key_w > 0 { SHORTCUT_GAP + key_w } else { 0 } + ITEM_RIGHT;
         let inner = inner.max(min_inner);
-        let frame = Rect::new(x, y, inner + 2, items.len() as i32 * self.look.m.menu_item_height + 2);
+        let edge = self.look.m.menu_border;
+        let frame = Rect::new(x, y, inner + 2 * edge, items.len() as i32 * self.look.m.menu_item_height + 2 * edge);
         let rects = items
             .into_iter()
             .enumerate()
-            .map(|(i, item)| (item, Rect::new(frame.x + 1, frame.y + 1 + i as i32 * self.look.m.menu_item_height, inner, self.look.m.menu_item_height)))
+            .map(|(i, item)| (item, Rect::new(frame.x + edge, frame.y + edge + i as i32 * self.look.m.menu_item_height, inner, self.look.m.menu_item_height)))
             .collect();
         (frame, rects)
     }
@@ -609,7 +626,8 @@ impl Ui {
                     // beside its parent item, overlapping the parent's edge a little
                     let parent = items.iter().find(|(item, _)| self.submenu_of(*item) == Some(menu)).map(|(_, r)| *r);
                     let right = frame.x + frame.w;
-                    parent.map(|r| self.layout(menu, right - 3, r.y - 1, 0))
+                    let edge = self.look.m.menu_border;
+                    parent.map(|r| self.layout(menu, right - 2 - edge, r.y - edge, 0))
                 }
             };
             match layout {
@@ -639,7 +657,7 @@ impl Ui {
             let Some(Kind::Menu { title, .. }) = self.nodes.get(menu).map(|n| &n.kind) else { continue };
             let (title, enabled) = (title.clone(), self.menu_enabled(menu));
             let part = Part::new(PartKind::MenuTitle, rect).text(&title);
-            self.part(canvas, part.when(state::ENABLED, enabled).when(state::HELD, lit == Some(menu)));
+            self.part(canvas, part.when(state::ENABLED, enabled).when(state::HELD, lit == Some(menu)).when(state::HOT, self.bar_hot == Some(menu)));
         }
     }
 
@@ -657,7 +675,7 @@ impl Ui {
         let shadow = self.look.m.menu_shadow;
         let mut canvas = Canvas::filled(frame.w + shadow, frame.h + shadow, crate::canvas::TRANSPARENT);
         canvas.fill(Rect::new(0, 0, frame.w, frame.h), self.look.pal.menu);
-        self.part(&mut canvas, Part::new(PartKind::MenuFrame, Rect::new(0, 0, frame.w + shadow, frame.h + shadow)).numbers(shadow, 0, 0));
+        self.part(&mut canvas, Part::new(PartKind::MenuFrame, Rect::new(0, 0, frame.w + shadow, frame.h + shadow)).numbers(shadow, self.look.m.menu_border, 0));
         for (item, rect) in items {
             let r = Rect::new(rect.x - frame.x, rect.y - frame.y, rect.w, rect.h);
             let Some(Kind::MenuItem { label, checked, shortcut, separator, submenu, .. }) = self.nodes.get(item).map(|n| &n.kind) else { continue };
@@ -668,24 +686,20 @@ impl Ui {
             }
             let y = r.y + (r.h - line) / 2;
             if checked {
-                self.font.draw(&mut canvas, "\u{2713}", r.x + 3, y, ink);
+                self.part(&mut canvas, Part::new(PartKind::MenuCheck, Rect::new(r.x, r.y, ITEM_LEFT, r.h)).ink(ink));
             }
             self.font.draw(&mut canvas, &label, r.x + ITEM_LEFT, y, ink);
             if has_sub {
-                // a solid arrow pointing at where the submenu opens
-                let (tip, mid) = (r.x + r.w - ITEM_RIGHT + 4, r.y + r.h / 2);
-                for d in 0..ARROW_WIDTH - 2 {
-                    canvas.fill(Rect::new(tip - d, mid - d, 1, 2 * d + 1), ink);
-                }
+                self.part(&mut canvas, Part::new(PartKind::MenuArrow, r).ink(ink));
             } else if let Some(key) = shortcut {
-                let text = shortcut_text(key);
+                let text = shortcut_text(key, self.look.m.shortcut_form);
                 let w = self.font.width(&text);
                 self.font.draw(&mut canvas, &text, r.x + r.w - ITEM_RIGHT - w + 4, y, ink);
             }
             if !self.choosable(item) {
                 self.part(&mut canvas, Part::new(PartKind::Dim, r));
             } else if hot == Some(item) && blink.is_none_or(|(blinking, on)| blinking != item || on) {
-                self.part(&mut canvas, Part::new(PartKind::Select, r));
+                self.part(&mut canvas, Part::new(PartKind::Select, r).numbers(2, 0, 0));
             }
         }
         Some(canvas)
@@ -739,7 +753,7 @@ impl Ui {
     /// End a blink now: put the menus away and report the choice.
     pub(super) fn finish_menu_blink(&mut self) -> Vec<Emitted> {
         let Some((item, _)) = self.menu_blink.take() else { return Vec::new() };
-        let target = self.menu_open.as_ref().and_then(|m| m.target);
+        let (target, window) = (self.menu_open.as_ref().and_then(|m| m.target), self.menu_open.as_ref().map(|m| m.window));
         self.close_menu();
         if !self.choosable(item) {
             return Vec::new(); // destroyed or disabled while it blinked
@@ -754,8 +768,17 @@ impl Ui {
                     EditAction::Paste => self.text_field_request_paste(field).map(|_| Vec::new()),
                     EditAction::SelectAll => self.text_field_select_all(field).map(|_| Vec::new()),
                     EditAction::Pick(index) => Ok(self.popup_pick(field, index)),
+                    EditAction::Frame(_) => Ok(Vec::new()),
                 };
                 done.unwrap_or_default()
+            }
+            // from the menu of a window's own frame: the display does it
+            (Some(Kind::MenuItem { action: Some(EditAction::Frame(which)), .. }), None) => {
+                let which = *which;
+                if let Some(window) = window {
+                    self.frame_ask(window, which);
+                }
+                Vec::new()
             }
             (Some(Kind::MenuItem { action: Some(_), .. }), None) => Vec::new(),
             _ => vec![Emitted { target: item, event: "MenuItem.activated", args: vec![] }],

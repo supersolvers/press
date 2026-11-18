@@ -17,7 +17,7 @@ use std::sync::Arc;
 /// The version of the interface below. A library made for an earlier
 /// version is still worn, as it was written; one made for any other but
 /// these is not used.
-pub const ABI: u32 = 3;
+pub const ABI: u32 = 5;
 
 /// A part to draw, as a style library is handed it. See
 /// [`press_core::PartKind`] for what the numbers mean for each kind.
@@ -35,6 +35,10 @@ pub struct RawPart {
     pub c: i32,
     /// The words on it, UTF-8 with a NUL after; never null.
     pub text: *const c_char,
+    // From here on, only read by a style made for the fifth version or later.
+    pub d: i32,
+    /// The colour the engine would have drawn a small mark in.
+    pub ink: u32,
 }
 
 /// What a style library draws on: the pixels, ARGB and a row after a row,
@@ -79,6 +83,9 @@ pub struct RawType {
     /// In pixels.
     pub size: i32,
     pub bold: i32,
+    /// From the fifth version: not 0 for whole pixels, with no greys at
+    /// the edges of the letters.
+    pub crisp: i32,
 }
 
 /// The engine's families in the order a style library numbers them.
@@ -118,6 +125,24 @@ struct Foreign {
     raw: &'static RawStyle,
 }
 
+impl Foreign {
+    /// Ask the library which typeface it would have for a numbered use.
+    fn asked_type(&self, number: u32) -> Option<press_core::Type> {
+        let ask = self.raw.typeface?;
+        let mut out = RawType { family: [0; 128], size: 0, bold: 0, crisp: 0 };
+        if unsafe { ask(number, &mut out) } == 0 {
+            return None;
+        }
+        out.family[127] = 0;
+        let family = unsafe { CStr::from_ptr(out.family.as_ptr()) }.to_string_lossy().trim().to_string();
+        // a family's name goes to fontconfig as it is: nothing in it may be
+        // taken for the rest of a pattern (the engine's own are named press:...)
+        let own = family.starts_with("press:");
+        let plain = family.chars().all(|c| c.is_alphanumeric() || matches!(c, ' ' | ',' | '-' | '_' | '.')) || own;
+        (!family.is_empty() && plain && (own || out.size > 0)).then(|| press_core::Type { family, size: out.size, bold: out.bold != 0, crisp: self.raw.abi >= 5 && out.crisp != 0 })
+    }
+}
+
 // The library's functions are only ever called from the UI thread; the
 // engine asks for these marks because a style is shared by reference.
 unsafe impl Send for Foreign {}
@@ -129,7 +154,7 @@ impl Style for Foreign {
     }
 
     fn metrics(&self) -> Metrics {
-        let mut m = press_core::OneBit::METRICS;
+        let mut m = press_core::EightyFour::METRICS;
         if let Some(f) = self.raw.metrics {
             unsafe { f(&mut m) };
         }
@@ -167,15 +192,30 @@ impl Style for Foreign {
             frame_left: m.frame_left & 0xffff,
             frame_right: m.frame_right & 0xffff,
             menu_in_window: i32::from(self.raw.abi >= 3 && m.menu_in_window != 0),
+            frame_tab: if self.raw.abi >= 4 { m.frame_tab.clamp(0, 64) } else { 0 },
+            shortcut_form: if self.raw.abi >= 5 { m.shortcut_form.clamp(0, 2) } else { 0 },
+            frame_foot: if self.raw.abi >= 5 { m.frame_foot.clamp(0, 48) } else { 0 },
+            frame_double: if self.raw.abi >= 5 { m.frame_double.clamp(0, 2) } else { 0 },
+            scroll_arrows: if self.raw.abi >= 5 { m.scroll_arrows.clamp(0, 1) } else { 0 },
+            tab_align: if self.raw.abi >= 5 { m.tab_align.clamp(0, 1) } else { 0 },
+            menu_border: if self.raw.abi >= 5 { m.menu_border.clamp(1, 8) } else { 1 },
         }
     }
 
     fn palette(&self) -> Palette {
-        let mut p = press_core::OneBit::PALETTE;
+        // what a style leaves unsaid of the later colours follows what it
+        // says of the earlier: lists are on the paper, a pane is of the window
+        let mut p = Palette { list: 0, list_ink: 0, pane: 0, ..press_core::EightyFour::PALETTE };
         if let Some(f) = self.raw.palette {
             unsafe { f(&mut p) };
         }
-        p
+        let said = self.raw.abi >= 5;
+        Palette {
+            list: if said && p.list != 0 { p.list } else { p.paper },
+            list_ink: if said && p.list_ink != 0 { p.list_ink } else { p.ink },
+            pane: if said && p.pane != 0 { p.pane } else { p.window },
+            ..p
+        }
     }
 
     fn wants(&self) -> u32 {
@@ -186,18 +226,13 @@ impl Style for Foreign {
         if self.raw.abi < 2 {
             return None;
         }
-        let ask = self.raw.typeface?;
         let number = FACES.iter().position(|f| *f == face)? as u32;
-        let mut out = RawType { family: [0; 128], size: 0, bold: 0 };
-        if unsafe { ask(number, &mut out) } == 0 {
-            return None;
-        }
-        out.family[127] = 0;
-        let family = unsafe { CStr::from_ptr(out.family.as_ptr()) }.to_string_lossy().trim().to_string();
-        // a family's name goes to fontconfig as it is: nothing in it may be
-        // taken for the rest of a pattern
-        let plain = family.chars().all(|c| c.is_alphanumeric() || matches!(c, ' ' | ',' | '-' | '_' | '.'));
-        (!family.is_empty() && plain && out.size > 0).then(|| press_core::Type { family, size: out.size, bold: out.bold != 0 })
+        self.asked_type(number)
+    }
+
+    fn frame_typeface(&self) -> Option<press_core::Type> {
+        // the title of a window's own frame is numbered after the families
+        if self.raw.abi < 5 { None } else { self.asked_type(FACES.len() as u32) }
     }
 
     fn draw(&self, part: &Part, painter: &mut Painter) -> bool {
@@ -215,6 +250,8 @@ impl Style for Foreign {
             b: part.b,
             c: part.c,
             text: text.as_ptr(),
+            d: part.d,
+            ink: part.ink,
         };
         let canvas: *mut press_core::Canvas = &mut *painter.canvas;
         let mut hand = Hand { canvas, font: &mut *painter.font };
@@ -301,8 +338,9 @@ fn chosen() -> Option<String> {
 
 /// A style by its name, or by the path of its library.
 pub fn named(named: &str) -> Result<Arc<dyn Style>, String> {
-    if named == "one-bit" {
-        return Ok(Arc::new(press_core::OneBit));
+    // black and white is in the engine
+    if named == "eightyfour" {
+        return Ok(Arc::new(press_core::EightyFour));
     }
     if named.contains('/') {
         return load(Path::new(named));
@@ -322,7 +360,7 @@ pub fn fixed_by_user() -> bool {
 
 /// The style the interface should wear, if not the one it was born with.
 pub fn choose() -> Option<Arc<dyn Style>> {
-    let named = chosen().filter(|n| !n.is_empty() && n != "one-bit")?;
+    let named = chosen().filter(|n| !n.is_empty() && n != "eightyfour")?;
     let found = self::named(&named);
     match found {
         Ok(style) => Some(style),

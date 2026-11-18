@@ -143,9 +143,9 @@ impl Ui {
         let layout = self.view_layout(h)?;
         let scroll = self.clamp_view(h);
         Some(if horizontal {
-            Bar { rect: layout.hbar?, vertical: false, value: scroll.0, max: layout.max.0, page: layout.port.w, step: STEP, enabled }
+            Bar { rect: layout.hbar?, vertical: false, value: scroll.0, max: layout.max.0, page: layout.port.w, step: STEP, enabled, together: self.look.m.scroll_arrows == 1 }
         } else {
-            Bar { rect: layout.vbar, vertical: true, value: scroll.1, max: layout.max.1, page: layout.port.h, step: STEP, enabled }
+            Bar { rect: layout.vbar, vertical: true, value: scroll.1, max: layout.max.1, page: layout.port.h, step: STEP, enabled, together: self.look.m.scroll_arrows == 1 }
         })
     }
 
@@ -165,7 +165,7 @@ impl Ui {
         self.part(canvas, Part::new(PartKind::ViewFrame, rect));
         // The content is drawn on a sheet of its own and only the part that
         // falls in the opening is copied across: that is the clipping.
-        let mut sheet = Canvas::filled(canvas.width, canvas.height, self.look.pal.window);
+        let mut sheet = Canvas::filled(canvas.width, canvas.height, self.ground);
         for c in self.children(h) {
             self.paint(c, &mut sheet, enabled, ctx);
         }

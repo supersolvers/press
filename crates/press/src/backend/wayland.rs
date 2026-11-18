@@ -810,6 +810,11 @@ impl Session {
             // a window destroyed by an earlier handler simply has no events
             deliver(events.unwrap_or_default());
         }
+        // what was chosen from a window's own menu, or done to it by its
+        // frame in passing, is done once the engine has been through the events
+        while let Ok(Some((window, act))) = with(|rt| Ok(rt.ui.take_frame_ask())) {
+            state.frame_act(window, act);
+        }
 
         // pictures that stretch hear of the room they were given
         deliver(with(|rt| Ok(rt.ui.layout_events()))?);
@@ -981,7 +986,9 @@ impl State {
             // The buffer is exactly the size the compositor gave the window,
             // in the screen's own pixels, even when that is not a whole
             // number of engine pixels.
-            let size = s.size.unwrap_or((units.out(canvas.width), units.out(canvas.height)));
+            // (a window rolled up into its title bar is as small as its picture, whatever it was given)
+            let rolled = with(|rt| Ok(rt.ui.window_rolled(s.handle))).unwrap_or(false);
+            let size = s.size.filter(|_| !rolled).unwrap_or((units.out(canvas.width), units.out(canvas.height)));
             let (w, h) = (units.device(size.0), units.device(size.1));
             let Ok((buffer, bytes)) = self.pool.create_buffer(w, h, w * 4, wl_shm::Format::Argb8888) else { continue };
             // beyond a frame of its own a window is see-through, as outside its corners

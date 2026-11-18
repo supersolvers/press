@@ -171,7 +171,9 @@ static void scroll_bar(const press_part *p, box r) {
         fill((box){r.x + 1, r.y + 3, r.w - 2, 2}, rgb(0xe8e8e8));
     }
     for (int second = 0; second < 2; second++) {
-        box b = vertical ? (box){r.x, second ? r.y + r.h - thick : r.y, thick, thick} : (box){second ? r.x + r.w - thick : r.x, r.y, thick, thick};
+        /* both arrows are together at the far end of the bar */
+        int from = (vertical ? r.y + r.h : r.x + r.w) - (2 - second) * thick;
+        box b = vertical ? (box){r.x, from, thick, thick} : (box){from, r.y, thick, thick};
         int held = live && p->a == second + 1;
         gel(b, 2, !live ? DULL : held ? WATER : CLEAR, 0);
         arrow(b.x + b.w / 2, b.y + b.h / 2, 4, vertical ? second : 2 + second, live ? rgb(0x303030) : GREY);
@@ -183,12 +185,19 @@ static void scroll_bar(const press_part *p, box r) {
 }
 
 static void tab(const press_part *p, box r) {
-    /* tabs are a row of buttons that stand just above the pane */
+    /* tabs are one bar of gel cut into pieces, in the middle of the pane's
+     * top: only the ends of the bar are round */
     box b = {r.x, r.y, r.w, r.h - 4};
     int front = has(p, PRESS_STATE_FRONT);
     if (front && has(p, PRESS_STATE_FOCUSED))
         halo(b, 4);
-    gel(b, 4, front ? WATER : CLEAR, 0);
+    box whole = b;
+    if (!(p->a & 1)) { whole.x -= 8; whole.w += 8; }
+    if (!(p->a & 2)) whole.w += 8;
+    clip_to(b);
+    gel(whole, 5, front ? WATER : CLEAR, 0);
+    if (!(p->a & 2)) fill_over((box){b.x + b.w - 1, b.y + 1, 1, b.h - 2}, with_alpha(BLACK, 0.35f));
+    clip_off();
     words(p->text, r.x + (r.w - text_width(p->text)) / 2, b.y + (b.h - line_height()) / 2, BLACK);
 }
 
@@ -275,7 +284,11 @@ static int32_t draw(const press_part *p, const press_surface *surface) {
     case PRESS_PART_CHECKBOX: checkbox(p, r); break;
     case PRESS_PART_RADIO: radio(p, r); break;
     case PRESS_PART_WELL: well(p, r); break;
-    case PRESS_PART_SELECT: recolour(r, BLUE, WHITE); break;
+    case PRESS_PART_SELECT:
+        /* a row or a menu's item goes blue with white words; words picked out in a text keep their black on a pale blue */
+        if (p->a == 1) recolour(r, rgb(0xb5d5ff), BLACK);
+        else recolour(r, BLUE, WHITE);
+        break;
     case PRESS_PART_DIM: dim_in(r); break;
     case PRESS_PART_FOCUS: halo(r, 2); break;
     case PRESS_PART_SLIDER: slider(p, r); break;
@@ -356,6 +369,8 @@ static void metrics(press_metrics *m) {
     m->frame_left = 0x321; /* close, put away, zoom */
     m->frame_right = 0;
     m->menu_in_window = 0;
+    m->scroll_arrows = 1;
+    m->tab_align = 1;
 }
 
 static void palette(press_palette *p) {

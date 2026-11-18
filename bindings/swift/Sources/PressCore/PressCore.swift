@@ -358,7 +358,7 @@ public enum App {
         return out
     }
 
-    /// Choose how the program looks: the name of a style (ninetyfive, say, looked for as libpress_style_ninetyfive.so where styles are kept), the path of a style's library, or one-bit for black and white. A style with a frame of its own has the program's windows draw their title bars and edges themselves, and one that keeps its menus in the window keeps them there on any desktop. Call it after init and before making windows. It takes the place of the desktop's choice of style; PRESS_STYLE in the program's environment, which is the user saying otherwise for one run, takes the place of this. A style that cannot be had is refused with INVALID_ARGUMENT, and the program looks as it did.
+    /// Choose how the program looks: the name of a style (ninetyfive, say, looked for as libpress_style_ninetyfive.so where styles are kept), the path of a style's library, or eightyfour for black and white. A style with a frame of its own has the program's windows draw their title bars and edges themselves, and one that keeps its menus in the window keeps them there on any desktop. Call it after init and before making windows. It takes the place of the desktop's choice of style; PRESS_STYLE in the program's environment, which is the user saying otherwise for one run, takes the place of this. A style that cannot be had is refused with INVALID_ARGUMENT, and the program looks as it did.
     public static func setStyle(_ name: String) throws {
         try _check(press_app_set_style(name, name.utf8.count))
     }

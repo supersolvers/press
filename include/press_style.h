@@ -32,7 +32,7 @@ extern "C" {
 #endif
 
 /* The version of this interface, for press_style.abi. */
-#define PRESS_STYLE_ABI 3
+#define PRESS_STYLE_ABI 5
 
 /* Sizes, in pixels. */
 typedef struct press_metrics {
@@ -71,13 +71,27 @@ typedef struct press_metrics {
                                  PRESS_FRAME_CLOSE, _MINIMIZE, _ZOOM: 0x231 at the right is
                                  minimize, zoom, close as read from the left */
     int32_t menu_in_window;   /* not 0: the menu bar stays in the window on every desktop */
+    /* from version 4 */
+    int32_t frame_tab;        /* not 0: the title bar is a tab at the left of the window's top,
+                                 as wide as its buttons and the title with this much room
+                                 either side of it; the rest of that strip is left see-through */
+    /* from version 5 */
+    int32_t shortcut_form;    /* how a menu's shortcuts are written: 0 the command key's sign
+                                 and the letter, 1 Ctrl+ and the letter, 2 a caret and the letter */
+    int32_t frame_foot;       /* thickness of the frame along the bottom, if not as along the sides */
+    int32_t frame_double;     /* two clicks on a title bar: 0 zoom, 1 roll the window up, 2 put it away */
+    int32_t scroll_arrows;    /* 0 an arrow at each end of a scroll bar; 1 both at the far end */
+    int32_t tab_align;        /* 0 tabs from the left of a tab view; 1 in the middle */
+    int32_t menu_border;      /* thickness of a menu's edge, inside which its items lie */
 } press_metrics;
 
 /* The buttons of a title bar. */
 enum {
     PRESS_FRAME_CLOSE = 1,
     PRESS_FRAME_MINIMIZE = 2,
-    PRESS_FRAME_ZOOM = 3
+    PRESS_FRAME_ZOOM = 3,
+    PRESS_FRAME_ROLL = 4,     /* roll the window up into its title bar, or let it down */
+    PRESS_FRAME_MENU = 5      /* show the window's own menu; two clicks on it close the window */
 };
 
 /* Colours, as 0xAARRGGBB. The engine draws words and small marks itself,
@@ -89,6 +103,10 @@ typedef struct press_palette {
     uint32_t ink;
     uint32_t menu;            /* a menu bar and its menus */
     uint32_t menu_text;
+    /* from version 5; any left 0 follows the one it is like */
+    uint32_t list;            /* lists, tables and trees, where not on the paper */
+    uint32_t list_ink;
+    uint32_t pane;            /* what the pages of a tab view lie on, where not the window's */
 } press_palette;
 
 /* The parts a window is drawn from. */
@@ -98,41 +116,56 @@ enum {
                                        twenty times a second for a style that wants PULSE */
     PRESS_PART_CHECKBOX = 3,        /* with its label. CHECKED, HELD, FOCUSED */
     PRESS_PART_RADIO = 4,           /* with its label. CHECKED, HELD, FOCUSED */
-    PRESS_PART_WELL = 5,            /* the box round a text field or list, and its paper. FOCUSED */
-    PRESS_PART_SELECT = 6,          /* show what is already drawn there as selected */
+    PRESS_PART_WELL = 5,            /* the box round a text field or list, and its paper. FOCUSED.
+                                       a: 0 a line of text, 1 a list, 2 an area of text */
+    PRESS_PART_SELECT = 6,          /* show what is already drawn there as selected.
+                                       a: 0 a row of a list, 1 text, 2 an item of a menu */
     PRESS_PART_DIM = 7,             /* show what is already drawn there as out of use */
     PRESS_PART_FOCUS = 8,           /* a ring: this has the keyboard */
     PRESS_PART_SLIDER = 9,          /* VERTICAL, FOCUSED, HELD. a: where the knob starts; b: its length */
     PRESS_PART_PROGRESS = 10,       /* BUSY, or a of b done */
     PRESS_PART_SCROLL_BAR = 11,     /* VERTICAL; ENABLED if there is anywhere to go. a: 1 or 2 while
                                        the first or second arrow is held; b: where the sliding box
-                                       starts, or -1 for none; c: its length. The arrow boxes are
-                                       as long as the bar is thick */
+                                       starts, or -1 for none; c: its length; d: what the pointer is
+                                       over, for a style that wants HOVER: 1 and 2 the arrows, 3 the
+                                       box. The arrow boxes are as long as the bar is thick, one at
+                                       each end, or both at the far end if scroll_arrows is 1 */
     PRESS_PART_SCROLL_CORNER = 12,  /* where two scroll bars meet */
     PRESS_PART_TAB = 13,            /* with its title. FRONT for the chosen one, which is drawn
-                                       after the pane; FOCUSED */
+                                       after the pane; FOCUSED; HOT. a: 1 the first of the row,
+                                       2 the last, 3 the only one */
     PRESS_PART_TAB_PANE = 14,       /* the framed area the pages show in */
     PRESS_PART_POPUP = 15,          /* a pop-up button and its choice. FOCUSED; HELD while its list is up */
     PRESS_PART_MENU_BAR = 16,       /* across the top of a window, before its titles */
-    PRESS_PART_MENU_TITLE = 17,     /* one title. HELD while its menu is down; ENABLED */
+    PRESS_PART_MENU_TITLE = 17,     /* one title. HELD while its menu is down; ENABLED; HOT */
     PRESS_PART_MENU_FRAME = 18,     /* a menu's outline and shadow, on a picture of their own: the
-                                       items are one pixel inside, and the last a columns and rows
+                                       items are b pixels inside (menu_border), and the last a columns and rows
                                        (menu_shadow of them) are the shadow's, see-through until
                                        drawn on. A pixel's top byte says how solid it is, so a
                                        shadow can be soft */
     PRESS_PART_MENU_SEPARATOR = 19, /* a dividing line, in the room of one item */
     PRESS_PART_VIEW_FRAME = 20,     /* the box round a scroll view */
     PRESS_PART_HEADER = 21,         /* the row of headings over a table, before the headings */
-    PRESS_PART_HEADER_CELL = 22,    /* one heading, before its words */
+    PRESS_PART_HEADER_CELL = 22,    /* one heading, before its words. HOT */
     PRESS_PART_FRAME = 23,          /* the frame of a window that draws its own: the title bar with
                                        the title, and the edges. The rectangle is the whole window,
                                        see-through until drawn on (leave its corners so to round
                                        them); the content is laid over the middle afterwards.
-                                       a: the title bar's height; b: the edges' thickness.
+                                       a: the title bar's height; b: the edges' thickness;
+                                       c: the title bar's width (the window's, unless a tab).
                                        ENABLED for the window in front; CHECKED for one made as
                                        large as it can be */
-    PRESS_PART_FRAME_BUTTON = 24    /* a button in a title bar. a: PRESS_FRAME_CLOSE and so on.
+    PRESS_PART_FRAME_BUTTON = 24,   /* a button in a title bar. a: PRESS_FRAME_CLOSE and so on.
                                        HOT, HELD; ENABLED and CHECKED as for the frame */
+    /* from version 5: small marks the engine used to draw itself, and
+     * still does for a style that returns 0 for them. Draw them in ink. */
+    PRESS_PART_MENU_CHECK = 25,     /* beside a menu's item that is switched on: the room at its left */
+    PRESS_PART_MENU_ARROW = 26,     /* at the right of an item that opens another menu: the item's rectangle */
+    PRESS_PART_SORT_ARROW = 27,     /* in a table's heading the rows are in the order of: its middle
+                                       is at (a, b). CHECKED for smallest first */
+    PRESS_PART_TREE_FOLD = 28,      /* before a row of a tree with rows under it: its middle is at
+                                       (a, b). CHECKED when they are showing */
+    PRESS_PART_CARET = 29           /* where typing goes: one pixel wide, as tall as the line */
 };
 
 /* States, added together in press_part.state. */
@@ -164,7 +197,8 @@ enum {
     PRESS_FACE_SMALL_BOLD = 2,
     PRESS_FACE_READING = 3,    /* long text */
     PRESS_FACE_FIXED = 4,      /* every letter the same width */
-    PRESS_FACE_TITLE = 5       /* large and heavy */
+    PRESS_FACE_TITLE = 5,      /* large and heavy */
+    PRESS_FACE_FRAME = 6       /* from version 5: the title of a window's own frame */
 };
 
 /* A typeface of the machine's, drawn smooth from its outlines. */
@@ -173,7 +207,13 @@ typedef struct press_type {
                                   tried in turn, and the nearest thing is used if none is here */
     int32_t size;              /* in pixels */
     int32_t bold;
+    int32_t crisp;             /* from version 5: not 0 for whole pixels, no greys at the edges */
 } press_type;
+
+/* A family may also be one of the engine's own, to stand in the place of
+ * another: "press:cicero", "press:agate", "press:agate-bold",
+ * "press:brevier", "press:pica" (fixed width), "press:elite". Its size is
+ * then its own. */
 
 /* One part to draw. */
 typedef struct press_part {
@@ -183,6 +223,9 @@ typedef struct press_part {
     int32_t phase;            /* counts up as time passes, for anything that moves */
     int32_t a, b, c;          /* what these mean depends on the kind */
     const char *text;         /* its words, UTF-8; never NULL */
+    /* from version 5 */
+    int32_t d;
+    uint32_t ink;             /* the colour the engine would have drawn a small mark in */
 } press_part;
 
 /* What to draw on. pixels[y * width + x] is 0xAARRGGBB, not multiplied by

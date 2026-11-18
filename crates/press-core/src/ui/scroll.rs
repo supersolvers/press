@@ -58,6 +58,8 @@ pub(super) struct Bar {
     pub page: i32,
     pub step: i32,
     pub enabled: bool,
+    /// Both arrows are at the far end, one beside the other.
+    pub together: bool,
 }
 
 impl Bar {
@@ -80,6 +82,9 @@ impl Bar {
     /// arrow box by a pixel so that their borders coincide at the ends.
     fn track(&self) -> (i32, i32) {
         let (start, len) = self.along();
+        if self.together {
+            return (start, (len - 2 * self.thick() + 1).max(0));
+        }
         (start + self.thick() - 1, (len - 2 * (self.thick() - 1)).max(0))
     }
 
@@ -111,11 +116,11 @@ impl Bar {
         }
         let (start, len) = self.along();
         let pos = if self.vertical { y } else { x };
-        if pos < start + self.thick() {
-            return Some(Part::Back);
-        }
         if pos >= start + len - self.thick() {
             return Some(Part::Forward);
+        }
+        if (self.together && pos >= start + len - 2 * self.thick()) || (!self.together && pos < start + self.thick()) {
+            return Some(Part::Back);
         }
         let (thumb, size) = self.thumb()?;
         Some(if pos < thumb {
@@ -142,6 +147,17 @@ impl Bar {
 
     /// The bar as a part for the style to draw. `held` is the arrow being
     /// pressed, if one is.
+    /// A part of the bar as a style numbers it for the pointer being over
+    /// it: 1 the first arrow, 2 the second, 3 the sliding box.
+    fn piece(part: Part) -> i32 {
+        match part {
+            Part::Back => 1,
+            Part::Forward => 2,
+            Part::Thumb => 3,
+            _ => 0,
+        }
+    }
+
     pub(super) fn as_part(&self, held: Option<Part>) -> crate::style::Part<'static> {
         let held = match held {
             Some(Part::Back) => 1,
@@ -256,13 +272,19 @@ impl Ui {
             Kind::ScrollBar { orientation, .. } if (*orientation == Orientation::Horizontal) != horizontal => None,
             Kind::TextField { .. } if horizontal => None,
             Kind::ScrollBar { orientation, value, max, page, step, .. } => Some(Bar {
-                rect: node.rect,
+                // no thicker than a scroll bar is, whatever room it was given across
+                rect: if *orientation == Orientation::Vertical {
+                    Rect::new(node.rect.x, node.rect.y, node.rect.w.min(self.look.m.scroll_bar), node.rect.h)
+                } else {
+                    Rect::new(node.rect.x, node.rect.y, node.rect.w, node.rect.h.min(self.look.m.scroll_bar))
+                },
                 vertical: *orientation == Orientation::Vertical,
                 value: *value,
                 max: *max,
                 page: *page,
                 step: *step,
                 enabled,
+                together: self.look.m.scroll_arrows == 1,
             }),
             Kind::TextField { multiline: true, edit, scroll, .. } => {
                 let (rect, text, scroll) = (node.rect, edit.text().to_string(), *scroll);
@@ -270,7 +292,7 @@ impl Ui {
                 let rows = (inner.h / self.font.line_height()).max(1);
                 let lines = self.wrap(&text, inner.w - 2, true).len() as i32;
                 let max = (lines - rows).max(0);
-                Some(Bar { rect: Self::area_bar_rect(rect, self.look.m.scroll_bar), vertical: true, value: scroll.clamp(0, max), max, page: rows, step: 1, enabled })
+                Some(Bar { rect: Self::area_bar_rect(rect, self.look.m.scroll_bar), vertical: true, value: scroll.clamp(0, max), max, page: rows, step: 1, enabled, together: self.look.m.scroll_arrows == 1 })
             }
             _ => None,
         }
@@ -415,8 +437,21 @@ impl Ui {
     pub(super) fn bar_draw(&mut self, h: Handle, horizontal: bool, canvas: &mut Canvas) {
         let held = self.bar_held(h, horizontal);
         if let Some(bar) = self.bar_of(h, horizontal) {
-            self.part(canvas, bar.as_part(held));
+            let mut part = bar.as_part(held);
+            // the piece of it the pointer is over, for a style that lights it
+            let piece = self.hover_piece - 2000 - i32::from(horizontal) * 10;
+            if self.hover == Some(h) && (1..=3).contains(&piece) {
+                part.d = piece;
+            }
+            self.part(canvas, part);
         }
+    }
+
+    /// The part of one of a widget's scroll bars a point is over, as a
+    /// style numbers it; none if it has no such bar or the point is off it.
+    pub(super) fn bar_part_at(&mut self, h: Handle, horizontal: bool, x: i32, y: i32) -> Option<i32> {
+        let part = self.bar_of(h, horizontal)?.part_at(x, y)?;
+        Some(Bar::piece(part)).filter(|p| *p > 0)
     }
 }
 
@@ -425,7 +460,7 @@ mod tests {
     use super::*;
 
     fn bar(value: i32, max: i32, page: i32) -> Bar {
-        Bar { rect: Rect::new(10, 20, BAR, 200), vertical: true, value, max, page, step: 1, enabled: true }
+        Bar { rect: Rect::new(10, 20, BAR, 200), vertical: true, value, max, page, step: 1, enabled: true, together: false }
     }
 
     #[test]

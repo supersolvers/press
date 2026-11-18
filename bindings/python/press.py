@@ -267,7 +267,7 @@ class App:
 
     @staticmethod
     def set_style(name):
-        """Choose how the program looks: the name of a style (ninetyfive, say, looked for as libpress_style_ninetyfive.so where styles are kept), the path of a style's library, or one-bit for black and white. A style with a frame of its own has the program's windows draw their title bars and edges themselves, and one that keeps its menus in the window keeps them there on any desktop. Call it after init and before making windows. It takes the place of the desktop's choice of style; PRESS_STYLE in the program's environment, which is the user saying otherwise for one run, takes the place of this. A style that cannot be had is refused with INVALID_ARGUMENT, and the program looks as it did."""
+        """Choose how the program looks: the name of a style (ninetyfive, say, looked for as libpress_style_ninetyfive.so where styles are kept), the path of a style's library, or eightyfour for black and white. A style with a frame of its own has the program's windows draw their title bars and edges themselves, and one that keeps its menus in the window keeps them there on any desktop. Call it after init and before making windows. It takes the place of the desktop's choice of style; PRESS_STYLE in the program's environment, which is the user saying otherwise for one run, takes the place of this. A style that cannot be had is refused with INVALID_ARGUMENT, and the program looks as it did."""
         _lib.press_app_set_style.argtypes = [ctypes.c_char_p, ctypes.c_size_t]
         _check(_lib.press_app_set_style(*_s(name)))
 

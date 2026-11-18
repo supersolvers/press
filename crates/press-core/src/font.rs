@@ -76,6 +76,9 @@ pub struct Type {
     pub family: String,
     pub size: i32,
     pub bold: bool,
+    /// Drawn in whole pixels, each either ink or not, as screens drew
+    /// outlines before they smoothed them.
+    pub crisp: bool,
 }
 
 /// The outline a smooth font draws its letters from.
@@ -83,6 +86,8 @@ pub struct Type {
 struct Outline {
     face: Arc<fontdue::Font>,
     size: f32,
+    /// Each pixel ink or not: no greys at the edges.
+    crisp: bool,
 }
 
 /// One bundled family, read where it lies: nothing is unpacked until a
@@ -270,13 +275,25 @@ impl Font {
     /// family it stands in for, which it falls back on for signs and
     /// pictures, and is all there is if the machine has no such font.
     pub fn smooth(face: Face, wanted: &Type) -> Font {
+        // one of the engine's own families may be asked for by name, to
+        // stand in the place of another: "press:pica", say
+        if let Some(own) = wanted.family.strip_prefix("press:") {
+            return Font::of(match own {
+                "agate" => Face::Agate,
+                "agate-bold" => Face::AgateBold,
+                "brevier" => Face::Brevier,
+                "pica" => Face::Pica,
+                "elite" => Face::Elite,
+                _ => Face::Cicero,
+            });
+        }
         let mut font = Font::of(face);
         let size = wanted.size.clamp(6, 96) as f32;
         if let Some(outline) = named(&wanted.family, wanted.bold) {
             if let Some(line) = outline.horizontal_line_metrics(size) {
                 font.ascent = line.ascent.round() as i32;
                 font.descent = (-line.descent).round().max(1.0) as i32;
-                font.outline = Some(Outline { face: outline, size });
+                font.outline = Some(Outline { face: outline, size, crisp: wanted.crisp });
             }
         }
         font
@@ -351,7 +368,8 @@ impl Font {
     fn smooth_glyph(&self, ch: char, outline: &Outline) -> Glyph {
         let drawn = |face: &fontdue::Font| {
             let (m, coverage) = face.rasterize(ch, outline.size);
-            Glyph { width: m.width as i32, height: m.height as i32, left: m.xmin, top: m.ymin + m.height as i32, advance: m.advance_width.round() as i32, bits: Vec::new(), cover: Some(coverage) }
+            let (bits, cover) = if outline.crisp { (coverage.iter().map(|&c| c >= 104).collect(), None) } else { (Vec::new(), Some(coverage)) };
+            Glyph { width: m.width as i32, height: m.height as i32, left: m.xmin, top: m.ymin + m.height as i32, advance: m.advance_width.round() as i32, bits, cover }
         };
         if outline.face.lookup_glyph_index(ch) != 0 {
             return drawn(&outline.face);

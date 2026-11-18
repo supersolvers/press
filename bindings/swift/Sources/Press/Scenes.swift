@@ -371,16 +371,34 @@ public struct Style: Hashable, Sendable {
 
     /// Whatever the desktop has chosen for every program.
     public static let desktop = Style(name: nil)
-    /// Black and white, in the manner of the first Macintosh.
-    public static let oneBit = Style(name: "one-bit")
+    /// Black and white, in the manner of the first Macintosh, of 1984.
+    public static let eightyFour = Style(name: "eightyfour")
+    /// Four colours, blue, white, black and orange, in the manner of the
+    /// home computer workbench of 1985.
+    public static let eightyFive = Style(name: "eightyfive")
+    /// Lozenge buttons, a lift for a scroll bar and brackets at the corners
+    /// of a window, in the manner of the open workstation look of 1988.
+    public static let eightyEight = Style(name: "eightyeight")
+    /// Four greys and black title bars, in the manner of the workstation of 1989.
+    public static let eightyNine = Style(name: "eightynine")
+    /// Grey buttons on white windows, in the manner of the office desktops of 1990.
+    public static let ninety = Style(name: "ninety")
+    /// Heavy bevels in slate blue and a frame in rose, in the manner of the
+    /// common desktop of the workstations of 1993.
+    public static let ninetyThree = Style(name: "ninetythree")
     /// Grey and bevelled, in the manner of the middle 1990s.
     public static let ninetyFive = Style(name: "ninetyfive")
+    /// Quiet grey, with the title a yellow tab on the window's corner, in
+    /// the manner of the media desktop of 1998.
+    public static let ninetyEight = Style(name: "ninetyeight")
     /// Platinum, in the manner of the end of the 1990s.
     public static let ninetyNine = Style(name: "ninetynine")
     /// In the manner of 2000: Ninety-Five in a warmer grey, with smooth type.
     public static let twoThousand = Style(name: "twothousand")
     /// In the manner of 2001: rounded, shaded, blue.
     public static let twoThousandOne = Style(name: "twothousandone")
+    /// Parchment, tan and orange, in the manner of the free desktop of 2004.
+    public static let twoThousandFour = Style(name: "twothousandfour")
     /// In the manner of 2005: gel, stripes and soft shadows.
     public static let twoThousandFive = Style(name: "twothousandfive")
 }

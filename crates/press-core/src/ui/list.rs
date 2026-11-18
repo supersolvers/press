@@ -1119,7 +1119,7 @@ impl Ui {
             let y = 1 + n as i32 * self.look.m.row_height;
             match art {
                 Some(art) => Self::draw_art(&mut canvas, art, 3, y, self.look.m.row_height),
-                None => Self::draw_icon(&mut canvas, *icon, 3, y, self.look.m.row_height),
+                None => Self::draw_icon(&mut canvas, *icon, 3, y, self.look.m.row_height, BLACK),
             }
             self.draw_cell(&mut canvas, name, label_x, y + text_y, widest + 2);
         }
@@ -1288,7 +1288,7 @@ impl Ui {
         let node = self.nodes.get(h)?;
         let Kind::List { scroll, .. } = &node.kind else { return None };
         let max = (count - fit).max(0);
-        Some(Bar { rect: Self::area_bar_rect(node.rect, self.look.m.scroll_bar), vertical: true, value: (*scroll).clamp(0, max), max, page: fit, step: 1, enabled })
+        Some(Bar { rect: Self::area_bar_rect(node.rect, self.look.m.scroll_bar), vertical: true, value: (*scroll).clamp(0, max), max, page: fit, step: 1, enabled, together: self.look.m.scroll_arrows == 1 })
     }
 
     /// After rows appear or disappear: keep the scroll position in range,
@@ -1465,6 +1465,11 @@ impl Ui {
 
     /// What a point in a table's row of headings is on: the right-hand edge
     /// of a column (to drag), or a heading (to sort by).
+    /// The heading of a table a point is over, if the widget is a table.
+    pub(super) fn heading_over(&self, h: Handle, x: i32, y: i32) -> Option<(usize, bool)> {
+        matches!(self.nodes.get(h).map(|n| &n.kind), Some(Kind::List { .. })).then(|| self.heading_at(h, x, y)).flatten()
+    }
+
     fn heading_at(&self, h: Handle, x: i32, y: i32) -> Option<(usize, bool)> {
         let (area, ..) = self.list_shape(h)?;
         let header = self.list_header(h);
@@ -1508,7 +1513,7 @@ impl Ui {
             }
             shown.push(ch);
         }
-        let ink = self.look.pal.ink;
+        let ink = self.look.pal.list_ink;
         self.font.draw(clip, &shown, x, y, ink);
     }
 
@@ -1555,7 +1560,7 @@ impl Ui {
         }
     }
 
-    fn draw_icon(clip: &mut Canvas, icon: Icon, x: i32, y: i32, row: i32) {
+    fn draw_icon(clip: &mut Canvas, icon: Icon, x: i32, y: i32, row: i32, ink: u32) {
         let shape: &[&str] = match icon {
             Icon::None => return,
             Icon::Folder => &FOLDER,
@@ -1566,7 +1571,7 @@ impl Ui {
         for (dy, row) in shape.iter().enumerate() {
             for (dx, b) in row.bytes().enumerate() {
                 if b == b'X' {
-                    clip.set(x + dx as i32, top + dy as i32, BLACK);
+                    clip.set(x + dx as i32, top + dy as i32, ink);
                 }
             }
         }
@@ -1595,9 +1600,9 @@ impl Ui {
         let (rows, across) = (self.list_rows(h), self.icons_across(h));
         let Some(Kind::List { items, scroll, meta, .. }) = self.nodes.get(h).map(|n| &n.kind) else { return };
         let (items, meta, scroll) = (items.clone(), meta.clone(), (*scroll).clamp(0, (count - fit).max(0)));
-        self.part(canvas, Part::new(PartKind::Well, rect).when(state::FOCUSED, live));
+        self.part(canvas, Part::new(PartKind::Well, rect).numbers(1, 0, 0).when(state::FOCUSED, live));
         let editing = self.list_edit.as_ref().filter(|e| e.list == h).map(|e| e.item);
-        let mut clip = Canvas::filled(area.w.max(1), area.h.max(1), self.look.pal.paper);
+        let mut clip = Canvas::filled(area.w.max(1), area.h.max(1), self.look.pal.list);
         let _ = across;
         for (place, row) in rows.iter().enumerate() {
             let (x, y) = self.icon_cell(h, place, row.item);
@@ -1628,14 +1633,16 @@ impl Ui {
         let (items, columns, meta, sort) = (items.clone(), columns.clone(), meta.clone(), *sort);
         let scroll = (*scroll).clamp(0, (count - fit).max(0));
         let line = self.font.line_height();
-        let (paper, ink) = (self.look.pal.paper, self.look.pal.ink);
-        self.part(canvas, Part::new(PartKind::Well, rect).when(state::FOCUSED, live));
+        let (paper, ink) = (self.look.pal.list, self.look.pal.list_ink);
+        self.part(canvas, Part::new(PartKind::Well, rect).numbers(1, 0, 0).when(state::FOCUSED, live));
         // headings and rows share one sheet so that both are clipped to the list
         let mut clip = Canvas::filled(area.w.max(1), (area.h + header).max(1), paper);
         if header > 0 {
             self.part(&mut clip, Part::new(PartKind::Header, Rect::new(0, 0, area.w, header)));
-            for (x, width) in &spans {
-                self.part(&mut clip, Part::new(PartKind::HeaderCell, Rect::new(*x, 0, *width, header)));
+            // the heading the pointer is over, for a style that lights it
+            let hot = if self.hover == Some(h) && (1000..2000).contains(&self.hover_piece) { Some((self.hover_piece - 1000) as usize) } else { None };
+            for (i, (x, width)) in spans.iter().enumerate() {
+                self.part(&mut clip, Part::new(PartKind::HeaderCell, Rect::new(*x, 0, *width, header)).when(state::HOT, hot == Some(i)));
             }
         }
         let text_y = (self.look.m.row_height - line) / 2;
@@ -1643,12 +1650,10 @@ impl Ui {
         for (i, ((title, _), (x, width))) in columns.iter().zip(&spans).enumerate() {
             self.draw_cell(&mut clip, title, x + 4, text_y, width - 8 - if sort.is_some_and(|s| s.0 == i) { 10 } else { 0 });
             if let Some((_, ascending)) = sort.filter(|s| s.0 == i) {
-                // a small arrowhead at the column's right: up for smallest first
+                // a mark at the column's right
                 let (cx, cy) = (x + width - 9, self.look.m.row_height / 2);
-                for d in 0..4 {
-                    let dy = if ascending { d - 2 } else { 1 - d };
-                    clip.fill(Rect::new(cx - d, cy + dy, 2 * d + 1, 1), ink);
-                }
+                let mark = Part::new(PartKind::SortArrow, Rect::new(*x, 0, *width, header)).numbers(cx, cy, 0).ink(ink);
+                self.part(&mut clip, mark.when(state::CHECKED, ascending));
             }
         }
         let editing = self.list_edit.as_ref().filter(|e| e.list == h).map(|e| (e.item, e.column));
@@ -1657,17 +1662,14 @@ impl Ui {
             let text = &items[row.item];
             let label_x = self.label_x(h, row);
             if let Some(open) = row.fold {
-                // a solid triangle: pointing right when folded, down when open
                 let (cx, cy) = (4 + row.depth * INDENT + 4, y + self.look.m.row_height / 2);
-                for d in 0..5 {
-                    let r = if open { Rect::new(cx - 4 + d, cy - 2 + d, 9 - 2 * d, 1) } else { Rect::new(cx - 2 + d, cy - 4 + d, 1, 9 - 2 * d) };
-                    clip.fill(r, ink);
-                }
+                let mark = Part::new(PartKind::TreeFold, Rect::new(cx - 5, cy - 5, 11, 11)).numbers(cx, cy, 0).ink(ink);
+                self.part(&mut clip, mark.when(state::CHECKED, open));
             }
             if has_icons {
                 match &meta[row.item].art {
                     Some(art) => Self::draw_art(&mut clip, art, label_x - ICON, y, self.look.m.row_height),
-                    None => Self::draw_icon(&mut clip, meta[row.item].icon, label_x - ICON, y, self.look.m.row_height),
+                    None => Self::draw_icon(&mut clip, meta[row.item].icon, label_x - ICON, y, self.look.m.row_height, ink),
                 }
             }
             if columns.is_empty() {
@@ -1749,7 +1751,7 @@ impl Ui {
             let (x0, x1) = (self.font.width(&edit.text()[..from]), self.font.width(&edit.text()[..from]) + self.font.width(&pre));
             inner.fill(Rect::new(x0 + 1, self.look.m.row_height - 3, x1 - x0, 1), ink);
             if self.caret_on() {
-                inner.fill(Rect::new(x1, 0, 1, self.look.m.row_height - 2), ink);
+                self.part(&mut inner, Part::new(PartKind::Caret, Rect::new(x1, 0, 1, self.look.m.row_height - 2)).ink(ink));
             }
         }
         if !pre.is_empty() {
@@ -1757,10 +1759,10 @@ impl Ui {
         } else if edit.has_selection() {
             let (from, to) = edit.selection();
             let (x0, x1) = (self.font.width(&edit.text()[..from]), self.font.width(&edit.text()[..to]));
-            self.part(&mut inner, Part::new(PartKind::Select, Rect::new(x0, 0, x1 - x0 + 1, self.look.m.row_height - 2)));
+            self.part(&mut inner, Part::new(PartKind::Select, Rect::new(x0, 0, x1 - x0 + 1, self.look.m.row_height - 2)).numbers(1, 0, 0));
         } else if self.caret_on() {
             let cx = self.font.width(&edit.text()[..edit.caret()]);
-            inner.fill(Rect::new(cx, 0, 1, self.look.m.row_height - 2), ink);
+            self.part(&mut inner, Part::new(PartKind::Caret, Rect::new(cx, 0, 1, self.look.m.row_height - 2)).ink(ink));
         }
         clip.blit(&inner, x + 2, y + 1);
     }

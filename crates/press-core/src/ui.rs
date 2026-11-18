@@ -378,6 +378,8 @@ pub struct Ui {
     painting: Option<Handle>,
     /// The throb of a default button last drawn.
     pulse: u64,
+    /// The menu whose title in the bar the pointer is over.
+    bar_hot: Option<Handle>,
     /// Windows draw their own frames, where the style has one.
     own_frames: bool,
     /// The button of a title bar the pointer is over, and the one it went
@@ -388,6 +390,19 @@ pub struct Ui {
     frame_click: (u64, i32, i32),
     /// The windows that have been made as large as they can be.
     zoomed: Vec<Handle>,
+    /// The windows rolled up into their title bars.
+    rolled: Vec<Handle>,
+    /// Something chosen from a window's own menu, for the display to do.
+    frame_asked: Option<(Handle, FrameAct)>,
+    /// The menu of a window's frame, made when first wanted.
+    frame_menu: Option<Handle>,
+    /// The typeface of a window's title, where the style has one for it.
+    frame_font: Option<Font>,
+    /// Which piece of the widget under the pointer the pointer is over: a
+    /// tab, a heading, a part of a scroll bar, a title in the menu bar.
+    hover_piece: i32,
+    /// What whatever is being drawn lies on: the window, or the pane of a tab view.
+    ground: u32,
     font: Font,
     /// The typefaces not being worn just now, kept with what they have
     /// already drawn, and the one that is (`font`).
@@ -490,6 +505,7 @@ impl Ui {
         // every typeface is the new style's from now on
         self.wardrobe.clear();
         self.font = self.look.font(self.worn);
+        self.frame_font = self.look.frame_font();
         self.dirty = true;
     }
 
@@ -517,7 +533,7 @@ impl Ui {
         let style = self.look.style.clone();
         let mut painter = Painter { canvas, font: &mut self.font };
         if !style.draw(&part, &mut painter) {
-            crate::style::OneBit.draw(&part, &mut painter);
+            crate::style::EightyFour.draw(&part, &mut painter);
         }
     }
 
@@ -1528,6 +1544,7 @@ impl Ui {
             self.reveal_now(window, target);
         }
         let mut canvas = Canvas::new(w, h);
+        self.ground = self.look.pal.window;
         self.part(&mut canvas, Part::new(PartKind::Background, Rect::new(0, 0, w, h)));
         for c in self.children(window) {
             self.paint(c, &mut canvas, true, ctx);
@@ -1661,13 +1678,24 @@ impl Ui {
         };
         // Hit-testing needs current geometry even if nothing has been drawn yet.
         self.arrange(window, Rect::new(0, 0, w, h));
+        // the title in the menu bar the pointer is over, for a style that lights it
+        if self.look.wants & crate::style::wants::HOVER != 0 {
+            let over_title = if kind == PointerKind::Leave { None } else { self.bar_title_at(window, x, y) };
+            if over_title != self.bar_hot {
+                self.bar_hot = over_title;
+                self.dirty = true;
+            }
+        }
         if let Some(out) = self.menu_pointer(window, x, y, kind) {
             return Ok(out);
         }
         let over = self.hit(window, x, y);
         let hover = over.filter(|_| kind != PointerKind::Leave);
-        if hover != self.hover {
+        // which piece of it, where it has pieces a style may light one of
+        let piece = if self.look.wants & crate::style::wants::HOVER != 0 { hover.map_or(0, |h| self.piece_at(h, x, y)) } else { 0 };
+        if hover != self.hover || piece != self.hover_piece {
             self.hover = hover;
+            self.hover_piece = piece;
             self.dirty |= self.look.wants & crate::style::wants::HOVER != 0;
         }
         if let Some(out) = self.bar_pointer(over, x, y, kind) {
@@ -2000,6 +2028,26 @@ impl Ui {
     }
 
     /// The time at which `tick` next has something to do, if any.
+    /// Which piece of a widget a point is over, as a number a style is not
+    /// told but which changes when the piece does: a tab, a table's
+    /// heading, a part of a scroll bar.
+    fn piece_at(&mut self, h: Handle, x: i32, y: i32) -> i32 {
+        match self.nodes.get(h).map(|n| &n.kind) {
+            Some(Kind::Tabs { .. }) => self.tab_at(h, x, y).map_or(0, |i| 1 + i as i32),
+            _ => {
+                if let Some((column, _)) = self.heading_over(h, x, y) {
+                    return 1000 + column as i32;
+                }
+                for horizontal in [false, true] {
+                    if let Some(part) = self.bar_part_at(h, horizontal, x, y) {
+                        return 2000 + i32::from(horizontal) * 10 + part;
+                    }
+                }
+                0
+            }
+        }
+    }
+
     /// How many times a throbbing button has been drawn again by now.
     fn pulse_step(&self) -> u64 {
         self.now / PULSE_MS
@@ -2273,6 +2321,10 @@ impl Ui {
     /// the window is busy, an I-beam over text that can be edited and while
     /// a selection is being dragged, otherwise the arrow.
     pub fn cursor_at(&mut self, window: Handle, x: i32, y: i32) -> Cursor {
+        // over an edge of its own frame that can be dragged, the arrows that say so
+        if let Some(cursor) = self.frame_cursor(window, x, y) {
+            return cursor;
+        }
         let is_field = |ui: &Ui, h: Handle| matches!(ui.nodes.get(h).map(|n| &n.kind), Some(Kind::TextField { .. }));
         if self.menu_open.as_ref().is_some_and(|m| m.window == window) {
             return Cursor::Arrow;
@@ -2800,7 +2852,7 @@ mod tests {
 #[cfg(test)]
 mod style_tests {
     use super::*;
-    use crate::style::{Metrics, OneBit, Palette};
+    use crate::style::{Metrics, EightyFour, Palette};
 
     /// A style that changes sizes and colours and draws nothing itself.
     struct Plain;
@@ -2810,10 +2862,10 @@ mod style_tests {
             "plain"
         }
         fn metrics(&self) -> Metrics {
-            Metrics { button_height: 30, ..OneBit::METRICS }
+            Metrics { button_height: 30, ..EightyFour::METRICS }
         }
         fn palette(&self) -> Palette {
-            Palette { window: 0xffc0c0c0, text: 0xff000080, ..OneBit::PALETTE }
+            Palette { window: 0xffc0c0c0, text: 0xff000080, ..EightyFour::PALETTE }
         }
         fn draw(&self, part: &Part, painter: &mut Painter) -> bool {
             if part.kind == PartKind::Background {
@@ -2839,8 +2891,8 @@ mod style_tests {
         let mut ui = Ui::natural();
         let (window, button) = dialog(&mut ui);
         ui.render(window).unwrap();
-        assert_eq!(ui.nodes.get(button).unwrap().rect.h, OneBit::METRICS.button_height);
-        assert_eq!(ui.style_name(), "one-bit");
+        assert_eq!(ui.nodes.get(button).unwrap().rect.h, EightyFour::METRICS.button_height);
+        assert_eq!(ui.style_name(), "eightyfour");
 
         ui.set_style(std::sync::Arc::new(Plain));
         let canvas = ui.render(window).unwrap();
@@ -2871,13 +2923,13 @@ mod style_tests {
             "tall"
         }
         fn metrics(&self) -> Metrics {
-            Metrics { row_height: 24, menu_bar_height: 30, scroll_bar: 20, ..OneBit::METRICS }
+            Metrics { row_height: 24, menu_bar_height: 30, scroll_bar: 20, ..EightyFour::METRICS }
         }
         fn palette(&self) -> Palette {
-            OneBit::PALETTE
+            EightyFour::PALETTE
         }
         fn typeface(&self, face: Face) -> Option<crate::font::Type> {
-            (face == Face::Cicero).then(|| crate::font::Type { family: "sans".into(), size: 14, bold: false })
+            (face == Face::Cicero).then(|| crate::font::Type { family: "sans".into(), size: 14, bold: false, crisp: false })
         }
         fn wants(&self) -> u32 {
             crate::style::wants::HOVER
@@ -2894,7 +2946,7 @@ mod style_tests {
         ui.list_box_set_rows(list, 5).unwrap();
         let plain = ui.measure(list).1;
         ui.set_style(std::sync::Arc::new(Tall));
-        assert_eq!(ui.measure(list).1 - plain, 5 * (24 - OneBit::METRICS.row_height));
+        assert_eq!(ui.measure(list).1 - plain, 5 * (24 - EightyFour::METRICS.row_height));
         let bar = ui.scroll_bar_new(Orientation::Vertical);
         assert_eq!(ui.measure(bar).0, 20);
     }
@@ -2916,7 +2968,7 @@ mod style_tests {
 
     #[test]
     fn the_pointer_coming_over_a_button_is_news_only_to_a_style_that_wants_it() {
-        for (wants, style) in [(false, std::sync::Arc::new(OneBit) as std::sync::Arc<dyn Style>), (true, std::sync::Arc::new(Tall))] {
+        for (wants, style) in [(false, std::sync::Arc::new(EightyFour) as std::sync::Arc<dyn Style>), (true, std::sync::Arc::new(Tall))] {
             let mut ui = Ui::natural();
             let (window, button) = dialog(&mut ui);
             ui.set_style(style);
@@ -2948,10 +3000,10 @@ mod style_tests {
             "framed"
         }
         fn metrics(&self) -> Metrics {
-            Metrics { frame_title: 20, frame_border: 3, frame_button_width: 12, frame_button_height: 12, frame_button_inset: 5, frame_left: 0x1, frame_right: 0x3, menu_in_window: 1, ..OneBit::METRICS }
+            Metrics { frame_title: 20, frame_border: 3, frame_button_width: 12, frame_button_height: 12, frame_button_inset: 5, frame_left: 0x1, frame_right: 0x3, menu_in_window: 1, ..EightyFour::METRICS }
         }
         fn palette(&self) -> Palette {
-            OneBit::PALETTE
+            EightyFour::PALETTE
         }
         fn draw(&self, _: &Part, _: &mut Painter) -> bool {
             false
@@ -2975,7 +3027,7 @@ mod style_tests {
         let content = ui.render(window).unwrap();
         assert_eq!(canvas.get(3 + 50, 20 + 50), content.get(50, 50));
         // black and white has no frame of its own
-        ui.set_style(std::sync::Arc::new(OneBit));
+        ui.set_style(std::sync::Arc::new(EightyFour));
         assert_eq!(ui.frame_insets(window), (0, 0, 0, 0));
     }
 
@@ -3006,5 +3058,170 @@ mod style_tests {
         let r = ui.nodes.get(button).unwrap().rect;
         ui.pointer(window, r.x + 2, r.y + 2, PointerKind::Press).unwrap();
         assert!(matches!(ui.frame_pointer(window, 100, 10, PointerKind::Move), FrameAct::Inside(..)));
+    }
+
+    /// A style whose title bar is a tab.
+    struct Tabbed;
+
+    impl Style for Tabbed {
+        fn name(&self) -> &str {
+            "tabbed"
+        }
+        fn metrics(&self) -> Metrics {
+            Metrics { frame_tab: 6, ..Framed.metrics() }
+        }
+        fn palette(&self) -> Palette {
+            EightyFour::PALETTE
+        }
+        fn draw(&self, _: &Part, _: &mut Painter) -> bool {
+            false
+        }
+    }
+
+    #[test]
+    fn a_title_bar_may_be_a_tab_as_wide_as_its_title() {
+        let mut ui = Ui::natural();
+        let (window, _) = dialog(&mut ui);
+        ui.set_own_frames(true);
+        ui.set_style(std::sync::Arc::new(Framed));
+        assert_eq!(ui.frame_bar_width(window), 206);
+        ui.set_style(std::sync::Arc::new(Tabbed));
+        let bar = ui.frame_bar_width(window);
+        assert!(bar < 206 && bar > ui.font.width("Style"), "the tab is {bar} wide");
+        // the button at its right is at the right of the tab, not of the window
+        let (which, zoom) = ui.frame_buttons(window)[1];
+        assert_eq!(which, frame::ZOOM);
+        assert!(zoom.x + zoom.w <= bar);
+        // the tab takes hold of the window; the strip beside it is nothing of the window's
+        assert_eq!(ui.frame_pointer(window, bar / 2, 8, PointerKind::Press), FrameAct::Move);
+        assert_eq!(ui.frame_pointer(window, bar + 20, 8, PointerKind::Press), FrameAct::Nothing);
+    }
+
+    /// A style with the manners of another kind of desktop, which also
+    /// notes down every part it is asked to draw.
+    struct Mannered(std::sync::Mutex<Vec<(PartKind, u32, i32, i32)>>);
+
+    impl Style for Mannered {
+        fn name(&self) -> &str {
+            "mannered"
+        }
+        fn metrics(&self) -> Metrics {
+            Metrics { shortcut_form: 1, frame_foot: 9, frame_double: 1, scroll_arrows: 1, tab_align: 1, menu_border: 3, frame_left: 0x5, frame_right: 0x4, ..Framed.metrics() }
+        }
+        fn palette(&self) -> Palette {
+            Palette { list: 0xffaaaaaa, pane: 0xffeeeeee, ..EightyFour::PALETTE }
+        }
+        fn wants(&self) -> u32 {
+            crate::style::wants::HOVER
+        }
+        fn draw(&self, part: &Part, _: &mut Painter) -> bool {
+            self.0.lock().unwrap().push((part.kind, part.state, part.a, part.d));
+            false
+        }
+    }
+
+    fn mannered() -> (Ui, std::sync::Arc<Mannered>) {
+        let style = std::sync::Arc::new(Mannered(Default::default()));
+        let mut ui = Ui::natural();
+        ui.set_own_frames(true);
+        ui.set_style(style.clone());
+        (ui, style)
+    }
+
+    #[test]
+    fn a_style_says_how_shortcuts_are_written_and_how_thick_a_menu_is() {
+        let (mut ui, style) = mannered();
+        let (window, _) = dialog(&mut ui);
+        let (bar, menu) = (ui.menu_bar_new(), ui.menu_new("File"));
+        let item = ui.menu_item_new("Loud");
+        ui.menu_item_set_shortcut(item, "l").unwrap();
+        ui.menu_item_set_checked(item, true).unwrap();
+        ui.menu_add(menu, item).unwrap();
+        ui.menu_bar_add(bar, menu).unwrap();
+        ui.window_set_menu_bar(window, bar).unwrap();
+        ui.render(window).unwrap();
+        ui.pointer(window, 20, 8, PointerKind::Press).unwrap();
+        let plain_width = {
+            let mut plain = Ui::natural();
+            plain.font.width("\u{2318}L")
+        };
+        assert!(ui.font.width("Ctrl+L") > plain_width);
+        let popup = ui.popups(window)[0].rect;
+        // an edge of three pixels all round the one item
+        assert_eq!(popup.h, EightyFour::METRICS.menu_item_height + 2 * 3 + EightyFour::METRICS.menu_shadow);
+        style.0.lock().unwrap().clear();
+        ui.render_popup(window, 0).unwrap();
+        let drawn: Vec<PartKind> = style.0.lock().unwrap().iter().map(|p| p.0).collect();
+        // the tick beside the item is the style's to draw now
+        assert!(drawn.contains(&PartKind::MenuCheck) && drawn.contains(&PartKind::MenuFrame));
+    }
+
+    #[test]
+    fn a_window_rolls_up_into_its_title_and_has_a_menu_of_its_own() {
+        let (mut ui, _) = mannered();
+        let (window, _) = dialog(&mut ui);
+        // the frame is thicker along its foot than along its sides
+        assert_eq!(ui.frame_insets(window), (3, 20, 3, 9));
+        let whole = ui.render_framed(window).unwrap().height;
+        // the button at the right rolls it up; so do two clicks on the title
+        let (which, roll) = *ui.frame_buttons(window).iter().find(|b| b.0 == frame::ROLL).unwrap();
+        assert_eq!(which, frame::ROLL);
+        ui.frame_pointer(window, roll.x + 2, roll.y + 2, PointerKind::Press);
+        assert_eq!(ui.frame_pointer(window, roll.x + 2, roll.y + 2, PointerKind::Release), FrameAct::Nothing);
+        assert!(ui.window_rolled(window));
+        assert_eq!(ui.render_framed(window).unwrap().height, 20 + 9);
+        ui.frame_pointer(window, 100, 10, PointerKind::Press);
+        ui.frame_pointer(window, 100, 10, PointerKind::Press);
+        assert!(!ui.window_rolled(window));
+        assert_eq!(ui.render_framed(window).unwrap().height, whole);
+        // the button at the left drops the window's own menu, and what is chosen there waits for the display
+        let menu = ui.frame_buttons(window)[0];
+        assert_eq!(menu.0, frame::MENU);
+        ui.tick(10_000);
+        assert_eq!(ui.frame_pointer(window, menu.1.x + 2, menu.1.y + 2, PointerKind::Press), FrameAct::Nothing);
+        assert_eq!(ui.popups(window).len(), 1);
+        ui.frame_ask(window, frame::CLOSE);
+        assert_eq!(ui.take_frame_ask(), Some((window, FrameAct::Close)));
+        assert_eq!(ui.take_frame_ask(), None);
+    }
+
+    #[test]
+    fn the_pointer_changes_over_an_edge_of_a_frame_that_can_be_dragged() {
+        let (mut ui, _) = mannered();
+        let (window, _) = dialog(&mut ui);
+        ui.render_framed(window).unwrap();
+        // measured from the corner of the content: the right edge, the foot, and the corner between
+        assert_eq!(ui.cursor_at(window, 201, 50), Cursor::ResizeColumn);
+        assert_eq!(ui.cursor_at(window, 100, 105), Cursor::ResizeRow);
+        assert_eq!(ui.cursor_at(window, 201, 105), Cursor::ResizeCorner);
+        assert_eq!(ui.cursor_at(window, 100, -10), Cursor::Arrow);
+    }
+
+    #[test]
+    fn tabs_stand_in_the_middle_and_scroll_arrows_together_where_the_style_says() {
+        let (mut ui, style) = mannered();
+        let window = ui.window_new("Tabs", 300, 200).unwrap();
+        let tabs = ui.tab_view_new();
+        let (one, two) = (ui.label_new("One"), ui.scroll_bar_new(Orientation::Vertical));
+        ui.tab_view_add(tabs, "First", one).unwrap();
+        ui.tab_view_add(tabs, "Second", two).unwrap();
+        ui.window_set_content(window, tabs).unwrap();
+        ui.render(window).unwrap();
+        let (rects, whole) = (ui.tab_rects(tabs), ui.nodes.get(tabs).unwrap().rect);
+        let (left, right) = (rects[0].x - whole.x, whole.x + whole.w - (rects[1].x + rects[1].w));
+        assert!((left - right).abs() <= 1, "tabs are {left} from the left and {right} from the right");
+        // the pointer over a tab is told to a style that wants to hear of it
+        style.0.lock().unwrap().clear();
+        ui.pointer(window, rects[1].x + 3, rects[1].y + 3, PointerKind::Move).unwrap();
+        ui.render(window).unwrap();
+        assert!(style.0.lock().unwrap().iter().any(|p| p.0 == PartKind::Tab && p.1 & state::HOT != 0));
+        // both arrows of a scroll bar are at its far end
+        ui.tab_view_set_selected(tabs, 1).unwrap();
+        ui.render(window).unwrap();
+        let r = ui.nodes.get(two).unwrap().rect;
+        let thick = EightyFour::METRICS.scroll_bar;
+        assert_ne!(ui.bar_part_at(two, false, r.x + 2, r.y + 2), Some(1), "no arrow at the near end");
+        assert_eq!(ui.bar_part_at(two, false, r.x + 2, r.y + r.h - thick - 2), Some(1));
+        assert_eq!(ui.bar_part_at(two, false, r.x + 2, r.y + r.h - 2), Some(2));
     }
 }

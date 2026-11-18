@@ -105,6 +105,11 @@ static void dim_in(box r) {
 
 /* A raised piece of a scroll bar: an arrow box or the sliding box. */
 static void sky_box(box r, int held, int live) {
+    if (live && held == 2) {
+        /* under the pointer: lighter */
+        round_box(r, 2, WHITE, rgb(0xd6e3ff), SKY_EDGE);
+        return;
+    }
     if (!live)
         round_box(r, 2, rgb(0xf6f5f0), rgb(0xe6e4dc), rgb(0xd0cec4));
     else if (held)
@@ -125,12 +130,12 @@ static void scroll_bar(const press_part *p, box r) {
     for (int second = 0; second < 2; second++) {
         box b = vertical ? (box){r.x, second ? r.y + r.h - thick : r.y, thick, thick} : (box){second ? r.x + r.w - thick : r.x, r.y, thick, thick};
         int held = live && p->a == second + 1;
-        sky_box(b, held, live);
+        sky_box(b, held ? 1 : p->d == second + 1 ? 2 : 0, live);
         arrow(b.x + b.w / 2, b.y + b.h / 2, 4, vertical ? second : 2 + second, live ? SKY_INK : GREY);
     }
     if (p->b >= 0) {
         box t = vertical ? (box){r.x, p->b, r.w, p->c} : (box){p->b, r.y, p->c, r.h};
-        sky_box(t, 0, 1);
+        sky_box(t, p->d == 3 ? 2 : 0, 1);
         /* ridges to take hold of, if there is room */
         if (p->c >= 16) {
             for (int i = -3; i <= 3; i += 2) {
@@ -202,6 +207,11 @@ static void tab(const press_part *p, box r) {
         fill((box){r.x + 1, foot, r.w - 2, 4}, rgb(0xfcfcfe));
     } else {
         round_box(shape, 3, WHITE, rgb(0xeae8dc), rgb(0x919b9c));
+        if (has(p, PRESS_STATE_HOT)) {
+            /* under the pointer, a tab behind takes the gold line of the one in front */
+            fill((box){r.x + 2, top, r.w - 4, 1}, rgb(0xe68b2c));
+            fill((box){r.x + 1, top + 1, r.w - 2, 1}, rgb(0xffc73c));
+        }
     }
     words(p->text, r.x + (r.w - text_width(p->text)) / 2, r.y + (r.h - line) / 2 + (front ? 0 : 1), BLACK);
     if (front && has(p, PRESS_STATE_FOCUSED))
@@ -340,9 +350,26 @@ static int32_t draw(const press_part *p, const press_surface *surface) {
         fill((box){r.x, r.y + r.h - 1, r.w, 1}, rgb(0xcbc7b8));
         break;
     case PRESS_PART_HEADER_CELL:
+        if (has(p, PRESS_STATE_HOT)) {
+            /* under the pointer a heading lightens, with gold along its foot */
+            fill((box){r.x, r.y, r.w, r.h - 3}, rgb(0xfaf9f4));
+            fill((box){r.x, r.y + r.h - 3, r.w, 1}, rgb(0xf9a900));
+            fill((box){r.x, r.y + r.h - 2, r.w, 1}, rgb(0xf8b330));
+            fill((box){r.x, r.y + r.h - 1, r.w, 1}, rgb(0xe59700));
+            break;
+        }
         fill((box){r.x + r.w - 2, r.y + 3, 1, r.h - 7}, rgb(0xc7c5b2));
         fill((box){r.x + r.w - 1, r.y + 3, 1, r.h - 7}, WHITE);
         break;
+    case PRESS_PART_TREE_FOLD: {
+        /* a little box with a minus in it, or a plus when there is more to show */
+        box b = {p->a - 4, p->b - 4, 9, 9};
+        gradient(b, WHITE, rgb(0xc3bab0));
+        outline(b, rgb(0x7898b5));
+        fill((box){b.x + 2, b.y + 4, 5, 1}, BLACK);
+        if (!has(p, PRESS_STATE_CHECKED)) fill((box){b.x + 4, b.y + 2, 1, 5}, BLACK);
+        break;
+    }
     case PRESS_PART_FRAME: frame(p, r); break;
     case PRESS_PART_FRAME_BUTTON: frame_button(p, r); break;
     default: return 0;
@@ -382,9 +409,11 @@ static void metrics(press_metrics *m) {
     m->frame_left = 0;
     m->frame_right = 0x231; /* put away, make large, close */
     m->menu_in_window = 1;
+    m->shortcut_form = 1;   /* Ctrl+L */
 }
 
 static void palette(press_palette *p) {
+    p->pane = rgb(0xfcfcfe); /* the pages of a tab view are nearly white */
     p->window = SAND;
     p->text = BLACK;
     p->paper = WHITE;
@@ -405,6 +434,7 @@ static int32_t typeface(uint32_t face, press_type *out) {
     case PRESS_FACE_READING: strcpy(out->family, sans); out->size = 11; break;
     case PRESS_FACE_FIXED: strcpy(out->family, fixed); out->size = 11; break;
     case PRESS_FACE_TITLE: strcpy(out->family, fixed); out->size = 14; out->bold = 1; break;
+    case PRESS_FACE_FRAME: strcpy(out->family, "Trebuchet MS,Tahoma,Verdana,DejaVu Sans"); out->size = 13; out->bold = 1; break;
     default: return 0;
     }
     return 1;

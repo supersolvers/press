@@ -61,7 +61,14 @@ unsafe fn dialog(dir: &std::path::Path, name: &str) -> (png::ColorType, Vec<u8>)
 /// test runs itself again for each, with the style named in the environment.
 #[test]
 fn windows_wear_styles_from_libraries_of_their_own() {
-    let styles: [(&str, [u8; 3]); 5] = [
+    let styles: [(&str, [u8; 3]); 12] = [
+        ("eightyeight", [0xcc, 0xcc, 0xcc]),
+        ("ninetythree", [0xae, 0xb2, 0xc3]),
+        ("ninetyeight", [0xd8, 0xd8, 0xd8]),
+        ("eightyfive", [0x00, 0x55, 0xaa]),
+        ("eightynine", [0xaa, 0xaa, 0xaa]),
+        ("ninety", [0xff, 0xff, 0xff]),
+        ("twothousandfour", [0xef, 0xeb, 0xe7]),
         ("ninetyfive", [0xc0, 0xc0, 0xc0]),
         ("ninetynine", [0xdd, 0xdd, 0xdd]),
         ("twothousand", [0xd4, 0xd0, 0xc8]),
@@ -78,8 +85,13 @@ fn windows_wear_styles_from_libraries_of_their_own() {
             assert_eq!(kind, png::ColorType::Rgb, "{name}");
             let own = data.chunks(3).filter(|p| *p == colour).count();
             assert!(own > 200 * 160 / 8, "{name}: much of the window is the style's colour, not {own} pixels of it");
-            // the paper of the list is white whatever the window is
-            assert!(data.chunks(3).filter(|p| *p == [0xff, 0xff, 0xff]).count() > 500, "{name}");
+            // the paper of the list is white whatever the window is (but in
+            // the styles whose paper is the window's own colour, or cream)
+            if !["eightyfive", "eightyeight", "ninetythree"].contains(name) {
+                assert!(data.chunks(3).filter(|p| *p == [0xff, 0xff, 0xff]).count() > 500, "{name}");
+            }
+            // and the window has a frame of its own round it
+            assert!(data.len() > 200 * 160 * 3, "{name}");
             assert_eq!(press_app_shutdown(), OK);
         }
         return;

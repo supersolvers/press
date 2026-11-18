@@ -19,6 +19,23 @@ typedef struct {
 
 static const press_surface *on;
 
+/* Where drawing is kept to, when it is: nothing outside this box is touched. */
+static box clip_box;
+static int clipped;
+
+static inline void clip_to(box r) {
+    clip_box = r;
+    clipped = 1;
+}
+
+static inline void clip_off(void) {
+    clipped = 0;
+}
+
+static inline int allowed(int x, int y) {
+    return !clipped || (x >= clip_box.x && y >= clip_box.y && x < clip_box.x + clip_box.w && y < clip_box.y + clip_box.h);
+}
+
 static inline uint32_t rgb(uint32_t hex) {
     return 0xff000000u | hex;
 }
@@ -46,14 +63,14 @@ static inline uint32_t at(int x, int y) {
 }
 
 static inline void px(int x, int y, uint32_t c) {
-    if (x >= 0 && y >= 0 && x < on->width && y < on->height)
+    if (x >= 0 && y >= 0 && x < on->width && y < on->height && allowed(x, y))
         on->pixels[y * on->width + x] = c;
 }
 
 /* Lay a colour over a pixel, as far as cover (0 to 1) and the colour's own
  * alpha allow. A see-through pixel takes the colour that solid. */
 static inline void blend(int x, int y, uint32_t c, float cover) {
-    if (x < 0 || y < 0 || x >= on->width || y >= on->height) return;
+    if (x < 0 || y < 0 || x >= on->width || y >= on->height || !allowed(x, y)) return;
     float a = cover * chan(c, 24) / 255.0f;
     if (a <= 0.002f) return;
     if (a > 1) a = 1;

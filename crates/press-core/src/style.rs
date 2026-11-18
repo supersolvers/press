@@ -7,7 +7,7 @@
 //! it draws, it hands each piece of a window to the style as a [`Part`].
 //!
 //! The look the engine was born with, black and white in the manner of the
-//! first Macintosh, is one style among others: [`OneBit`]. It is also the
+//! first Macintosh, is one style among others: [`EightyFour`]. It is also the
 //! one that draws whatever another style declines to, so a style may be
 //! written a part at a time.
 //!
@@ -73,6 +73,27 @@ pub struct Metrics {
     /// Not nothing: the menu bar stays in the window, even on a desktop
     /// that offers to show it across the top of the screen.
     pub menu_in_window: i32,
+    /// Not nothing: the title bar is a tab at the left of the window's top,
+    /// only as wide as its buttons and the title with this much room either
+    /// side of it, and the rest of that strip is not the window's.
+    pub frame_tab: i32,
+    /// How a menu's shortcuts are written: 0 with the sign of the command
+    /// key before the letter, 1 as Ctrl+ and the letter, 2 with a caret.
+    pub shortcut_form: i32,
+    /// How thick the frame is along the bottom of a window, where that is
+    /// not as thick as along its sides: nothing, for the same.
+    pub frame_foot: i32,
+    /// What two clicks on a title bar do: 0 zoom the window, 1 roll it up
+    /// into its title bar, 2 put it away.
+    pub frame_double: i32,
+    /// Where a scroll bar keeps its arrows: 0 one at each end, 1 both at
+    /// the far end (the bottom, the right).
+    pub scroll_arrows: i32,
+    /// Where the tabs of a tab view stand along its top: 0 from the left,
+    /// 1 in the middle.
+    pub tab_align: i32,
+    /// How thick the edge of a menu is, inside which its items lie.
+    pub menu_border: i32,
 }
 
 /// The colours a style decides, as ARGB. The engine draws words and small
@@ -89,6 +110,13 @@ pub struct Palette {
     /// A menu bar and the menus pulled down from it.
     pub menu: u32,
     pub menu_text: u32,
+    /// Lists, tables and trees, where they are not on the same paper as
+    /// what is typed.
+    pub list: u32,
+    pub list_ink: u32,
+    /// What the pages of a tab view lie on, where that is not what a
+    /// window is made of.
+    pub pane: u32,
 }
 
 /// The pieces a window is drawn from.
@@ -151,15 +179,31 @@ pub enum PartKind {
     HeaderCell = 22,
     /// The frame of a window that draws its own: the title bar with the
     /// window's title, and the edges. The rectangle is the whole window,
-    /// see-through until drawn on; `a` is the height of the title bar and
-    /// `b` the thickness of the edges, and the content is laid over the
-    /// rest afterwards. `ENABLED` for the window in front; `CHECKED` for
+    /// see-through until drawn on; `a` is the height of the title bar,
+    /// `b` the thickness of the edges and `c` how wide the title bar is
+    /// (all of the window, unless it is a tab), and the content is laid
+    /// over the rest afterwards. `ENABLED` for the window in front; `CHECKED` for
     /// one made as large as it can be.
     Frame = 23,
     /// A button in a title bar: `a` is 1 for the one that closes, 2 for
     /// the one that minimizes, 3 for the one that zooms. `HOT`, `HELD`,
     /// `ENABLED` and `CHECKED` as for the frame.
     FrameButton = 24,
+    /// The mark beside a menu's item that is switched on, in the room at
+    /// the left of the item. Drawn in `ink`.
+    MenuCheck = 25,
+    /// The mark at the right of a menu's item that opens another menu. The
+    /// rectangle is the item's. Drawn in `ink`.
+    MenuArrow = 26,
+    /// The mark in a table's heading that says the rows are in its order:
+    /// its middle is at (`a`, `b`). `CHECKED` for smallest first.
+    SortArrow = 27,
+    /// The mark before a row of a tree that has rows under it: its middle
+    /// is at (`a`, `b`). `CHECKED` when they are showing.
+    TreeFold = 28,
+    /// Where typing goes, in a text field: the rectangle is one pixel wide
+    /// and as tall as the line.
+    Caret = 29,
 }
 
 /// What state a part is in: these are added together in [`Part::state`].
@@ -202,13 +246,17 @@ pub struct Part<'a> {
     pub a: i32,
     pub b: i32,
     pub c: i32,
+    pub d: i32,
+    /// The colour the engine would have drawn it in, for the small marks
+    /// it used to draw itself: the ink of the paper or menu they are on.
+    pub ink: u32,
     /// The words on it, if it has any.
     pub text: &'a str,
 }
 
 impl<'a> Part<'a> {
     pub fn new(kind: PartKind, rect: Rect) -> Part<'a> {
-        Part { kind, state: state::ENABLED, rect, phase: 0, a: 0, b: 0, c: 0, text: "" }
+        Part { kind, state: state::ENABLED, rect, phase: 0, a: 0, b: 0, c: 0, d: 0, ink: BLACK, text: "" }
     }
 
     pub fn text(mut self, text: &'a str) -> Part<'a> {
@@ -236,6 +284,11 @@ impl<'a> Part<'a> {
         self
     }
 
+    pub fn ink(mut self, ink: u32) -> Part<'a> {
+        self.ink = ink;
+        self
+    }
+
     pub fn is(&self, flag: u32) -> bool {
         self.state & flag != 0
     }
@@ -259,12 +312,17 @@ pub trait Style: Send + Sync {
     fn typeface(&self, _face: Face) -> Option<Type> {
         None
     }
+    /// The typeface for the title of a window that draws its own frame,
+    /// where that is not the interface's: bold, as often as not.
+    fn frame_typeface(&self) -> Option<Type> {
+        None
+    }
     /// What it would have the engine do for it: see [`wants`].
     fn wants(&self) -> u32 {
         0
     }
     /// Draw a part. A style that returns false has drawn nothing, and the
-    /// part is drawn as [`OneBit`] draws it.
+    /// part is drawn as [`EightyFour`] draws it.
     fn draw(&self, part: &Part, painter: &mut Painter) -> bool;
 }
 
@@ -275,11 +333,13 @@ pub const MENU_TITLE_PAD: i32 = 9;
 /// Where an item's words start in a menu, leaving room for a tick.
 pub const MENU_ITEM_LEFT: i32 = 17;
 
-/// Black and white, in the manner of the first Macintosh.
+/// Black and white, one bit to a pixel, in the manner of the first
+/// Macintosh, of 1984: named for its year, as the other styles are for
+/// theirs. It was the engine's only look once.
 #[derive(Debug, Clone, Copy, Default)]
-pub struct OneBit;
+pub struct EightyFour;
 
-impl OneBit {
+impl EightyFour {
     pub const METRICS: Metrics = Metrics {
         button_height: 20,
         button_min_width: 58,
@@ -312,9 +372,16 @@ impl OneBit {
         frame_left: 0,
         frame_right: 0,
         menu_in_window: 0,
+        frame_tab: 0,
+        shortcut_form: 0,
+        frame_foot: 0,
+        frame_double: 0,
+        scroll_arrows: 0,
+        tab_align: 0,
+        menu_border: 1,
     };
 
-    pub const PALETTE: Palette = Palette { window: WHITE, text: BLACK, paper: WHITE, ink: BLACK, menu: WHITE, menu_text: BLACK };
+    pub const PALETTE: Palette = Palette { window: WHITE, text: BLACK, paper: WHITE, ink: BLACK, menu: WHITE, menu_text: BLACK, list: WHITE, list_ink: BLACK, pane: WHITE };
 
     /// How far the focus ring stands off a control.
     const RING_GAP: i32 = 3;
@@ -397,9 +464,9 @@ impl OneBit {
     }
 }
 
-impl Style for OneBit {
+impl Style for EightyFour {
     fn name(&self) -> &str {
-        "one-bit"
+        "eightyfour"
     }
 
     fn metrics(&self) -> Metrics {
@@ -576,6 +643,30 @@ impl Style for OneBit {
             }
             PartKind::Header => canvas.fill(Rect::new(rect.x, rect.y + rect.h - 1, rect.w, 1), BLACK),
             PartKind::HeaderCell => {}
+            PartKind::MenuCheck => p.font.draw(canvas, "\u{2713}", rect.x + 3, rect.y + (rect.h - line) / 2, part.ink),
+            PartKind::MenuArrow => {
+                // a solid arrow pointing at where the submenu opens
+                let (tip, mid) = (rect.x + rect.w - 8, rect.y + rect.h / 2);
+                for d in 0..4 {
+                    canvas.fill(Rect::new(tip - d, mid - d, 1, 2 * d + 1), part.ink);
+                }
+            }
+            PartKind::SortArrow => {
+                // a small arrowhead: up for smallest first
+                for d in 0..4 {
+                    let dy = if part.is(state::CHECKED) { d - 2 } else { 1 - d };
+                    canvas.fill(Rect::new(part.a - d, part.b + dy, 2 * d + 1, 1), part.ink);
+                }
+            }
+            PartKind::TreeFold => {
+                // a solid triangle: pointing right when folded, down when open
+                let (cx, cy) = (part.a, part.b);
+                for d in 0..5 {
+                    let r = if part.is(state::CHECKED) { Rect::new(cx - 4 + d, cy - 2 + d, 9 - 2 * d, 1) } else { Rect::new(cx - 2 + d, cy - 4 + d, 1, 9 - 2 * d) };
+                    canvas.fill(r, part.ink);
+                }
+            }
+            PartKind::Caret => canvas.fill(rect, part.ink),
             PartKind::Frame => {
                 // a plain frame for a style that asks for one and draws none
                 canvas.fill(rect, WHITE);
@@ -606,6 +697,12 @@ pub(crate) struct Look {
 }
 
 impl Look {
+    /// The font for the title of a window's own frame, if the style has
+    /// one for it apart from the interface's.
+    pub fn frame_font(&self) -> Option<Font> {
+        self.style.frame_typeface().map(|wanted| Font::smooth(Face::Cicero, &wanted))
+    }
+
     /// A font for one of the families, as the style would have it.
     pub fn font(&self, face: Face) -> Font {
         match self.style.typeface(face) {
@@ -624,6 +721,6 @@ impl Look {
 
 impl Default for Look {
     fn default() -> Look {
-        Look::of(std::sync::Arc::new(OneBit))
+        Look::of(std::sync::Arc::new(EightyFour))
     }
 }

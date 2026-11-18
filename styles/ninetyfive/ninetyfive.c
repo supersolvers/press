@@ -374,7 +374,8 @@ static void frame(const press_part *p, box r) {
 #else
     fill(bar, active ? NAVY : SHADOW);
 #endif
-    words(p->text, bar.x + 3, bar.y + (bar.h - on->line_height(on->ctx)) / 2, active ? WHITE : part_way(WHITE, FACE, 3, 4));
+    /* (after the little picture at its left) */
+    words(p->text, bar.x + 21, bar.y + (bar.h - on->line_height(on->ctx)) / 2, active ? WHITE : part_way(WHITE, FACE, 3, 4));
 }
 
 /* The buttons at the right of the bar: put away, make large, close. */
@@ -387,6 +388,15 @@ static void frame_button(const press_part *p, box r) {
         edge(inset(r, 1), SHADOW, LIGHT);
     } else {
         raised(r);
+    }
+    if (p->a == PRESS_FRAME_MENU) {
+        /* not a button but a little picture of a window: the window's own menu drops from it */
+        fill(r, has(p, PRESS_STATE_ENABLED) ? NAVY : SHADOW);
+        box icon = {r.x + 1, r.y + 1, 13, 12};
+        fill(icon, WHITE);
+        edge(icon, BLACK, BLACK);
+        fill((box){icon.x + 1, icon.y + 1, icon.w - 2, 3}, NAVY);
+        return;
     }
     switch (p->a) {
     case PRESS_FRAME_CLOSE:
@@ -438,17 +448,31 @@ static int32_t draw(const press_part *p, const press_surface *surface) {
     case PRESS_PART_MENU_BAR: fill(r, FACE); break;
     case PRESS_PART_MENU_TITLE: {
         int line = on->line_height(on->ctx), lit = has(p, PRESS_STATE_HELD) && has(p, PRESS_STATE_ENABLED);
+#ifdef STYLE_FLAT_MENU_BAR
+        /* a title stands out of the bar under the pointer, and is pressed into it while its menu is down */
+        if (lit) edge((box){r.x, r.y + 1, r.w, r.h - 2}, SHADOW, HILITE);
+        else if (has(p, PRESS_STATE_HOT) && has(p, PRESS_STATE_ENABLED)) edge((box){r.x, r.y + 1, r.w, r.h - 2}, HILITE, SHADOW);
+        words(p->text, r.x + 9 + lit, r.y + (r.h - line) / 2 + lit, has(p, PRESS_STATE_ENABLED) ? BLACK : SHADOW);
+#else
         if (lit) fill(r, NAVY);
         words(p->text, r.x + 9, r.y + (r.h - line) / 2, lit ? WHITE : has(p, PRESS_STATE_ENABLED) ? BLACK : SHADOW);
+#endif
         break;
     }
     case PRESS_PART_MENU_FRAME:
-        /* light along the top and left, shade inside the bottom and right,
-         * and the shadow's own row and column a hard black edge */
-        edge((box){r.x, r.y, r.w - 1, r.h - 1}, HILITE, SHADOW);
-        fill((box){r.x + r.w - 1, r.y, 1, r.h}, DARK);
-        fill((box){r.x, r.y + r.h - 1, r.w, 1}, DARK);
+        /* standing out of the page as a button does, a pixel of the face inside its edges */
+        edge(r, LIGHT, DARK);
+        edge(inset(r, 1), HILITE, SHADOW);
         break;
+    case PRESS_PART_TREE_FOLD: {
+        /* a little box with a minus in it, or a plus when there is more to show */
+        box b = {p->a - 4, p->b - 4, 9, 9};
+        fill(b, WHITE);
+        edge(b, SHADOW, SHADOW);
+        fill((box){b.x + 2, b.y + 4, 5, 1}, BLACK);
+        if (!has(p, PRESS_STATE_CHECKED)) fill((box){b.x + 4, b.y + 2, 1, 5}, BLACK);
+        break;
+    }
     case PRESS_PART_MENU_SEPARATOR:
         fill((box){r.x + 1, r.y + r.h / 2 - 1, r.w - 2, 1}, SHADOW);
         fill((box){r.x + 1, r.y + r.h / 2, r.w - 2, 1}, HILITE);
@@ -484,9 +508,12 @@ static void metrics(press_metrics *m) {
     m->frame_button_gap = 0;
     m->frame_button_inset = 6;
     m->frame_button_rise = 2;
-    m->frame_left = 0;
+    m->frame_left = 0x5;    /* the window's own menu */
     m->frame_right = 0x231; /* put away, make large, close */
     m->menu_in_window = 1;
+    m->shortcut_form = 1;   /* Ctrl+L */
+    m->menu_border = 3;
+    m->menu_shadow = 0;
 #ifdef STYLE_METRICS
     STYLE_METRICS(m);
 #endif
@@ -504,8 +531,11 @@ static void palette(press_palette *p) {
 #ifndef STYLE_TYPEFACE
 #define STYLE_TYPEFACE NULL
 #endif
+#ifndef STYLE_WANTS
+#define STYLE_WANTS 0
+#endif
 
-static const press_style style = {PRESS_STYLE_ABI, STYLE_NAME, metrics, palette, draw, 0, STYLE_TYPEFACE};
+static const press_style style = {PRESS_STYLE_ABI, STYLE_NAME, metrics, palette, draw, STYLE_WANTS, STYLE_TYPEFACE};
 
 const press_style *press_style_entry(void) {
     return &style;

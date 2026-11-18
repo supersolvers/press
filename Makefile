@@ -25,7 +25,7 @@ CC ?= cc
 SWIFT ?= swift
 FONT_PYTHON ?= fonts/.venv/bin/python
 FAMILIES = Cicero-Regular Agate-Regular Agate-Bold Brevier-Regular Pica-Regular Elite-Regular Fleuron-Regular Vignette-Regular Cartouche-Regular
-STYLES = ninetyfive ninetynine twothousand twothousandone twothousandfive
+STYLES = eightyfive eightyeight eightynine ninety ninetythree ninetyfive ninetyeight ninetynine twothousand twothousandone twothousandfour twothousandfive
 OUT = target/$(PROFILE)
 
 build:
