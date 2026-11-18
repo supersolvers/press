@@ -1,8 +1,9 @@
 [package]
 name = "press-fontgen"
-version = "0.1.0"
-edition = "2021"
-license = "GPL-3.0-or-later"
+description = "Takes the pixels out of the Fonts of Old font files and writes them in the compact form press bundles"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
 
 [dependencies]
-ttf-parser = "=0.25.1"
+ttf-parser = "0.25"

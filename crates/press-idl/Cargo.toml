@@ -1,0 +1,10 @@
+[package]
+name = "press-idl"
+description = "Parser for the press interface definition and the binding generators"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+toml = "0.9"

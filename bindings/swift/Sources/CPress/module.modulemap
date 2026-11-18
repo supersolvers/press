@@ -1,0 +1,6 @@
+// The C interface, as Swift sees it. The PressCore module is written against this.
+module CPress [system] {
+    header "shim.h"
+    link "press"
+    export *
+}

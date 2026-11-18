@@ -75,6 +75,21 @@ values = [
     { name = "End", value = 11, doc = "end of the line" },
     { name = "Menu", value = 12, doc = "pull down or put away the menu bar (F10)" },
     { name = "Context", value = 13, doc = "pop up the context menu of whatever has the keyboard (the Menu key, or Shift+F10)" },
+    { name = "PageUp", value = 14, doc = "a page up; told only to a picture that hears every key" },
+    { name = "PageDown", value = 15, doc = "a page down; told only to a picture that hears every key" },
+    { name = "Insert", value = 16, doc = "Insert; told only to a picture that hears every key" },
+    { name = "F1", value = 21, doc = "a function key, told only to a picture that hears every key; F2 is 22 and so on" },
+    { name = "F2", value = 22, doc = "F2" },
+    { name = "F3", value = 23, doc = "F3" },
+    { name = "F4", value = 24, doc = "F4" },
+    { name = "F5", value = 25, doc = "F5" },
+    { name = "F6", value = 26, doc = "F6" },
+    { name = "F7", value = 27, doc = "F7" },
+    { name = "F8", value = 28, doc = "F8" },
+    { name = "F9", value = 29, doc = "F9" },
+    { name = "F10", value = 30, doc = "F10, which otherwise works the menu bar" },
+    { name = "F11", value = 31, doc = "F11" },
+    { name = "F12", value = 32, doc = "F12" },
 ]
 
 [[enum]]
@@ -95,6 +110,15 @@ values = [
     { name = "Folder", value = 1, doc = "a folder" },
     { name = "Document", value = 2, doc = "a sheet of paper with a corner turned down" },
     { name = "Application", value = 3, doc = "a diamond" },
+]
+
+[[enum]]
+name = "LineStyle"
+doc = "How a line is drawn on a Picture."
+values = [
+    { name = "Solid", value = 0, doc = "every pixel" },
+    { name = "Dotted", value = 1, doc = "every other pixel" },
+    { name = "Dashed", value = 2, doc = "four pixels on and three off" },
 ]
 
 [[enum]]
@@ -191,7 +215,7 @@ doc = "Base of everything that can be placed in a window, menus included. Its fu
 
   [[class.method]]
   name = "set_typeface"
-  doc = "Set the widget's text in another of the bundled typefaces. Labels, buttons, checkboxes, text fields and text areas have one; other widgets refuse it as the wrong type. A widget is the size its text needs in its typeface."
+  doc = "Set the widget's text in another of the bundled typefaces. Labels, buttons, checkboxes, text fields, text areas and pictures have one; other widgets refuse it as the wrong type. A widget is the size its text needs in its typeface."
   args = [{ name = "face", type = "Typeface" }]
 
   [[class.method]]
@@ -245,6 +269,16 @@ doc = "A top-level window. The desktop draws its title bar and frame."
   access = "w"
   doc = "A name by which the desktop can know this window again another day, so as to put it back where it was, at the size it was. It is not shown to anyone, so it is not translated, and it should be the same each time the program shows the same thing: a document's path, say, or \"preferences\". Set it before the window is first shown. Desktops that do not remember windows ignore it."
 
+  [[class.property]]
+  name = "full_screen"
+  type = "bool"
+  doc = "Whether the window fills its screen, with no title bar or frame and in front of the menu bar, as a film or a slide show does. Turning it on asks the desktop, which may refuse; reading it says what the window last asked for or was told. While it is on the window draws no menu bar of its own, though its shortcuts still work. Turned off, the window goes back to where it was and its size. full_screen_changed says when the desktop changes it, as when the user leaves full screen by its own means."
+
+  [[class.event]]
+  name = "full_screen_changed"
+  doc = "The desktop has put the window into full screen, or taken it out, whether the program asked or not: whether it is now."
+  args = [{ name = "full_screen", type = "bool" }]
+
   [[class.method]]
   name = "set_content"
   doc = "Place a widget in the window; it fills the content area."
@@ -256,18 +290,32 @@ doc = "A top-level window. The desktop draws its title bar and frame."
   args = [{ name = "bar", type = "MenuBar" }]
 
   [[class.method]]
+  name = "fit"
+  doc = "Make the window the size its content asks for, with room for its menu bar, in place of the size it was created with. Call it once the content and the menu bar are in place and before the window is first shown; a window that has been shown refuses."
+
+  [[class.method]]
   name = "show"
   doc = "Make the window visible."
 
   [[class.method]]
+  name = "focused"
+  doc = "The widget in the window that has the keyboard, or none (a handle of 0) when nothing has. A window that has not been typed into yet answers with its first text field, which is where typing will go."
+  returns = "Widget"
+
+  [[class.method]]
   name = "snapshot"
-  doc = "Render the window content to a PNG file, magnified by an integer scale. An open menu is included, and the picture grows to fit it. Works with every backend."
+  doc = "Render the window content to a PNG file, magnified by an integer scale: one bit a pixel, or in colour when the window shows a photo. An open menu is included, and the picture grows to fit it. Works with every backend."
   args = [{ name = "path", type = "str" }, { name = "scale", type = "i32" }]
 
   [[class.method]]
   name = "click_at"
   doc = "Test hook: press and release the pointer at a point in the content area. An open menu is reached at the place it hangs, even outside the window."
   args = [{ name = "x", type = "i32" }, { name = "y", type = "i32" }]
+
+  [[class.method]]
+  name = "drag_at"
+  doc = "Test hook: press the pointer at one point in the content area, move it to another in four steps, and let it go there."
+  args = [{ name = "x0", type = "i32" }, { name = "y0", type = "i32" }, { name = "x1", type = "i32" }, { name = "y1", type = "i32" }]
 
   [[class.method]]
   name = "popup_menu"
@@ -278,6 +326,11 @@ doc = "A top-level window. The desktop draws its title bar and frame."
   name = "context_click_at"
   doc = "Test hook: press the right button at a point in the content area."
   args = [{ name = "x", type = "i32" }, { name = "y", type = "i32" }]
+
+  [[class.method]]
+  name = "side_click"
+  doc = "Test hook: press the pointer's back button, or its forward button, over the window."
+  args = [{ name = "forward", type = "bool" }]
 
   [[class.method]]
   name = "hold_modifiers"
@@ -320,6 +373,11 @@ doc = "A top-level window. The desktop draws its title bar and frame."
   args = [{ name = "kind", type = "str" }, { name = "data", type = "bytes" }, { name = "x", type = "i32" }, { name = "y", type = "i32" }]
 
   [[class.event]]
+  name = "navigate"
+  doc = "The pointer's back or forward button, on the side of many a mouse, was pressed over the window: forward says which. What it does is the program's to say; without a handler nothing happens."
+  args = [{ name = "forward", type = "bool" }]
+
+  [[class.event]]
   name = "close_requested"
   doc = "The user asked to close the window. Without a handler the application quits."
 
@@ -336,6 +394,11 @@ doc = "Lays out its children in a row or a column."
   name = "add"
   doc = "Append a child. A widget can have only one parent."
   args = [{ name = "child", type = "Widget" }]
+
+  [[class.method]]
+  name = "insert"
+  doc = "Put a child at a place among the stack's children, counting from 0, with those after it moving along; a place past the end is the end. A child already in this stack is moved to the place, which is how children are put in another order."
+  args = [{ name = "child", type = "Widget" }, { name = "index", type = "i32" }]
 
   [[class.property]]
   name = "spacing"
@@ -411,6 +474,12 @@ doc = "A box that is either checked or not, with a caption."
   args = [{ name = "label", type = "str" }]
 
   [[class.property]]
+  name = "label"
+  type = "str"
+  access = "w"
+  doc = "The box's caption."
+
+  [[class.property]]
   name = "checked"
   type = "bool"
   doc = "Whether the box is checked."
@@ -457,6 +526,21 @@ doc = "One line of editable text."
   doc = "Select all of the text."
 
   [[class.method]]
+  name = "select"
+  doc = "Select from one place in the text to another, each a byte offset into its UTF-8: `to` is where the caret goes, and is scrolled into view, so a selection made backwards has `to` first. The same place twice puts the caret there with nothing selected. A place inside a character moves to its start, and one past the end to the end. Made by the program, it does not raise selected."
+  args = [{ name = "from", type = "i32" }, { name = "to", type = "i32" }]
+
+  [[class.method]]
+  name = "selection_start"
+  doc = "Where the selection begins, as a byte offset into the text's UTF-8; with nothing selected, where the caret is."
+  returns = "i32"
+
+  [[class.method]]
+  name = "selection_end"
+  doc = "Where the selection ends, as a byte offset into the text's UTF-8; with nothing selected, where the caret is."
+  returns = "i32"
+
+  [[class.method]]
   name = "copy"
   doc = "Copy the selected text to the clipboard. With nothing selected the clipboard is left alone."
 
@@ -478,10 +562,15 @@ doc = "One line of editable text."
   doc = "The user pressed Return in the field. The handler is given the text. The default button, if any, is pressed as well."
   args = [{ name = "text", type = "str" }]
 
+  [[class.event]]
+  name = "selected"
+  doc = "The user moved the caret or changed the selection: by typing, the keys, the pointer or a paste. The handler is given where the selection begins and ends, as byte offsets into the text's UTF-8, the start first; equal, they are the caret. It comes after changed when both happen. A password field does not raise it."
+  args = [{ name = "start", type = "i32" }, { name = "end", type = "i32" }]
+
 [[class]]
 name = "TextArea"
 base = "TextField"
-doc = "Several lines of editable text, wrapped at word gaps to the width of the area. It is a TextField: every TextField function and event works on it, except that Return starts a new line, so it never raises submitted and does not press the default button."
+doc = "Several lines of editable text, wrapped at word gaps to the width of the area. It keeps tabs, each four spaces wide, and holds up to two megabytes, where a text field holds 64 kilobytes. It is a TextField: every TextField function and event works on it, except that Return starts a new line, so it never raises submitted and does not press the default button."
 
   [class.constructor]
   doc = "Create a text area holding the given text. Line breaks in the text are kept."
@@ -799,6 +888,172 @@ doc = "Shows how far along some work is. It fills from the left as value goes fr
   type = "i32"
   access = "w"
   doc = "The length of the bar in pixels."
+
+[[class]]
+name = "Picture"
+base = "Widget"
+doc = "A white box of a size the program chooses, for the program to draw on with lines, boxes and words: a graph, a chart, a diagram. What is drawn is kept, and drawn again whenever the window is, so draw once and again only when something changes. Places are in the picture's own pixels, from its top left corner; what falls outside is not shown. The pointer pressed, dragged and let go in it, and the wheel turned over it, are told with the place. Words are drawn in the picture's typeface, which set_typeface changes."
+
+  [class.constructor]
+  doc = "Create a blank picture of the given size in pixels, from 1 to 4096 each way."
+  args = [{ name = "width", type = "i32" }, { name = "height", type = "i32" }]
+
+  [[class.method]]
+  name = "clear"
+  doc = "Rub out everything drawn, leaving it white."
+
+  [[class.method]]
+  name = "line"
+  doc = "Draw a line one pixel thick from one point to another, both ends included."
+  args = [{ name = "x0", type = "i32" }, { name = "y0", type = "i32" }, { name = "x1", type = "i32" }, { name = "y1", type = "i32" }, { name = "style", type = "LineStyle" }]
+
+  [[class.method]]
+  name = "box"
+  doc = "Draw a box with its top left corner at a point: an outline one pixel thick, or filled in black."
+  args = [{ name = "x", type = "i32" }, { name = "y", type = "i32" }, { name = "width", type = "i32" }, { name = "height", type = "i32" }, { name = "filled", type = "bool" }]
+
+  [[class.method]]
+  name = "fill"
+  doc = "Fill a box with a pattern of black and white: `pattern` is eight bytes, a row of an 8 by 8 tile each, the leftmost pixel in the top bit, a set bit black and a clear one white. It covers what was there, so eight noughts rub the box out and eight 255s black it in; 170 and 85 by turns are a half-tone grey. The tile is laid from the picture's corner, so boxes side by side in one pattern join without a seam. Lines, outlines and words are always drawn over patterns, whichever was asked for first."
+  args = [{ name = "x", type = "i32" }, { name = "y", type = "i32" }, { name = "width", type = "i32" }, { name = "height", type = "i32" }, { name = "pattern", type = "bytes" }]
+
+  [[class.method]]
+  name = "image"
+  doc = "Lay down a picture of your own making, a pixel a bit, with its top left corner at a point: `bits` is rows of `width` pixels, each row padded to whole bytes, the leftmost pixel in the top bit of a byte, set for black. It covers what was there, as fill does. For a scene drawn pixel by pixel, such as shading or a game's world, this is one call where dots would be thousands."
+  args = [{ name = "x", type = "i32" }, { name = "y", type = "i32" }, { name = "width", type = "i32" }, { name = "height", type = "i32" }, { name = "bits", type = "bytes" }]
+
+  [[class.method]]
+  name = "photo"
+  doc = "Lay down a picture in colour with its top left corner at a point: `rgb` is rows of `width` pixels, three bytes each, red, green and blue. press is black and white, and this is its one exception, for what is a photograph by nature, such as a camera's picture; offer it in black and white too. It covers what was there, as image does."
+  args = [{ name = "x", type = "i32" }, { name = "y", type = "i32" }, { name = "width", type = "i32" }, { name = "height", type = "i32" }, { name = "rgb", type = "bytes" }]
+
+  [[class.method]]
+  name = "text"
+  doc = "Draw words in black with the left end of their line at x and its top at y."
+  args = [{ name = "x", type = "i32" }, { name = "y", type = "i32" }, { name = "text", type = "str" }]
+
+  [[class.method]]
+  name = "text_width"
+  doc = "How wide words would be drawn, in pixels, so that they can be placed: centred under a mark, say, or kept clear of an edge."
+  args = [{ name = "text", type = "str" }]
+  returns = "i32"
+
+  [[class.method]]
+  name = "line_height"
+  doc = "How tall a line of words is, in pixels."
+  returns = "i32"
+
+  [[class.method]]
+  name = "text_in"
+  doc = "Draw words in black in a typeface of their own, whatever the picture's, with the left end of their line at x and its top at y: a heading over plain words, say, or program text in an even face."
+  args = [{ name = "x", type = "i32" }, { name = "y", type = "i32" }, { name = "text", type = "str" }, { name = "face", type = "Typeface" }]
+
+  [[class.method]]
+  name = "text_width_in"
+  doc = "How wide words would be drawn in a given typeface, in pixels."
+  args = [{ name = "text", type = "str" }, { name = "face", type = "Typeface" }]
+  returns = "i32"
+
+  [[class.method]]
+  name = "line_height_in"
+  doc = "How tall a line of words is in a given typeface, in pixels."
+  args = [{ name = "face", type = "Typeface" }]
+  returns = "i32"
+
+  [[class.property]]
+  name = "description"
+  type = "str"
+  access = "w"
+  doc = "What the picture shows, in words, for those who cannot see it: \"a graph of y = sin x from -10 to 10\", say. Screen readers read it out."
+
+  [[class.property]]
+  name = "takes_keys"
+  type = "bool"
+  access = "w"
+  doc = "Let the picture have the keyboard, for a game or a drawing worked by keys: Tab stops at it, a press in it takes the keyboard there, and it is ringed while it has it. The arrow keys and their kin are then told by key_pressed, and what is typed by typed."
+
+  [[class.property]]
+  name = "raw_keys"
+  type = "bool"
+  access = "w"
+  doc = "Let the picture hear every key, for a terminal or an emulator of another machine: it takes the keyboard as takes_keys does, and each key is told by key_down with the modifiers held, Tab, Return, Escape, F1 to F12, Page Up and Down, Insert, and Control or Alt with a character among them. Control and Shift with a character still choose a menu entry with that shortcut. What is typed without Control or Alt still comes by typed, and key_pressed is not raised."
+
+  [[class.property]]
+  name = "right_button"
+  type = "bool"
+  access = "w"
+  doc = "Let the picture hear the right button, for a remote desktop or a game: pressed in the picture, it raises right_pressed, and no context menu pops up there. Where the pointer goes while it is held is told by dragged, and letting it go by right_released."
+
+  [[class.property]]
+  name = "middle_button"
+  type = "bool"
+  access = "w"
+  doc = "Let the picture hear the middle button, as right_button does the right: middle_pressed, where the pointer goes while it is held by dragged, and middle_released."
+
+  [[class.method]]
+  name = "set_size"
+  doc = "Change the picture's size, from 1 to 4096 pixels each way. What is drawn is kept; what falls outside is not shown."
+  args = [{ name = "width", type = "i32" }, { name = "height", type = "i32" }]
+
+  [[class.event]]
+  name = "right_pressed"
+  doc = "The right button was pressed in a picture that hears it (right_button): where, in the picture's pixels. Until it is let go the picture hears where the pointer goes, by dragged, even outside."
+  args = [{ name = "x", type = "i32" }, { name = "y", type = "i32" }]
+
+  [[class.event]]
+  name = "right_released"
+  doc = "The right button, pressed in the picture, was let go: where, in the picture's pixels, which may be outside it."
+  args = [{ name = "x", type = "i32" }, { name = "y", type = "i32" }]
+
+  [[class.event]]
+  name = "middle_pressed"
+  doc = "The middle button was pressed in a picture that hears it (middle_button): where, in the picture's pixels. Until it is let go the picture hears where the pointer goes, by dragged, even outside."
+  args = [{ name = "x", type = "i32" }, { name = "y", type = "i32" }]
+
+  [[class.event]]
+  name = "middle_released"
+  doc = "The middle button, pressed in the picture, was let go: where, in the picture's pixels, which may be outside it."
+  args = [{ name = "x", type = "i32" }, { name = "y", type = "i32" }]
+
+  [[class.event]]
+  name = "key_down"
+  doc = "A key was pressed while a picture that hears every key had the keyboard: its Key value, or 0 for a character key; the character, as a Unicode code point, when Control or Alt was held with one (Control gives it in lower case), and otherwise 0; and the Modifier bits held."
+  args = [{ name = "key", type = "i32" }, { name = "character", type = "i32" }, { name = "modifiers", type = "i32" }]
+
+  [[class.event]]
+  name = "resized"
+  doc = "A picture told to stretch (with set_stretch) was given room of another size by its window, the first time it is laid out included: the width and height it now fills, in pixels. Draw it again for that size; its own size, from new or set_size, is the least it asks for."
+  args = [{ name = "width", type = "i32" }, { name = "height", type = "i32" }]
+
+  [[class.event]]
+  name = "key_pressed"
+  doc = "A key that types nothing was pressed while the picture had the keyboard: an arrow, Home, End, Backspace or Delete, as its Key value. Tab, Return and Escape keep their usual work."
+  args = [{ name = "key", type = "i32" }]
+
+  [[class.event]]
+  name = "typed"
+  doc = "Something was typed while the picture had the keyboard: a letter, a figure, a space, or whatever an input method made of the keys."
+  args = [{ name = "text", type = "str" }]
+
+  [[class.event]]
+  name = "pressed"
+  doc = "The pointer was pressed in the picture: where, and 1 for a single click, 2 for the second of a double click, and so on. Until it is let go the picture hears where it moves, even outside."
+  args = [{ name = "x", type = "i32" }, { name = "y", type = "i32" }, { name = "clicks", type = "i32" }]
+
+  [[class.event]]
+  name = "dragged"
+  doc = "The pointer moved while held after a press in the picture. The place may be outside it."
+  args = [{ name = "x", type = "i32" }, { name = "y", type = "i32" }]
+
+  [[class.event]]
+  name = "released"
+  doc = "The pointer pressed in the picture was let go."
+  args = [{ name = "x", type = "i32" }, { name = "y", type = "i32" }]
+
+  [[class.event]]
+  name = "scrolled"
+  doc = "The wheel was turned over the picture: lines down, or up when negative (three to a notch of an ordinary wheel), and where the pointer was."
+  args = [{ name = "lines", type = "i32" }, { name = "x", type = "i32" }, { name = "y", type = "i32" }]
 
 [[class]]
 name = "TabView"

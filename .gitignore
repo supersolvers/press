@@ -1,0 +1,14 @@
+/target
+__pycache__/
+*.pyc
+/examples/c/hello
+/examples/c/hostloop
+/examples/c/worker
+/examples/c/notes
+/examples/c/scroll
+/examples/c/controls
+/examples/c/files
+/examples/c/shuffle
+/fonts/build
+/fonts/.venv
+.build/

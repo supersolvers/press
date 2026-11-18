@@ -1,0 +1,11 @@
+[package]
+name = "press-core"
+description = "The press engine: widget tree, layout, input and one-bit drawing. No platform or FFI code."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+fontdue = "0.9"
+unicode-normalization = "0.1"
+unicode-segmentation = "1"
