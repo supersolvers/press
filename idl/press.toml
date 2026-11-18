@@ -237,6 +237,13 @@ doc = "Base of everything that can be placed in a window, menus included. Its fu
   name = "focus"
   doc = "Give the widget the keyboard. Only text fields, buttons and checkboxes that are enabled and in a window can take it."
 
+
+  [[class.property]]
+  name = "tooltip"
+  type = "str"
+  access = "w"
+  doc = "A word of help, shown beside the pointer when it has rested on the widget a moment, and put away when it moves on or is pressed. An empty string takes it away."
+
 [[class]]
 name = "Window"
 base = "Widget"
@@ -316,6 +323,11 @@ doc = "A top-level window. The desktop draws its title bar and frame."
   name = "click_at"
   doc = "Test hook: press and release the pointer at a point in the content area. An open menu is reached at the place it hangs, even outside the window."
   args = [{ name = "x", type = "i32" }, { name = "y", type = "i32" }]
+
+  [[class.method]]
+  name = "hover_at"
+  doc = "Test hook: move the pointer to a point in the content area and leave it there for a number of milliseconds, as far as the toolkit's clock is concerned: long enough, and the word of help of what is under it shows."
+  args = [{ name = "x", type = "i32" }, { name = "y", type = "i32" }, { name = "milliseconds", type = "i32" }]
 
   [[class.method]]
   name = "drag_at"
@@ -468,6 +480,18 @@ doc = "A push button."
   [[class.event]]
   name = "clicked"
   doc = "The button was pressed, with the pointer or from the keyboard."
+
+
+  [[class.property]]
+  name = "flat"
+  type = "bool"
+  access = "w"
+  doc = "Whether the button lies flat, with no edge of its own until the pointer is over it or down on it, and is no wider than its label needs: a tool in a toolbar."
+
+  [[class.method]]
+  name = "set_image"
+  doc = "Give the button a picture, in colour, before its label: the bytes of a PNG file, up to 256 pixels each way, with see-through parts if it has them. A button with a picture and an empty label is the picture alone. No bytes take the picture away."
+  args = [{ name = "png", type = "bytes" }]
 
 [[class]]
 name = "Checkbox"
@@ -796,6 +820,12 @@ doc = "Rows of text, one of which may be selected. It scrolls when there are mor
   name = "edited"
   doc = "The user edited an item's text in place and kept the change. The list already holds the new text; column is 0 except in a table."
   args = [{ name = "index", type = "i32" }, { name = "column", type = "i32" }, { name = "text", type = "str" }]
+
+
+  [[class.method]]
+  name = "set_image"
+  doc = "Give an item a picture in colour, in place of its icon: the bytes of a PNG file, up to 16 pixels each way, with see-through parts if it has them. No bytes take the picture away."
+  args = [{ name = "index", type = "i32" }, { name = "png", type = "bytes" }]
 
 [[class]]
 name = "Table"
@@ -1258,3 +1288,94 @@ doc = "A command in a menu. A disabled item is greyed and cannot be chosen."
   [[class.event]]
   name = "activated"
   doc = "The user chose the item, from the menu or with its shortcut."
+
+[[class]]
+name = "GroupBox"
+base = "Stack"
+doc = "A box with a title, round things that belong together. It is a Stack: every Stack function works on it, and its children are laid out inside the box."
+
+  [class.constructor]
+  doc = "Create an empty box. With an empty title it is a box and no more."
+  args = [{ name = "title", type = "str" }, { name = "orientation", type = "Orientation" }]
+
+  [[class.property]]
+  name = "title"
+  type = "str"
+  access = "w"
+  doc = "The words at the top of the box."
+
+[[class]]
+name = "Toolbar"
+base = "Stack"
+doc = "A bar of tools, for the top of a window: a Stack that lays its children out in a row, close together, on a bar drawn by the style. Buttons in it are usually flat."
+
+  [class.constructor]
+  doc = "Create an empty toolbar."
+
+[[class]]
+name = "StatusBar"
+base = "Stack"
+doc = "A bar of news, for the foot of a window: a Stack that lays its children out in a row on a bar drawn by the style. Labels are what it usually holds."
+
+  [class.constructor]
+  doc = "Create an empty status bar."
+
+  [[class.property]]
+  name = "panels"
+  type = "bool"
+  access = "w"
+  doc = "Whether each child is shown in a cell of its own, the last reaching the end of the bar. At first they are all on one strip."
+
+[[class]]
+name = "Stepper"
+base = "Widget"
+doc = "A whole number with a pair of arrows beside it, one over the other, to step it up and down. An arrow held down steps again and again. The arrow keys step it too when it has the keyboard."
+
+  [class.constructor]
+  doc = "Create a stepper at 0, which goes from 0 to 100 by ones."
+
+  [[class.property]]
+  name = "value"
+  type = "i32"
+  doc = "The number. Setting it does not raise changed; a value out of range is brought into range."
+
+  [[class.property]]
+  name = "min"
+  type = "i32"
+  access = "w"
+  doc = "The least the number may be."
+
+  [[class.property]]
+  name = "max"
+  type = "i32"
+  access = "w"
+  doc = "The most the number may be."
+
+  [[class.property]]
+  name = "step"
+  type = "i32"
+  access = "w"
+  doc = "How far one press of an arrow moves the number, at least 1."
+
+  [[class.event]]
+  name = "changed"
+  doc = "The user stepped the number."
+  args = [{ name = "value", type = "i32" }]
+
+[[class]]
+name = "ComboBox"
+base = "TextField"
+doc = "A text field with a list of things it might say, dropped from a button at its end. Choosing one puts it in the field and raises changed; anything else may be typed. It is a TextField: every TextField function and event works on it."
+
+  [class.constructor]
+  doc = "Create a combo box holding the given text, with no choices yet."
+  args = [{ name = "text", type = "str" }]
+
+  [[class.method]]
+  name = "add"
+  doc = "Append a choice to the list."
+  args = [{ name = "choice", type = "str" }]
+
+  [[class.method]]
+  name = "clear"
+  doc = "Take every choice away. The text in the field stays."

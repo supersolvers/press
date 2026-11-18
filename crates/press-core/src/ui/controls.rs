@@ -288,6 +288,9 @@ impl Ui {
         if let Some(told) = self.picture_key(h, key) {
             return Some(told);
         }
+        if let Some(told) = self.stepper_key(h, key) {
+            return Some(told);
+        }
         match self.nodes.get(h).map(|n| &n.kind) {
             Some(Kind::Radio { .. }) => {
                 // the arrows walk the group, choosing as they go

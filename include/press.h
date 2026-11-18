@@ -181,6 +181,11 @@ typedef press_handle_t press_scroll_bar_t;
 typedef press_handle_t press_menu_bar_t;
 typedef press_handle_t press_menu_t;
 typedef press_handle_t press_menu_item_t;
+typedef press_handle_t press_group_box_t;
+typedef press_handle_t press_toolbar_t;
+typedef press_handle_t press_status_bar_t;
+typedef press_handle_t press_stepper_t;
+typedef press_handle_t press_combo_box_t;
 
 /** Called when a callback is dropped, so its userdata can be released. */
 typedef void (*press_destroy_fn)(void *userdata);
@@ -256,6 +261,9 @@ PRESS_API press_status_t press_widget_set_enabled(press_widget_t self, bool valu
 /** Disabled widgets are drawn greyed and ignore the pointer and the keyboard. */
 PRESS_API press_status_t press_widget_get_enabled(press_widget_t self, bool *out);
 
+/** A word of help, shown beside the pointer when it has rested on the widget a moment, and put away when it moves on or is pressed. An empty string takes it away. */
+PRESS_API press_status_t press_widget_set_tooltip(press_widget_t self, const char *value, size_t value_len);
+
 /* ---- Window (a Widget): A top-level window. The desktop draws its title bar and frame. */
 
 /** Create a hidden window with the given content size in pixels. */
@@ -281,6 +289,9 @@ PRESS_API press_status_t press_window_snapshot(press_window_t self, const char *
 
 /** Test hook: press and release the pointer at a point in the content area. An open menu is reached at the place it hangs, even outside the window. */
 PRESS_API press_status_t press_window_click_at(press_window_t self, int32_t x, int32_t y);
+
+/** Test hook: move the pointer to a point in the content area and leave it there for a number of milliseconds, as far as the toolkit's clock is concerned: long enough, and the word of help of what is under it shows. */
+PRESS_API press_status_t press_window_hover_at(press_window_t self, int32_t x, int32_t y, int32_t milliseconds);
 
 /** Test hook: press the pointer at one point in the content area, move it to another in four steps, and let it go there. */
 PRESS_API press_status_t press_window_drag_at(press_window_t self, int32_t x0, int32_t y0, int32_t x1, int32_t y1);
@@ -390,6 +401,9 @@ PRESS_API press_status_t press_label_set_text(press_label_t self, const char *va
 /** Create a button. */
 PRESS_API press_status_t press_button_new(const char *label, size_t label_len, press_button_t *out);
 
+/** Give the button a picture, in colour, before its label: the bytes of a PNG file, up to 256 pixels each way, with see-through parts if it has them. A button with a picture and an empty label is the picture alone. No bytes take the picture away. */
+PRESS_API press_status_t press_button_set_image(press_button_t self, const uint8_t *png, size_t png_len);
+
 /** The button's caption. */
 PRESS_API press_status_t press_button_set_label(press_button_t self, const char *value, size_t value_len);
 
@@ -398,6 +412,9 @@ PRESS_API press_status_t press_button_set_is_default(press_button_t self, bool v
 
 /** Mark the button that answers the Escape key. */
 PRESS_API press_status_t press_button_set_is_cancel(press_button_t self, bool value);
+
+/** Whether the button lies flat, with no edge of its own until the pointer is over it or down on it, and is no wider than its label needs: a tool in a toolbar. */
+PRESS_API press_status_t press_button_set_flat(press_button_t self, bool value);
 
 /** The button was pressed, with the pointer or from the keyboard. */
 typedef void (*press_button_clicked_fn)(press_button_t self, void *userdata);
@@ -580,6 +597,9 @@ PRESS_API press_status_t press_list_box_position_of(press_list_box_t self, int32
 
 /** Start editing an item's text in place, whether or not the list is editable. In a table, column says which cell; elsewhere pass 0. */
 PRESS_API press_status_t press_list_box_edit(press_list_box_t self, int32_t index, int32_t column);
+
+/** Give an item a picture in colour, in place of its icon: the bytes of a PNG file, up to 16 pixels each way, with see-through parts if it has them. No bytes take the picture away. */
+PRESS_API press_status_t press_list_box_set_image(press_list_box_t self, int32_t index, const uint8_t *png, size_t png_len);
 
 /** The index of the selected row, counting from 0; -1 when none is. Setting it scrolls the row into view and does not raise changed. */
 PRESS_API press_status_t press_list_box_set_selected(press_list_box_t self, int32_t value);
@@ -962,6 +982,63 @@ PRESS_API press_status_t press_menu_item_set_shortcut(press_menu_item_t self, co
 typedef void (*press_menu_item_activated_fn)(press_menu_item_t self, void *userdata);
 /** Connect a handler (replacing any earlier one); pass NULL to disconnect. */
 PRESS_API press_status_t press_menu_item_on_activated(press_menu_item_t self, press_menu_item_activated_fn callback, void *userdata, press_destroy_fn destroy);
+
+/* ---- GroupBox (a Stack): A box with a title, round things that belong together. It is a Stack: every Stack function works on it, and its children are laid out inside the box. */
+
+/** Create an empty box. With an empty title it is a box and no more. */
+PRESS_API press_status_t press_group_box_new(const char *title, size_t title_len, press_orientation_t orientation, press_group_box_t *out);
+
+/** The words at the top of the box. */
+PRESS_API press_status_t press_group_box_set_title(press_group_box_t self, const char *value, size_t value_len);
+
+/* ---- Toolbar (a Stack): A bar of tools, for the top of a window: a Stack that lays its children out in a row, close together, on a bar drawn by the style. Buttons in it are usually flat. */
+
+/** Create an empty toolbar. */
+PRESS_API press_status_t press_toolbar_new(press_toolbar_t *out);
+
+/* ---- StatusBar (a Stack): A bar of news, for the foot of a window: a Stack that lays its children out in a row on a bar drawn by the style. Labels are what it usually holds. */
+
+/** Create an empty status bar. */
+PRESS_API press_status_t press_status_bar_new(press_status_bar_t *out);
+
+/** Whether each child is shown in a cell of its own, the last reaching the end of the bar. At first they are all on one strip. */
+PRESS_API press_status_t press_status_bar_set_panels(press_status_bar_t self, bool value);
+
+/* ---- Stepper (a Widget): A whole number with a pair of arrows beside it, one over the other, to step it up and down. An arrow held down steps again and again. The arrow keys step it too when it has the keyboard. */
+
+/** Create a stepper at 0, which goes from 0 to 100 by ones. */
+PRESS_API press_status_t press_stepper_new(press_stepper_t *out);
+
+/** The number. Setting it does not raise changed; a value out of range is brought into range. */
+PRESS_API press_status_t press_stepper_set_value(press_stepper_t self, int32_t value);
+
+/** The number. Setting it does not raise changed; a value out of range is brought into range. */
+PRESS_API press_status_t press_stepper_get_value(press_stepper_t self, int32_t *out);
+
+/** The least the number may be. */
+PRESS_API press_status_t press_stepper_set_min(press_stepper_t self, int32_t value);
+
+/** The most the number may be. */
+PRESS_API press_status_t press_stepper_set_max(press_stepper_t self, int32_t value);
+
+/** How far one press of an arrow moves the number, at least 1. */
+PRESS_API press_status_t press_stepper_set_step(press_stepper_t self, int32_t value);
+
+/** The user stepped the number. */
+typedef void (*press_stepper_changed_fn)(press_stepper_t self, int32_t value, void *userdata);
+/** Connect a handler (replacing any earlier one); pass NULL to disconnect. */
+PRESS_API press_status_t press_stepper_on_changed(press_stepper_t self, press_stepper_changed_fn callback, void *userdata, press_destroy_fn destroy);
+
+/* ---- ComboBox (a TextField): A text field with a list of things it might say, dropped from a button at its end. Choosing one puts it in the field and raises changed; anything else may be typed. It is a TextField: every TextField function and event works on it. */
+
+/** Create a combo box holding the given text, with no choices yet. */
+PRESS_API press_status_t press_combo_box_new(const char *text, size_t text_len, press_combo_box_t *out);
+
+/** Append a choice to the list. */
+PRESS_API press_status_t press_combo_box_add(press_combo_box_t self, const char *choice, size_t choice_len);
+
+/** Take every choice away. The text in the field stays. */
+PRESS_API press_status_t press_combo_box_clear(press_combo_box_t self);
 
 #ifdef __cplusplus
 }

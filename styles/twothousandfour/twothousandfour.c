@@ -354,6 +354,8 @@ static void palette(press_palette *p) {
     p->ink = BLACK;
     p->menu = rgb(0xf7f4f1);
     p->menu_text = BLACK;
+    p->tip = 0xfffff5b5u; /* a word of help is on yellow */
+    p->tip_text = 0xff000000u;
 }
 
 /* The face of that desktop, of which the one most machines have now is the child. */

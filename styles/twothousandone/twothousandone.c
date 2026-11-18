@@ -370,6 +370,35 @@ static int32_t draw(const press_part *p, const press_surface *surface) {
         if (!has(p, PRESS_STATE_CHECKED)) fill((box){b.x + 4, b.y + 2, 1, 5}, BLACK);
         break;
     }
+    case PRESS_PART_GROUP_BOX: {
+        /* a thin rounded line, its title in blue across the top of it */
+        int top = p->text[0] ? line_height() / 2 : 0;
+        round_line((box){r.x, r.y + top, r.w, r.h - top}, 4, 1, rgb(0xd0d0bf));
+        if (p->text[0]) {
+            fill((box){r.x + 7, r.y, text_width(p->text) + 6, line_height()}, (uint32_t)p->c);
+            words(p->text, r.x + 10, r.y, rgb(0x0046d5));
+        }
+        break;
+    }
+    case PRESS_PART_STATUS_BAR:
+        /* a soft shade along the top, and a grip of dots in the corner */
+        fill((box){r.x, r.y, r.w, 1}, rgb(0xc5c2b2));
+        fill((box){r.x, r.y + 1, r.w, 1}, rgb(0xe3e0d0));
+        for (int i = 0; i < 3; i++) {
+            for (int j = 0; j <= i; j++) {
+                box dot = {r.x + r.w - 5 - 4 * j, r.y + r.h - 13 + 4 * i, 2, 2};
+                fill((box){dot.x + 1, dot.y + 1, 2, 2}, WHITE);
+                fill(dot, rgb(0xb8b4a2));
+            }
+        }
+        break;
+    case PRESS_PART_STATUS_PANEL:
+        /* cells are told apart by a line between them, cut into the bar */
+        if (p->a > 0) {
+            fill((box){r.x - 2, r.y + 1, 1, r.h - 3}, rgb(0xc5c2b2));
+            fill((box){r.x - 1, r.y + 1, 1, r.h - 3}, WHITE);
+        }
+        break;
     case PRESS_PART_FRAME: frame(p, r); break;
     case PRESS_PART_FRAME_BUTTON: frame_button(p, r); break;
     default: return 0;
@@ -420,6 +449,8 @@ static void palette(press_palette *p) {
     p->ink = BLACK;
     p->menu = WHITE;
     p->menu_text = BLACK;
+    p->tip = 0xffffffe1u; /* a word of help is on pale yellow */
+    p->tip_text = 0xff000000u;
 }
 
 /* The faces of that desktop where the machine has them, and the nearest

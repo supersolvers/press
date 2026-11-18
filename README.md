@@ -187,7 +187,7 @@ its headers and the styles under `PREFIX` (`/usr/local`).
 | `fonts/` | The fonts' sources: the scripts that draw them, hand-drawn pixels, the build, and what they borrow (see `fonts/README.md`) |
 | `crates/press-fontgen` | Takes the pixels out of the built font files and writes them in the form the engine bundles |
 | `assets/fonts` | The bundled fonts, as written by `press-fontgen`, and their licence |
-| `examples/` | The same dialog in C, Python and Swift (twice: with `PressCore` and with `Press`), a tour of Press, a host event loop in each, and in C a worker thread, a notes window, scroll bars, a window of other controls, a file browser and a pair of lists to drag between |
+| `examples/` | The same dialog in C, Python and Swift (twice: with `PressCore` and with `Press`), a tour of Press, the furniture of a whole program in C and with Press (tools), a host event loop in each, and in C a worker thread, a notes window, scroll bars, a window of other controls, a file browser and a pair of lists to drag between |
 
 ## Styles
 
@@ -319,7 +319,7 @@ twelve. A style is looked for in the folders named in `PRESS_STYLE_PATH`, in
 `~/.local/lib/press/styles`, and in `/usr/local/lib/press/styles` and
 `/usr/lib/press/styles`.
 
-The interface is at its fifth version. A style made for an earlier one is
+The interface is at its sixth version. A style made for an earlier one is
 still worn as it was written, in the desktop's frame.
 
 A Rust program that embeds the engine can dress it directly:
@@ -332,8 +332,8 @@ A Rust program that embeds the engine can dress it directly:
   Cancel go, and which key is the command key.
 - A window's shadow, and the shape of the pointer away from the edges of
   a frame, which is the engine's own everywhere.
-- Toolbars, status bars, group boxes, tooltips, and pictures in colour on
-  buttons and in lists: the engine has none of these yet, in any style.
+- A word of help is drawn inside its window, so it cannot reach past the
+  window's edge; and a spin of a stepper's arrows held down does not repeat.
 - A few sizes: the room round a menu's words and a tab's, and the cell of an
   icon view.
 - Smooth things are drawn a pixel to a pixel and then magnified whole, so
@@ -651,6 +651,53 @@ Lists, tables and trees can do more when asked:
   field, and so do input methods.
 
 ![A table and a tree view under tabs, with progress bars](docs/files.png)
+
+### Boxes, bars, tools, help, steppers and combo boxes
+
+![The tools example in six styles: a bar of tools with one under the pointer and its word of help, a box with a stepper and a combo box, a list with pictures in colour, and a bar of news](docs/tools.png)
+
+What a whole program has round its dialogs.
+
+- A **group box** (`press_group_box_new`) is a stack with a line round it
+  and a title at its top, for things that belong together. A **toolbar**
+  (`press_toolbar_new`) and a **status bar** (`press_status_bar_new`) are
+  rows, drawn as bars: put the one at the top of a window's column and the
+  other at its foot. All three are stacks, and take what a stack takes.
+  A status bar told to keep **panels** (`press_status_bar_set_panels`)
+  shows each of its children in a cell of its own, the last reaching the
+  end of the bar; let one stretch and it takes the room that is spare.
+- A button may be **flat** (`press_button_set_flat`): it has no edge until
+  the pointer is over it or down on it, and is no wider than it needs.
+  That is a tool in a toolbar.
+- A button may have a **picture in colour** before its label
+  (`press_button_set_image`), and so may an item of a list in place of its
+  icon (`press_list_box_set_image`): the bytes of a PNG file, see-through
+  where the file is. A button with a picture and no label is the picture.
+  A picture in a list keeps its own colours when its row is chosen.
+- Any widget may have a **word of help** (`press_widget_set_tooltip`),
+  shown below the pointer when it has rested there a moment. It hangs
+  over the window as a menu does, on a surface of its own, so it may reach
+  past the window's edge; it stays where it came up until the pointer
+  leaves or is pressed.
+- A **stepper** (`press_stepper_new`) is a whole number with a pair of
+  arrows beside it, one over the other; an arrow held down steps again
+  and again, and the arrow keys step it too. It raises `changed`.
+- A **combo box** (`press_combo_box_new`) is a text field with a button at
+  its end that drops a list of things it might say; choosing one puts it
+  in the field and raises the field's `changed`. It is a text field.
+
+A style draws the box, the bars and the cells of a status bar if it cares
+to; for one that does not, they are a line cut into whatever they lie on,
+in that style's own colours. The rest are made of parts every style draws
+already: a tool is a button, a stepper's arrows are two small buttons, a
+combo box is a text field with a small button on it. So all of them look
+at home in every style without any style having been told of them, and a
+style that wants its own stepper or combo box button draws that part and
+is left to it. The styles of 2001 and 2005 draw their own boxes and bars,
+and 2005 its own stepper.
+
+`examples/c/tools.c` has all of these, and `examples/swift` has the same
+window written with Press, as `ToolsUI`.
 
 ### Pictures
 
@@ -978,6 +1025,7 @@ for different things. `examples/swift` has this dialog with its menus as
 | State | `@State`, `@Binding`, `@Bindable`, `@Environment` (by key path or by an observable type), `@Observable` objects, `EnvironmentKey` |
 | Structure | `ViewBuilder` with `if`, `if`/`else` and `if let`; `ForEach`, `Group`, `AnyView`, `EmptyView`, `ViewModifier` |
 | Layout | `VStack`, `HStack`, `Spacer`, `Form`, `Section`, `LabeledContent`, `ScrollView`, `TabView`, `.padding`, `.frame`, `.fixedSize` |
+| Programs' furniture | `GroupBox`, `Stepper`, `.help`, `.buttonStyle(.borderless)`; and not in SwiftUI: `Toolbar { }` and `StatusBar(panels:) { }` for the top and foot of a window's column, `ComboBox(_:text:choices:)`, whose choices may change, and `Button(_:png:action:)` and `Label(_:png:)` for a button and a row of a list with a picture in colour |
 | Controls | `Text`, `Label`, `Button`, `Toggle`, `TextField`, `SecureField`, `TextEditor` (with a `TextSelection` binding, or without), `Slider`, `ProgressView`, `Picker` (as a pop-up or with `.pickerStyle(.radioGroup)`) |
 | Collections | `List` with one selection or a set, `Table` with `TableColumn` |
 | Drawing | `Canvas` with `Path`, `stroke`, `fill` and `draw`; words drawn in their own `.font`; a one-bit `Image(bitmap:width:height:)`; `.onTapGesture(count:)` and `.gesture(DragGesture(...).onChanged {}.onEnded {})`; `.onScroll {}` for the wheel, and `.onKeyboard(typed:pressed:)` to take the keyboard, or `.onKeyboard(typed:down:)` to hear every key; `.onRightButton {}` and `.onMiddleButton {}` for the other buttons; `.frame(minWidth:maxWidth: .infinity, ...)` for a canvas that grows with its window, drawn at the room it is given, with `.onResize {}` to hear of it |

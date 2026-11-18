@@ -17,7 +17,7 @@ use std::sync::Arc;
 /// The version of the interface below. A library made for an earlier
 /// version is still worn, as it was written; one made for any other but
 /// these is not used.
-pub const ABI: u32 = 5;
+pub const ABI: u32 = 6;
 
 /// A part to draw, as a style library is handed it. See
 /// [`press_core::PartKind`] for what the numbers mean for each kind.
@@ -205,7 +205,7 @@ impl Style for Foreign {
     fn palette(&self) -> Palette {
         // what a style leaves unsaid of the later colours follows what it
         // says of the earlier: lists are on the paper, a pane is of the window
-        let mut p = Palette { list: 0, list_ink: 0, pane: 0, ..press_core::EightyFour::PALETTE };
+        let mut p = Palette { list: 0, list_ink: 0, pane: 0, tip: 0, tip_text: 0, ..press_core::EightyFour::PALETTE };
         if let Some(f) = self.raw.palette {
             unsafe { f(&mut p) };
         }
@@ -214,6 +214,9 @@ impl Style for Foreign {
             list: if said && p.list != 0 { p.list } else { p.paper },
             list_ink: if said && p.list_ink != 0 { p.list_ink } else { p.ink },
             pane: if said && p.pane != 0 { p.pane } else { p.window },
+            // a word of help is on the paper, in its ink, unless the style says
+            tip: if self.raw.abi >= 6 && p.tip != 0 { p.tip } else { p.paper },
+            tip_text: if self.raw.abi >= 6 && p.tip_text != 0 { p.tip_text } else { p.ink },
             ..p
         }
     }

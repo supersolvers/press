@@ -23,6 +23,8 @@ use crate::text::Editor;
 mod access;
 mod controls;
 mod dnd;
+mod extra;
+pub(crate) use extra::plain_dress;
 pub use dnd::settle_copies;
 mod field;
 mod frame;
@@ -272,6 +274,8 @@ enum Kind {
     /// A window onto a widget larger than itself. `scroll` is how far the
     /// content has been moved left and up, in pixels.
     ScrollView { content: Option<Handle>, width: i32, height: i32, scroll: (i32, i32) },
+    /// A number with arrows to step it by.
+    Spin { value: i32, min: i32, max: i32, step: i32 },
     /// A scroll bar standing on its own. `value` runs from 0 to `max`.
     ScrollBar { orientation: Orientation, value: i32, max: i32, page: i32, step: i32, length: i32 },
     MenuBar { menus: Vec<Handle> },
@@ -309,6 +313,7 @@ impl Kind {
             Kind::List { .. } => "ListBox",
             Kind::Popup { .. } => "PopupButton",
             Kind::ScrollView { .. } => "ScrollView",
+            Kind::Spin { .. } => "Stepper",
             Kind::ScrollBar { .. } => "ScrollBar",
             Kind::MenuBar { .. } => "MenuBar",
             Kind::Menu { .. } => "Menu",
@@ -403,6 +408,28 @@ pub struct Ui {
     hover_piece: i32,
     /// What whatever is being drawn lies on: the window, or the pane of a tab view.
     ground: u32,
+    /// The stacks that are a box with a title, a bar of tools, a bar of news.
+    dress: HashMap<Handle, extra::Dress>,
+    /// The buttons that lie flat until the pointer comes.
+    flat: Vec<Handle>,
+    /// The pictures of buttons that have one.
+    images: HashMap<Handle, std::rc::Rc<Canvas>>,
+    /// The words of help of widgets that have some.
+    tips: HashMap<Handle, String>,
+    /// When the pointer came to what it is over, and whether help has been sent away since.
+    tip_since: u64,
+    tip_off: bool,
+    /// Whether help was showing when the clock last moved.
+    tip_shown: bool,
+    /// Where the pointer is, measured from the corner of the content.
+    hover_at: (i32, i32),
+    /// The arrow of a stepper that is held: 1 down, 2 up.
+    spin_held: Option<(Handle, i32, u64)>,
+    /// Where the pointer was when the word of help now showing came up.
+    tip_at: (i32, i32),
+    /// The lists of things combo boxes might say, and the menu one was last shown as.
+    choices: HashMap<Handle, Vec<String>>,
+    combo_menu: Option<Handle>,
     font: Font,
     /// The typefaces not being worn just now, kept with what they have
     /// already drawn, and the one that is (`font`).
@@ -537,6 +564,13 @@ impl Ui {
         }
     }
 
+    /// Have the style draw a part if it will, and say whether it did: for
+    /// a part the engine makes of others when the style has no word on it.
+    fn part_own(&mut self, canvas: &mut Canvas, part: Part) -> bool {
+        let style = self.look.style.clone();
+        style.draw(&part, &mut Painter { canvas, font: &mut self.font })
+    }
+
     // ------------------------------------------------------------ creation
 
     fn add(&mut self, kind: Kind) -> Handle {
@@ -630,7 +664,9 @@ impl Ui {
         let actual = self.class_of(h)?;
         // likewise a table, a tree view and an icon view are list boxes
         let is_list = class == "ListBox" && matches!(actual, "Table" | "TreeView" | "IconView");
-        Ok(class == "Widget" || actual == class || (class == "TextField" && actual == "TextArea") || is_list)
+        // a group box, a toolbar and a status bar are stacks in dress, and a combo box a text field with choices
+        let dressed = self.dressed_as(h) == Some(class);
+        Ok(class == "Widget" || actual == class || (class == "TextField" && actual == "TextArea") || is_list || dressed)
     }
 
     /// Whether anything has changed since the last `take_dirty`.
@@ -692,6 +728,7 @@ impl Ui {
         let mut gone = Vec::new();
         let mut pending = vec![h];
         while let Some(next) = pending.pop() {
+            self.forget(next);
             if let Some(node) = self.nodes.remove(next) {
                 pending.extend(node.context_menu);
                 match node.kind {
@@ -746,6 +783,7 @@ impl Ui {
     pub fn destroy_all(&mut self) -> Vec<Handle> {
         let all = self.nodes.handles();
         for h in &all {
+            self.forget(*h);
             self.nodes.remove(*h);
         }
         self.pressed = None;
@@ -1448,6 +1486,7 @@ impl Ui {
             Kind::ScrollBar { orientation, length, .. } => {
                 if *orientation == Orientation::Vertical { (m.scroll_bar, *length) } else { (*length, m.scroll_bar) }
             }
+            Kind::Spin { .. } => self.measure_stepper(),
             Kind::Label { text } => {
                 let text = text.clone();
                 (self.font.width(&text), line)
@@ -1455,7 +1494,11 @@ impl Ui {
             Kind::TextField { min_width, multiline, rows, .. } => (*min_width, line * if *multiline { *rows } else { 1 } + 2 * m.field_inset_y),
             Kind::Button { label, is_default, .. } => {
                 let (label, ring) = (label.clone(), if *is_default { 2 * m.default_ring } else { 0 });
-                ((self.font.width(&label) + 2 * m.button_pad).max(m.button_min_width) + ring, m.button_height + ring)
+                // with room for its picture; a tool in a bar is no wider than it needs
+                let label = self.button_text(h, &label);
+                let least = if self.is_flat(h) { m.button_height } else { m.button_min_width };
+                let pad = if self.is_flat(h) { m.button_pad / 2 } else { m.button_pad };
+                ((self.font.width(&label) + 2 * pad).max(least) + ring, m.button_height.max(self.button_image_height(h)) + ring)
             }
             Kind::Checkbox { label, .. } => {
                 let label = label.clone();
@@ -1463,6 +1506,7 @@ impl Ui {
             }
             Kind::Stack { orientation, spacing, padding, children, .. } => {
                 let (orientation, spacing, padding, children) = (*orientation, *spacing, *padding, children.clone());
+                let (dl, dt, dr, db) = self.dress_insets(h);
                 let (mut along, mut across) = (0, 0);
                 for (i, c) in children.iter().enumerate() {
                     let (w, h) = self.measure(*c);
@@ -1471,7 +1515,8 @@ impl Ui {
                     across = across.max(x);
                 }
                 let (along, across) = (along + 2 * padding, across + 2 * padding);
-                if orientation == Orientation::Vertical { (across, along) } else { (along, across) }
+                let (w, tall) = if orientation == Orientation::Vertical { (across, along) } else { (along, across) };
+                (w + dl + dr, tall + dt + db)
             }
         }
     }
@@ -1490,8 +1535,10 @@ impl Ui {
             Kind::ScrollView { .. } => self.arrange_view(h),
             Kind::Tabs { .. } => self.arrange_tabs(h, rect),
             Kind::Stack { orientation, spacing, padding, align, children } => {
-                let (orientation, spacing, align, children) = (*orientation, *spacing, *align, children.clone());
-                let inner = rect.inset(*padding);
+                let (orientation, spacing, align, children, padding) = (*orientation, *spacing, *align, children.clone(), *padding);
+                // inside its dress, if it wears one
+                let (dl, dt, dr, db) = self.dress_insets(h);
+                let inner = Rect::new(rect.x + dl, rect.y + dt, (rect.w - dl - dr).max(0), (rect.h - dt - db).max(0)).inset(padding);
                 let vertical = orientation == Orientation::Vertical;
                 let mut pos = if vertical { inner.y } else { inner.x };
                 let room = if vertical { inner.w } else { inner.h };
@@ -1570,19 +1617,28 @@ impl Ui {
         match &node.kind {
             Kind::Window { .. } | Kind::MenuBar { .. } | Kind::Menu { .. } | Kind::MenuItem { .. } => {}
             Kind::Stack { .. } => {
+                self.paint_dress(h, rect, canvas);
                 for c in self.children(h) {
                     self.paint(c, canvas, enabled, ctx);
                 }
                 return; // children grey themselves out
             }
+            Kind::Spin { .. } => self.paint_stepper(h, rect, live, canvas),
             Kind::Label { text } => {
                 let (text, color) = (text.clone(), self.look.pal.text);
                 self.font.draw(canvas, &text, rect.x, rect.y + (rect.h - line) / 2, color);
             }
             Kind::Button { label, is_default, .. } => {
                 let (label, is_default) = (label.clone(), *is_default);
-                let part = Part::new(PartKind::Button, rect).text(&label).phase(ants);
-                self.part(canvas, part.when(state::DEFAULT, is_default).when(state::HELD, held).when(state::FOCUSED, live));
+                let label = self.button_text(h, &label);
+                if self.is_flat(h) && !held && !live && self.hover != Some(h) {
+                    // a tool in a bar, with nobody near it: its label and no edge
+                    self.paint_flat(rect, &label, canvas);
+                } else {
+                    let part = Part::new(PartKind::Button, rect).text(&label).phase(ants);
+                    self.part(canvas, part.when(state::DEFAULT, is_default).when(state::HELD, held).when(state::FOCUSED, live));
+                }
+                self.paint_button_image(h, rect, &label, canvas);
             }
             Kind::Checkbox { label, checked } => {
                 let (label, checked) = (label.clone(), *checked);
@@ -1636,6 +1692,7 @@ impl Ui {
             | Kind::Checkbox { .. }
             | Kind::TextField { .. }
             | Kind::ScrollBar { .. }
+            | Kind::Spin { .. }
             | Kind::Popup { .. }
             | Kind::Radio { .. }
             | Kind::Slider { .. }
@@ -1693,10 +1750,25 @@ impl Ui {
         let hover = over.filter(|_| kind != PointerKind::Leave);
         // which piece of it, where it has pieces a style may light one of
         let piece = if self.look.wants & crate::style::wants::HOVER != 0 { hover.map_or(0, |h| self.piece_at(h, x, y)) } else { 0 };
+        self.hover_at = (x, y);
+        if kind == PointerKind::Press {
+            self.tip_dismiss();
+        }
         if hover != self.hover || piece != self.hover_piece {
-            self.hover = hover;
+            // a tool in a bar shows its edge under the pointer in every style
+            let tool = [hover, self.hover].into_iter().flatten().any(|h| self.is_flat(h) || matches!(self.nodes.get(h).map(|n| &n.kind), Some(Kind::Spin { .. })));
+            if hover != self.hover {
+                self.hover = hover;
+                self.tip_reset();
+            }
             self.hover_piece = piece;
-            self.dirty |= self.look.wants & crate::style::wants::HOVER != 0;
+            self.dirty |= tool || self.look.wants & crate::style::wants::HOVER != 0;
+        }
+        if let Some(out) = self.stepper_pointer(over, x, y, kind) {
+            return Ok(out);
+        }
+        if let Some(out) = self.combo_pointer(over, x, y, kind) {
+            return Ok(out);
         }
         if let Some(out) = self.bar_pointer(over, x, y, kind) {
             return Ok(out);
@@ -1817,7 +1889,7 @@ impl Ui {
     /// the way up the tree.
     fn focusable(&self, h: Handle) -> bool {
         let Some(node) = self.nodes.get(h) else { return false };
-        if !matches!(node.kind, Kind::TextField { .. } | Kind::Button { .. } | Kind::Checkbox { .. } | Kind::Popup { .. } | Kind::Radio { .. } | Kind::Slider { .. } | Kind::List { .. } | Kind::Tabs { .. } | Kind::Picture { keys: true, .. }) {
+        if !matches!(node.kind, Kind::TextField { .. } | Kind::Button { .. } | Kind::Checkbox { .. } | Kind::Popup { .. } | Kind::Radio { .. } | Kind::Slider { .. } | Kind::Spin { .. } | Kind::List { .. } | Kind::Tabs { .. } | Kind::Picture { keys: true, .. }) {
             return false;
         }
         let mut up = Some(h);
@@ -1942,7 +2014,7 @@ impl Ui {
     /// Give a widget the keyboard. A text field has its text selected, as if
     /// it had been reached with Tab.
     pub fn focus(&mut self, h: Handle) -> Result<()> {
-        if !matches!(self.node(h)?.kind, Kind::TextField { .. } | Kind::Button { .. } | Kind::Checkbox { .. } | Kind::Popup { .. } | Kind::Radio { .. } | Kind::Slider { .. } | Kind::List { .. } | Kind::Tabs { .. } | Kind::Picture { keys: true, .. }) {
+        if !matches!(self.node(h)?.kind, Kind::TextField { .. } | Kind::Button { .. } | Kind::Checkbox { .. } | Kind::Popup { .. } | Kind::Radio { .. } | Kind::Slider { .. } | Kind::Spin { .. } | Kind::List { .. } | Kind::Tabs { .. } | Kind::Picture { keys: true, .. }) {
             return Err(Error::WrongType);
         }
         let window = self.window_of(h).ok_or(Error::InvalidState)?;
@@ -2006,6 +2078,12 @@ impl Ui {
 
     /// Advance the clock. Returns the click of a button whose keyboard flash
     /// has just ended.
+    /// Let time pass, as far as the engine's clock is concerned: for a
+    /// caller with no clock of its own to tick by.
+    pub fn advance(&mut self, milliseconds: u64) -> Vec<Emitted> {
+        self.tick(self.now + milliseconds)
+    }
+
     pub fn tick(&mut self, now: u64) -> Vec<Emitted> {
         self.now = self.now.max(now);
         let mut out = Vec::new();
@@ -2014,7 +2092,14 @@ impl Ui {
         }
         out.extend(self.menu_tick());
         out.extend(self.bar_tick());
+        out.extend(self.stepper_tick());
         self.progress_tick();
+        // help that has waited long enough shows
+        if self.tip_showing() != self.tip_shown {
+            self.tip_shown = self.tip_showing();
+            self.tip_at = self.hover_at; // it stays where it came up
+            self.dirty = true;
+        }
         if self.pulsing() && self.pulse_step() != self.pulse {
             self.pulse = self.pulse_step();
             self.dirty = true;
@@ -2034,6 +2119,7 @@ impl Ui {
     fn piece_at(&mut self, h: Handle, x: i32, y: i32) -> i32 {
         match self.nodes.get(h).map(|n| &n.kind) {
             Some(Kind::Tabs { .. }) => self.tab_at(h, x, y).map_or(0, |i| 1 + i as i32),
+            Some(Kind::Spin { .. }) => self.stepper_arrow_at(h, x, y),
             _ => {
                 if let Some((column, _)) = self.heading_over(h, x, y) {
                     return 1000 + column as i32;
@@ -2066,6 +2152,8 @@ impl Ui {
         deadlines.extend(self.menu_deadline());
         deadlines.extend(self.bar_deadline());
         deadlines.extend(self.progress_deadline());
+        deadlines.extend(self.tip_deadline());
+        deadlines.extend(self.spin_held.map(|s| s.2));
         if self.pulsing() {
             deadlines.push((self.pulse_step() + 1) * PULSE_MS);
         }
@@ -3223,5 +3311,170 @@ mod style_tests {
         assert_ne!(ui.bar_part_at(two, false, r.x + 2, r.y + 2), Some(1), "no arrow at the near end");
         assert_eq!(ui.bar_part_at(two, false, r.x + 2, r.y + r.h - thick - 2), Some(1));
         assert_eq!(ui.bar_part_at(two, false, r.x + 2, r.y + r.h - 2), Some(2));
+    }
+
+    #[test]
+    fn a_box_and_a_bar_are_stacks_with_room_kept_for_their_edges() {
+        let mut ui = Ui::natural();
+        let window = ui.window_new("Extras", 300, 200).unwrap();
+        let (plain, boxed, bar) = (ui.stack_new(Orientation::Vertical), ui.group_box_new("Paper", Orientation::Vertical), ui.toolbar_new());
+        for stack in [plain, boxed] {
+            let label = ui.label_new("Words");
+            ui.stack_add(stack, label).unwrap();
+        }
+        let (bare, dressed) = (ui.measure(plain), ui.measure(boxed));
+        assert!(dressed.0 > bare.0 && dressed.1 > bare.1 + 10, "{bare:?} and {dressed:?}");
+        // each is what it is, and a stack besides; a plain stack is not a box
+        assert!(ui.is_a(boxed, "GroupBox").unwrap() && ui.is_a(boxed, "Stack").unwrap());
+        assert!(ui.is_a(bar, "Toolbar").unwrap() && !ui.is_a(bar, "GroupBox").unwrap());
+        assert!(!ui.is_a(plain, "GroupBox").unwrap());
+        assert_eq!(ui.group_box_set_title(plain, "No"), Err(Error::WrongType));
+        // the box is drawn before what is in it: its line is on the window
+        ui.window_set_content(window, boxed).unwrap();
+        let canvas = ui.render(window).unwrap();
+        let r = ui.nodes.get(boxed).unwrap().rect;
+        assert_eq!(canvas.get(r.x, r.y + r.h / 2), BLACK);
+    }
+
+    #[test]
+    fn a_tool_lies_flat_until_the_pointer_comes_and_help_shows_when_it_rests() {
+        let mut ui = Ui::natural();
+        let window = ui.window_new("Extras", 300, 200).unwrap();
+        let bar = ui.toolbar_new();
+        let tool = ui.button_new("Open");
+        ui.button_set_flat(tool, true).unwrap();
+        ui.set_tooltip(tool, "Open a sheet").unwrap();
+        ui.stack_add(bar, tool).unwrap();
+        ui.window_set_content(window, bar).unwrap();
+        let before = ui.render(window).unwrap();
+        let r = ui.nodes.get(tool).unwrap().rect;
+        // no narrower than its words, and no wider than a tool needs to be
+        assert!(r.w < EightyFour::METRICS.button_min_width);
+        // flat: no line along its top
+        assert_eq!(before.get(r.x + r.w / 2, r.y), WHITE);
+        ui.dirty = false;
+        ui.pointer(window, r.x + 4, r.y + 4, PointerKind::Move).unwrap();
+        assert!(ui.dirty, "the pointer coming over a tool is drawn in every style");
+        assert_eq!(ui.render(window).unwrap().get(r.x + r.w / 2, r.y), BLACK);
+        // help waits for the pointer to rest, shows, and is sent away by a press
+        assert!(!ui.tip_showing());
+        assert!(ui.next_deadline().is_some());
+        ui.advance(800);
+        assert!(ui.tip_showing());
+        // it hangs over the window as a menu does, below the pointer, and may reach past the window's edge
+        let tips = ui.popups(window);
+        assert!(tips.len() == 1 && tips[0].tip && tips[0].rect.y > r.y + 4);
+        let picture = ui.render_popup(window, 0).unwrap();
+        assert_eq!((picture.width, picture.height), (tips[0].rect.w, tips[0].rect.h));
+        assert_eq!(picture.get(0, 0), BLACK);
+        // it stays where it came up while the pointer wanders over the same thing
+        ui.pointer(window, r.x + 6, r.y + 5, PointerKind::Move).unwrap();
+        assert_eq!(ui.popups(window), tips);
+        ui.pointer(window, r.x + 4, r.y + 4, PointerKind::Press).unwrap();
+        assert!(!ui.tip_showing() && ui.popups(window).is_empty());
+    }
+
+    #[test]
+    fn a_stepper_steps_between_its_bounds() {
+        let mut ui = Ui::natural();
+        let window = ui.window_new("Extras", 300, 200).unwrap();
+        let stepper = ui.stepper_new();
+        ui.stepper_set(stepper, 1, 1).unwrap();
+        ui.stepper_set(stepper, 2, 3).unwrap();
+        ui.stepper_set(stepper, 0, 2).unwrap();
+        ui.window_set_content(window, stepper).unwrap();
+        ui.render(window).unwrap();
+        let r = ui.nodes.get(stepper).unwrap().rect;
+        let (down, up) = ((r.x + r.w - 4, r.y + r.h - 3), (r.x + r.w - 4, r.y + 3));
+        let click = |ui: &mut Ui, at: (i32, i32)| {
+            let mut out = ui.pointer(window, at.0, at.1, PointerKind::Press).unwrap();
+            out.extend(ui.pointer(window, at.0, at.1, PointerKind::Release).unwrap());
+            out
+        };
+        assert_eq!(click(&mut ui, up), vec![Emitted { target: stepper, event: "Stepper.changed", args: vec![Value::I32(3)] }]);
+        assert_eq!(click(&mut ui, up), vec![], "no further than its most");
+        click(&mut ui, down);
+        click(&mut ui, down);
+        assert_eq!(click(&mut ui, down), vec![]);
+        assert_eq!(ui.stepper_value(stepper), Ok(1));
+        // the arrow keys step it when it has the keyboard
+        ui.focus(stepper).unwrap();
+        ui.key(window, Key::Up, Mods::default()).unwrap();
+        assert_eq!(ui.stepper_value(stepper), Ok(2));
+        // an arrow held down steps again after a pause, and again, until it is let go
+        ui.stepper_set(stepper, 2, 50).unwrap();
+        ui.pointer(window, up.0, up.1, PointerKind::Press).unwrap();
+        assert_eq!(ui.stepper_value(stepper), Ok(3));
+        ui.advance(100);
+        assert_eq!(ui.stepper_value(stepper), Ok(3));
+        assert_eq!(ui.advance(250).len(), 1);
+        ui.advance(70);
+        assert_eq!(ui.stepper_value(stepper), Ok(5));
+        // not while the pointer has slid off it
+        ui.pointer(window, r.x + 4, r.y + 4, PointerKind::Move).unwrap();
+        ui.advance(70);
+        assert_eq!(ui.stepper_value(stepper), Ok(5));
+        ui.pointer(window, r.x + 4, r.y + 4, PointerKind::Release).unwrap();
+        ui.advance(500);
+        assert_eq!((ui.stepper_value(stepper), ui.next_deadline()), (Ok(5), None));
+    }
+
+    #[test]
+    fn a_bar_of_news_can_keep_each_thing_in_a_cell() {
+        let mut ui = Ui::natural();
+        let window = ui.window_new("Extras", 300, 200).unwrap();
+        let bar = ui.status_bar_new();
+        for words in ["Ready", "Page 1"] {
+            let label = ui.label_new(words);
+            ui.stack_add(bar, label).unwrap();
+        }
+        ui.window_set_content(window, bar).unwrap();
+        let strip = ui.render(window).unwrap();
+        ui.status_bar_set_panels(bar, true).unwrap();
+        assert!(ui.render(window).unwrap().pixels != strip.pixels);
+        let plain = ui.stack_new(Orientation::Horizontal);
+        assert_eq!(ui.status_bar_set_panels(plain, true), Err(Error::WrongType));
+    }
+
+    #[test]
+    fn a_combo_box_is_a_text_field_that_drops_a_list_of_what_it_might_say() {
+        let mut ui = Ui::natural();
+        let window = ui.window_new("Extras", 300, 200).unwrap();
+        let combo = ui.combo_box_new("A4");
+        ui.combo_box_add(combo, "A3").unwrap();
+        ui.combo_box_add(combo, "Letter").unwrap();
+        assert!(ui.is_a(combo, "ComboBox").unwrap() && ui.is_a(combo, "TextField").unwrap());
+        let plain = ui.text_field_new("A4");
+        assert_eq!(ui.combo_box_add(plain, "No"), Err(Error::WrongType));
+        ui.window_set_content(window, combo).unwrap();
+        ui.render(window).unwrap();
+        let r = ui.nodes.get(combo).unwrap().rect;
+        // a press on the button at its end drops the list
+        ui.pointer(window, r.x + r.w - 8, r.y + r.h / 2, PointerKind::Press).unwrap();
+        ui.pointer(window, r.x + r.w - 8, r.y + r.h / 2, PointerKind::Release).unwrap();
+        let list = ui.popups(window);
+        assert_eq!(list.len(), 1);
+        // and one chosen from it is what the field says
+        let at = (list[0].rect.x + 10, list[0].rect.y + EightyFour::METRICS.menu_item_height + 6);
+        ui.pointer(window, at.0, at.1, PointerKind::Press).unwrap();
+        let mut out = ui.pointer(window, at.0, at.1, PointerKind::Release).unwrap();
+        out.extend(ui.finish_animations());
+        assert_eq!(ui.text_field_text(combo).unwrap(), "Letter");
+        assert!(out.iter().any(|e| e.event == "TextField.changed"));
+    }
+
+    #[test]
+    fn a_picture_in_colour_goes_before_a_buttons_label() {
+        let mut ui = Ui::natural();
+        let window = ui.window_new("Extras", 300, 200).unwrap();
+        let (plain, pictured) = (ui.button_new("Open"), ui.button_new("Open"));
+        ui.button_set_image(pictured, Some(Canvas::filled(16, 16, 0xff2060c0))).unwrap();
+        assert!(ui.measure(pictured).0 >= ui.measure(plain).0);
+        ui.window_set_content(window, pictured).unwrap();
+        let canvas = ui.render(window).unwrap();
+        assert!(canvas.pixels.contains(&0xff2060c0));
+        // too large a picture is not taken, and none takes one away
+        ui.button_set_image(pictured, Some(Canvas::new(400, 400))).unwrap();
+        assert!(!ui.render(window).unwrap().pixels.contains(&0xff2060c0));
     }
 }

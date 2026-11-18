@@ -316,6 +316,11 @@ class Widget(_Object):
         _check(_lib.press_widget_get_enabled(self.handle, ctypes.byref(out)))
         return out.value
 
+    def set_tooltip(self, value):
+        """A word of help, shown beside the pointer when it has rested on the widget a moment, and put away when it moves on or is pressed. An empty string takes it away."""
+        _lib.press_widget_set_tooltip.argtypes = [ctypes.c_uint64, ctypes.c_char_p, ctypes.c_size_t]
+        _check(_lib.press_widget_set_tooltip(self.handle, *_s(value)))
+
 
 class Window(Widget):
     """A top-level window. The desktop draws its title bar and frame."""
@@ -362,6 +367,11 @@ class Window(Widget):
         """Test hook: press and release the pointer at a point in the content area. An open menu is reached at the place it hangs, even outside the window."""
         _lib.press_window_click_at.argtypes = [ctypes.c_uint64, ctypes.c_int32, ctypes.c_int32]
         _check(_lib.press_window_click_at(self.handle, x, y))
+
+    def hover_at(self, x, y, milliseconds):
+        """Test hook: move the pointer to a point in the content area and leave it there for a number of milliseconds, as far as the toolkit's clock is concerned: long enough, and the word of help of what is under it shows."""
+        _lib.press_window_hover_at.argtypes = [ctypes.c_uint64, ctypes.c_int32, ctypes.c_int32, ctypes.c_int32]
+        _check(_lib.press_window_hover_at(self.handle, x, y, milliseconds))
 
     def drag_at(self, x0, y0, x1, y1):
         """Test hook: press the pointer at one point in the content area, move it to another in four steps, and let it go there."""
@@ -542,6 +552,11 @@ class Button(Widget):
         _check(_lib.press_button_new(*_s(label), ctypes.byref(out)))
         _Object.__init__(self, out.value)
 
+    def set_image(self, png):
+        """Give the button a picture, in colour, before its label: the bytes of a PNG file, up to 256 pixels each way, with see-through parts if it has them. A button with a picture and an empty label is the picture alone. No bytes take the picture away."""
+        _lib.press_button_set_image.argtypes = [ctypes.c_uint64, ctypes.c_char_p, ctypes.c_size_t]
+        _check(_lib.press_button_set_image(self.handle, *_b(png)))
+
     def set_label(self, value):
         """The button's caption."""
         _lib.press_button_set_label.argtypes = [ctypes.c_uint64, ctypes.c_char_p, ctypes.c_size_t]
@@ -556,6 +571,11 @@ class Button(Widget):
         """Mark the button that answers the Escape key."""
         _lib.press_button_set_is_cancel.argtypes = [ctypes.c_uint64, ctypes.c_bool]
         _check(_lib.press_button_set_is_cancel(self.handle, value))
+
+    def set_flat(self, value):
+        """Whether the button lies flat, with no edge of its own until the pointer is over it or down on it, and is no wider than its label needs: a tool in a toolbar."""
+        _lib.press_button_set_flat.argtypes = [ctypes.c_uint64, ctypes.c_bool]
+        _check(_lib.press_button_set_flat(self.handle, value))
 
     def on_clicked(self, fn):
         """The button was pressed, with the pointer or from the keyboard. The handler receives (); pass None to disconnect."""
@@ -880,6 +900,11 @@ class ListBox(Widget):
         """Start editing an item's text in place, whether or not the list is editable. In a table, column says which cell; elsewhere pass 0."""
         _lib.press_list_box_edit.argtypes = [ctypes.c_uint64, ctypes.c_int32, ctypes.c_int32]
         _check(_lib.press_list_box_edit(self.handle, index, column))
+
+    def set_image(self, index, png):
+        """Give an item a picture in colour, in place of its icon: the bytes of a PNG file, up to 16 pixels each way, with see-through parts if it has them. No bytes take the picture away."""
+        _lib.press_list_box_set_image.argtypes = [ctypes.c_uint64, ctypes.c_int32, ctypes.c_char_p, ctypes.c_size_t]
+        _check(_lib.press_list_box_set_image(self.handle, index, *_b(png)))
 
     def set_selected(self, value):
         """The index of the selected row, counting from 0; -1 when none is. Setting it scrolls the row into view and does not raise changed."""
@@ -1538,3 +1563,107 @@ class MenuItem(Widget):
         connector = _lib.press_menu_item_on_activated
         connector.argtypes = [ctypes.c_uint64, cfunc, ctypes.c_void_p, _DESTROY]
         self._connect("activated", connector, cfunc, fn, lambda f: lambda _this, _userdata: f())
+
+
+class GroupBox(Stack):
+    """A box with a title, round things that belong together. It is a Stack: every Stack function works on it, and its children are laid out inside the box."""
+    def __init__(self, title, orientation):
+        """Create an empty box. With an empty title it is a box and no more."""
+        _lib.press_group_box_new.argtypes = [ctypes.c_char_p, ctypes.c_size_t, ctypes.c_int32, ctypes.POINTER(ctypes.c_uint64)]
+        out = ctypes.c_uint64()
+        _check(_lib.press_group_box_new(*_s(title), int(orientation), ctypes.byref(out)))
+        _Object.__init__(self, out.value)
+
+    def set_title(self, value):
+        """The words at the top of the box."""
+        _lib.press_group_box_set_title.argtypes = [ctypes.c_uint64, ctypes.c_char_p, ctypes.c_size_t]
+        _check(_lib.press_group_box_set_title(self.handle, *_s(value)))
+
+
+class Toolbar(Stack):
+    """A bar of tools, for the top of a window: a Stack that lays its children out in a row, close together, on a bar drawn by the style. Buttons in it are usually flat."""
+    def __init__(self):
+        """Create an empty toolbar."""
+        _lib.press_toolbar_new.argtypes = [ctypes.POINTER(ctypes.c_uint64)]
+        out = ctypes.c_uint64()
+        _check(_lib.press_toolbar_new(ctypes.byref(out)))
+        _Object.__init__(self, out.value)
+
+
+class StatusBar(Stack):
+    """A bar of news, for the foot of a window: a Stack that lays its children out in a row on a bar drawn by the style. Labels are what it usually holds."""
+    def __init__(self):
+        """Create an empty status bar."""
+        _lib.press_status_bar_new.argtypes = [ctypes.POINTER(ctypes.c_uint64)]
+        out = ctypes.c_uint64()
+        _check(_lib.press_status_bar_new(ctypes.byref(out)))
+        _Object.__init__(self, out.value)
+
+    def set_panels(self, value):
+        """Whether each child is shown in a cell of its own, the last reaching the end of the bar. At first they are all on one strip."""
+        _lib.press_status_bar_set_panels.argtypes = [ctypes.c_uint64, ctypes.c_bool]
+        _check(_lib.press_status_bar_set_panels(self.handle, value))
+
+
+class Stepper(Widget):
+    """A whole number with a pair of arrows beside it, one over the other, to step it up and down. An arrow held down steps again and again. The arrow keys step it too when it has the keyboard."""
+    def __init__(self):
+        """Create a stepper at 0, which goes from 0 to 100 by ones."""
+        _lib.press_stepper_new.argtypes = [ctypes.POINTER(ctypes.c_uint64)]
+        out = ctypes.c_uint64()
+        _check(_lib.press_stepper_new(ctypes.byref(out)))
+        _Object.__init__(self, out.value)
+
+    def set_value(self, value):
+        """The number. Setting it does not raise changed; a value out of range is brought into range."""
+        _lib.press_stepper_set_value.argtypes = [ctypes.c_uint64, ctypes.c_int32]
+        _check(_lib.press_stepper_set_value(self.handle, value))
+
+    def get_value(self):
+        """The number. Setting it does not raise changed; a value out of range is brought into range."""
+        _lib.press_stepper_get_value.argtypes = [ctypes.c_uint64, ctypes.POINTER(ctypes.c_int32)]
+        out = ctypes.c_int32()
+        _check(_lib.press_stepper_get_value(self.handle, ctypes.byref(out)))
+        return out.value
+
+    def set_min(self, value):
+        """The least the number may be."""
+        _lib.press_stepper_set_min.argtypes = [ctypes.c_uint64, ctypes.c_int32]
+        _check(_lib.press_stepper_set_min(self.handle, value))
+
+    def set_max(self, value):
+        """The most the number may be."""
+        _lib.press_stepper_set_max.argtypes = [ctypes.c_uint64, ctypes.c_int32]
+        _check(_lib.press_stepper_set_max(self.handle, value))
+
+    def set_step(self, value):
+        """How far one press of an arrow moves the number, at least 1."""
+        _lib.press_stepper_set_step.argtypes = [ctypes.c_uint64, ctypes.c_int32]
+        _check(_lib.press_stepper_set_step(self.handle, value))
+
+    def on_changed(self, fn):
+        """The user stepped the number. The handler receives (value); pass None to disconnect."""
+        cfunc = ctypes.CFUNCTYPE(None, ctypes.c_uint64, ctypes.c_int32, ctypes.c_void_p)
+        connector = _lib.press_stepper_on_changed
+        connector.argtypes = [ctypes.c_uint64, cfunc, ctypes.c_void_p, _DESTROY]
+        self._connect("changed", connector, cfunc, fn, lambda f: lambda _this, value, _userdata: f(value))
+
+
+class ComboBox(TextField):
+    """A text field with a list of things it might say, dropped from a button at its end. Choosing one puts it in the field and raises changed; anything else may be typed. It is a TextField: every TextField function and event works on it."""
+    def __init__(self, text):
+        """Create a combo box holding the given text, with no choices yet."""
+        _lib.press_combo_box_new.argtypes = [ctypes.c_char_p, ctypes.c_size_t, ctypes.POINTER(ctypes.c_uint64)]
+        out = ctypes.c_uint64()
+        _check(_lib.press_combo_box_new(*_s(text), ctypes.byref(out)))
+        _Object.__init__(self, out.value)
+
+    def add(self, choice):
+        """Append a choice to the list."""
+        _lib.press_combo_box_add.argtypes = [ctypes.c_uint64, ctypes.c_char_p, ctypes.c_size_t]
+        _check(_lib.press_combo_box_add(self.handle, *_s(choice)))
+
+    def clear(self):
+        """Take every choice away. The text in the field stays."""
+        _lib.press_combo_box_clear.argtypes = [ctypes.c_uint64]
+        _check(_lib.press_combo_box_clear(self.handle))

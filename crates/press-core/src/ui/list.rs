@@ -105,6 +105,8 @@ pub(super) struct ItemMeta {
     /// A picture of the program's own, in place of a stock icon: rows of
     /// pixels, each 0 for see-through, 1 for black, 2 for white.
     art: Option<std::rc::Rc<Vec<Vec<u8>>>>,
+    /// A picture in colour, in place of either.
+    image: Option<std::rc::Rc<Canvas>>,
     /// The file the item stands for, if it stands for one.
     file: Option<String>,
     /// What the item carries when dragged out of its list: each thing's
@@ -118,7 +120,7 @@ pub(super) struct ItemMeta {
 
 impl ItemMeta {
     fn has_picture(&self) -> bool {
-        self.icon != Icon::None || self.art.is_some()
+        self.icon != Icon::None || self.art.is_some() || self.image.is_some()
     }
 }
 
@@ -788,7 +790,7 @@ impl Ui {
                     (true, false) => arrival.parent.filter(|p| *p < k).map(|p| first + p),
                 };
                 // it keeps its picture; what was dragged arrives selected
-                meta.push(ItemMeta { parent: hangs_from, open: to_tree && arrival.open, picked: head || !to_tree, icon: arrival.icon, art: arrival.art, file: None, data: Vec::new(), at: None });
+                meta.push(ItemMeta { parent: hangs_from, open: to_tree && arrival.open, picked: head || !to_tree, icon: arrival.icon, image: None, art: arrival.art, file: None, data: Vec::new(), at: None });
                 if head || !to_tree {
                     order.insert(at + placed, index);
                     placed += 1;
@@ -1521,6 +1523,23 @@ impl Ui {
     /// drawn in text, a line for each row of pixels: X or # is black, a full
     /// stop is white, and anything else lets the row show through. Up to 14
     /// pixels each way. An empty string takes the picture away.
+    /// Give an item a picture in colour, up to 16 pixels each way; none
+    /// takes it away. It is shown in place of any other picture the item has.
+    pub fn list_box_set_image(&mut self, h: Handle, index: i32, image: Option<Canvas>) -> Result<()> {
+        if image.as_ref().is_some_and(|i| i.width > 16 || i.height > 16) {
+            return Err(Error::InvalidArgument);
+        }
+        match &mut self.node_mut(h)?.kind {
+            Kind::List { meta, .. } => {
+                let m = meta.get_mut(index.max(0) as usize).filter(|_| index >= 0).ok_or(Error::InvalidArgument)?;
+                m.image = image.map(std::rc::Rc::new);
+                self.dirty = true;
+                Ok(())
+            }
+            _ => Err(Error::WrongType),
+        }
+    }
+
     pub fn list_box_set_picture(&mut self, h: Handle, index: i32, art: &str) -> Result<()> {
         let rows: Vec<Vec<u8>> = art
             .lines()
@@ -1667,9 +1686,11 @@ impl Ui {
                 self.part(&mut clip, mark.when(state::CHECKED, open));
             }
             if has_icons {
-                match &meta[row.item].art {
-                    Some(art) => Self::draw_art(&mut clip, art, label_x - ICON, y, self.look.m.row_height),
-                    None => Self::draw_icon(&mut clip, meta[row.item].icon, label_x - ICON, y, self.look.m.row_height, ink),
+                match (&meta[row.item].image, &meta[row.item].art) {
+                    // a picture in colour, in the middle of the row's height
+                    (Some(image), _) => clip.blit(image, label_x - ICON, y + (self.look.m.row_height - image.height) / 2),
+                    (None, Some(art)) => Self::draw_art(&mut clip, art, label_x - ICON, y, self.look.m.row_height),
+                    (None, None) => Self::draw_icon(&mut clip, meta[row.item].icon, label_x - ICON, y, self.look.m.row_height, ink),
                 }
             }
             if columns.is_empty() {
@@ -1683,6 +1704,10 @@ impl Ui {
             }
             if meta[row.item].picked {
                 self.part(&mut clip, Part::new(PartKind::Select, Rect::new(0, y, area.w, self.look.m.row_height)));
+                // a picture in colour keeps its colours, on whatever shows the row is chosen
+                if let Some(image) = &meta[row.item].image {
+                    clip.blit(image, label_x - ICON, y + (self.look.m.row_height - image.height) / 2);
+                }
             }
             if editing.is_some_and(|(item, _)| item == row.item) {
                 self.paint_edit(h, &mut clip, y, area.w);

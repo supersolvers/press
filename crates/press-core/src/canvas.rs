@@ -29,6 +29,7 @@ impl Rect {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct Canvas {
     pub width: i32,
     pub height: i32,

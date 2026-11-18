@@ -17,8 +17,8 @@ pub(super) const BAR: i32 = 16;
 const THUMB_MIN: i32 = 10;
 
 // Holding the button repeats: first after a pause, then steadily.
-const REPEAT_DELAY_MS: u64 = 300;
-const REPEAT_MS: u64 = 60;
+pub(super) const REPEAT_DELAY_MS: u64 = 300;
+pub(super) const REPEAT_MS: u64 = 60;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum Part {

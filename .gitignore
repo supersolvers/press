@@ -12,3 +12,4 @@ __pycache__/
 /fonts/build
 /fonts/.venv
 .build/
+/examples/c/tools

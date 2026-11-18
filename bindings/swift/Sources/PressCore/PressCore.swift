@@ -413,6 +413,11 @@ public class Widget: PressObject {
             return out
         }
     }
+
+    /// A word of help, shown beside the pointer when it has rested on the widget a moment, and put away when it moves on or is pressed. An empty string takes it away.
+    public func setTooltip(_ value: String) throws {
+        try _check(press_widget_set_tooltip(handle, value, value.utf8.count))
+    }
 }
 
 /// A top-level window. The desktop draws its title bar and frame.
@@ -463,6 +468,11 @@ public class Window: Widget {
     /// Test hook: press and release the pointer at a point in the content area. An open menu is reached at the place it hangs, even outside the window.
     public func clickAt(_ x: Int, y: Int) throws {
         try _check(press_window_click_at(handle, Int32(clamping: x), Int32(clamping: y)))
+    }
+
+    /// Test hook: move the pointer to a point in the content area and leave it there for a number of milliseconds, as far as the toolkit's clock is concerned: long enough, and the word of help of what is under it shows.
+    public func hoverAt(_ x: Int, y: Int, milliseconds: Int) throws {
+        try _check(press_window_hover_at(handle, Int32(clamping: x), Int32(clamping: y), Int32(clamping: milliseconds)))
     }
 
     /// Test hook: press the pointer at one point in the content area, move it to another in four steps, and let it go there.
@@ -706,6 +716,11 @@ public class Button: Widget {
         super.init(handle: out)
     }
 
+    /// Give the button a picture, in colour, before its label: the bytes of a PNG file, up to 256 pixels each way, with see-through parts if it has them. A button with a picture and an empty label is the picture alone. No bytes take the picture away.
+    public func setImage(_ png: [UInt8]) throws {
+        try _check(press_button_set_image(handle, png, png.count))
+    }
+
     /// The button's caption.
     public func setLabel(_ value: String) throws {
         try _check(press_button_set_label(handle, value, value.utf8.count))
@@ -719,6 +734,11 @@ public class Button: Widget {
     /// Mark the button that answers the Escape key.
     public func setIsCancel(_ value: Bool) throws {
         try _check(press_button_set_is_cancel(handle, value))
+    }
+
+    /// Whether the button lies flat, with no edge of its own until the pointer is over it or down on it, and is no wider than its label needs: a tool in a toolbar.
+    public func setFlat(_ value: Bool) throws {
+        try _check(press_button_set_flat(handle, value))
     }
 
     /// The button was pressed, with the pointer or from the keyboard. A new handler takes the place of the last; pass nil to disconnect.
@@ -1129,6 +1149,11 @@ public class ListBox: Widget {
     /// Start editing an item's text in place, whether or not the list is editable. In a table, column says which cell; elsewhere pass 0.
     public func edit(_ index: Int, column: Int) throws {
         try _check(press_list_box_edit(handle, Int32(clamping: index), Int32(clamping: column)))
+    }
+
+    /// Give an item a picture in colour, in place of its icon: the bytes of a PNG file, up to 16 pixels each way, with see-through parts if it has them. No bytes take the picture away.
+    public func setImage(_ index: Int, png: [UInt8]) throws {
+        try _check(press_list_box_set_image(handle, Int32(clamping: index), png, png.count))
     }
 
     /// The index of the selected row, counting from 0; -1 when none is. Setting it scrolls the row into view and does not raise changed.
@@ -2039,5 +2064,139 @@ public class MenuItem: Widget {
             box.release()
         }
         try _check(status)
+    }
+}
+
+/// A box with a title, round things that belong together. It is a Stack: every Stack function works on it, and its children are laid out inside the box.
+public class GroupBox: Stack {
+    public override init(handle: UInt64) {
+        super.init(handle: handle)
+    }
+
+    /// Create an empty box. With an empty title it is a box and no more.
+    public init(title: String, orientation: Orientation) throws {
+        var out = UInt64(0)
+        try _check(press_group_box_new(title, title.utf8.count, orientation.rawValue, &out))
+        super.init(handle: out)
+    }
+
+    /// The words at the top of the box.
+    public func setTitle(_ value: String) throws {
+        try _check(press_group_box_set_title(handle, value, value.utf8.count))
+    }
+}
+
+/// A bar of tools, for the top of a window: a Stack that lays its children out in a row, close together, on a bar drawn by the style. Buttons in it are usually flat.
+public class Toolbar: Stack {
+    public override init(handle: UInt64) {
+        super.init(handle: handle)
+    }
+
+    /// Create an empty toolbar.
+    public init() throws {
+        var out = UInt64(0)
+        try _check(press_toolbar_new(&out))
+        super.init(handle: out)
+    }
+}
+
+/// A bar of news, for the foot of a window: a Stack that lays its children out in a row on a bar drawn by the style. Labels are what it usually holds.
+public class StatusBar: Stack {
+    public override init(handle: UInt64) {
+        super.init(handle: handle)
+    }
+
+    /// Create an empty status bar.
+    public init() throws {
+        var out = UInt64(0)
+        try _check(press_status_bar_new(&out))
+        super.init(handle: out)
+    }
+
+    /// Whether each child is shown in a cell of its own, the last reaching the end of the bar. At first they are all on one strip.
+    public func setPanels(_ value: Bool) throws {
+        try _check(press_status_bar_set_panels(handle, value))
+    }
+}
+
+/// A whole number with a pair of arrows beside it, one over the other, to step it up and down. An arrow held down steps again and again. The arrow keys step it too when it has the keyboard.
+public class Stepper: Widget {
+    public override init(handle: UInt64) {
+        super.init(handle: handle)
+    }
+
+    /// Create a stepper at 0, which goes from 0 to 100 by ones.
+    public init() throws {
+        var out = UInt64(0)
+        try _check(press_stepper_new(&out))
+        super.init(handle: out)
+    }
+
+    /// The number. Setting it does not raise changed; a value out of range is brought into range.
+    public func setValue(_ value: Int) throws {
+        try _check(press_stepper_set_value(handle, Int32(clamping: value)))
+    }
+
+    /// The number. Setting it does not raise changed; a value out of range is brought into range.
+    public var value: Int {
+        get throws {
+            var out = Int32(0)
+            try _check(press_stepper_get_value(handle, &out))
+            return Int(out)
+        }
+    }
+
+    /// The least the number may be.
+    public func setMin(_ value: Int) throws {
+        try _check(press_stepper_set_min(handle, Int32(clamping: value)))
+    }
+
+    /// The most the number may be.
+    public func setMax(_ value: Int) throws {
+        try _check(press_stepper_set_max(handle, Int32(clamping: value)))
+    }
+
+    /// How far one press of an arrow moves the number, at least 1.
+    public func setStep(_ value: Int) throws {
+        try _check(press_stepper_set_step(handle, Int32(clamping: value)))
+    }
+
+    /// The user stepped the number. The handler receives (value). A new handler takes the place of the last; pass nil to disconnect.
+    public func onChanged(_ handler: ((Int) -> Void)?) throws {
+        guard let handler else {
+            return try _check(press_stepper_on_changed(handle, nil, nil, nil))
+        }
+        let box = Unmanaged.passRetained(_Box<(Int) -> Void>(handler))
+        let status = press_stepper_on_changed(handle, { _, value, userdata in
+            _unbox(userdata, as: ((Int) -> Void).self)(Int(value))
+        }, box.toOpaque(), _release)
+        if status != 0 {
+            box.release()
+        }
+        try _check(status)
+    }
+}
+
+/// A text field with a list of things it might say, dropped from a button at its end. Choosing one puts it in the field and raises changed; anything else may be typed. It is a TextField: every TextField function and event works on it.
+public class ComboBox: TextField {
+    public override init(handle: UInt64) {
+        super.init(handle: handle)
+    }
+
+    /// Create a combo box holding the given text, with no choices yet.
+    public override init(_ text: String) throws {
+        var out = UInt64(0)
+        try _check(press_combo_box_new(text, text.utf8.count, &out))
+        super.init(handle: out)
+    }
+
+    /// Append a choice to the list.
+    public func add(_ choice: String) throws {
+        try _check(press_combo_box_add(handle, choice, choice.utf8.count))
+    }
+
+    /// Take every choice away. The text in the field stays.
+    public func clear() throws {
+        try _check(press_combo_box_clear(handle))
     }
 }

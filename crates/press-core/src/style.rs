@@ -117,6 +117,9 @@ pub struct Palette {
     /// What the pages of a tab view lie on, where that is not what a
     /// window is made of.
     pub pane: u32,
+    /// A word of help beside the pointer.
+    pub tip: u32,
+    pub tip_text: u32,
 }
 
 /// The pieces a window is drawn from.
@@ -204,6 +207,29 @@ pub enum PartKind {
     /// Where typing goes, in a text field: the rectangle is one pixel wide
     /// and as tall as the line.
     Caret = 29,
+    /// A box round things that belong together, with its title: before
+    /// what is in it. `c` is the colour of what it lies on; its words are
+    /// in `ink`.
+    GroupBox = 30,
+    /// A bar of tools, before the tools. `c` as for a box.
+    Toolbar = 31,
+    /// A bar of news along the foot of a window, before what it says.
+    StatusBar = 32,
+    /// A word of help beside the pointer, with its words: `c` is its
+    /// ground and `ink` its words' colour, from the palette.
+    Tooltip = 33,
+    /// The two arrows of a stepper, one over the other: up, then down.
+    /// `a` is 1 while the lower is held and 2 the upper, `d` likewise for
+    /// the one the pointer is over; `c` and `ink` as for a box. A style
+    /// that draws none gets two of its buttons with arrows on them.
+    Stepper = 34,
+    /// The button at the end of a combo box that drops its list. `HELD`
+    /// while the list is down, `HOT` under the pointer. A style that
+    /// draws none gets one of its buttons with an arrow on it.
+    ComboButton = 35,
+    /// One cell of a bar of news that keeps each thing it says in a cell
+    /// of its own: `a` counts them from 0. `c` as for a box.
+    StatusPanel = 36,
 }
 
 /// What state a part is in: these are added together in [`Part::state`].
@@ -381,7 +407,7 @@ impl EightyFour {
         menu_border: 1,
     };
 
-    pub const PALETTE: Palette = Palette { window: WHITE, text: BLACK, paper: WHITE, ink: BLACK, menu: WHITE, menu_text: BLACK, list: WHITE, list_ink: BLACK, pane: WHITE };
+    pub const PALETTE: Palette = Palette { window: WHITE, text: BLACK, paper: WHITE, ink: BLACK, menu: WHITE, menu_text: BLACK, list: WHITE, list_ink: BLACK, pane: WHITE, tip: WHITE, tip_text: BLACK };
 
     /// How far the focus ring stands off a control.
     const RING_GAP: i32 = 3;
@@ -667,6 +693,9 @@ impl Style for EightyFour {
                 }
             }
             PartKind::Caret => canvas.fill(rect, part.ink),
+            PartKind::GroupBox | PartKind::Toolbar | PartKind::StatusBar | PartKind::Tooltip | PartKind::StatusPanel => crate::ui::plain_dress(part, canvas, p.font),
+            // made of other parts, which is the engine's to do
+            PartKind::Stepper | PartKind::ComboButton => return false,
             PartKind::Frame => {
                 // a plain frame for a style that asks for one and draws none
                 canvas.fill(rect, WHITE);

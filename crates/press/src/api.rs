@@ -269,6 +269,16 @@ pub fn window_snapshot(this: Handle, path: &str, scale: i32) -> Result {
     writer.write_image_data(&rows).map_err(|_| Status::Io)
 }
 
+pub fn window_hover_at(this: Handle, x: i32, y: i32, milliseconds: i32) -> Result {
+    let events = with(|rt| {
+        let mut events = rt.ui.pointer(this, x, y, PointerKind::Move)?;
+        events.extend(rt.ui.advance(milliseconds.max(0) as u64));
+        Ok(events)
+    })?;
+    deliver(events);
+    Ok(())
+}
+
 pub fn window_click_at(this: Handle, x: i32, y: i32) -> Result {
     let mut events = with(|rt| Ok(rt.ui.pointer(this, x, y, PointerKind::Press)?))?;
     // There is no clock to wait on, so a menu item chosen by the click
@@ -1023,4 +1033,115 @@ pub fn picture_image(this: Handle, x: i32, y: i32, width: i32, height: i32, bits
 
 pub fn picture_photo(this: Handle, x: i32, y: i32, width: i32, height: i32, rgb: &[u8]) -> Result {
     with(|rt| Ok(rt.ui.picture_photo(this, x, y, width, height, rgb)?))
+}
+
+// ------------------------------------------------------------------ what a
+// whole program wants: boxes, bars, tools, pictures, help, steppers, combos
+
+/// The picture in the bytes of a PNG file, as the engine keeps pictures:
+/// colour with how solid each pixel is. None for no bytes at all.
+fn image_from_png(png: &[u8]) -> Result<Option<press_core::Canvas>> {
+    if png.is_empty() {
+        return Ok(None);
+    }
+    let mut decoder = png::Decoder::new(std::io::Cursor::new(png));
+    // whatever the file holds, have it as eight bits a channel
+    decoder.set_transformations(png::Transformations::normalize_to_color8());
+    let mut reader = decoder.read_info().map_err(|_| Status::InvalidArgument)?;
+    let mut pixels = vec![0u8; reader.output_buffer_size().ok_or(Status::InvalidArgument)?];
+    let frame = reader.next_frame(&mut pixels).map_err(|_| Status::InvalidArgument)?;
+    let (width, height, channels) = (frame.width as i32, frame.height as i32, frame.color_type.samples());
+    if width < 1 || height < 1 || width > 1024 || height > 1024 {
+        return Err(Status::InvalidArgument);
+    }
+    let mut canvas = press_core::Canvas::new(width, height);
+    for (i, px) in pixels.chunks(channels).take((width * height) as usize).enumerate() {
+        // grey or colour, with or without how solid
+        let (r, g, b, a) = match channels {
+            1 => (px[0], px[0], px[0], 255),
+            2 => (px[0], px[0], px[0], px[1]),
+            3 => (px[0], px[1], px[2], 255),
+            _ => (px[0], px[1], px[2], px[3]),
+        };
+        canvas.pixels[i] = if a == 0 { 0 } else { (a as u32) << 24 | (r as u32) << 16 | (g as u32) << 8 | b as u32 };
+    }
+    Ok(Some(canvas))
+}
+
+pub fn widget_set_tooltip(this: Handle, value: &str) -> Result {
+    with(|rt| Ok(rt.ui.set_tooltip(this, value)?))
+}
+
+pub fn button_set_flat(this: Handle, value: bool) -> Result {
+    with(|rt| Ok(rt.ui.button_set_flat(this, value)?))
+}
+
+pub fn button_set_image(this: Handle, png: &[u8]) -> Result {
+    let image = image_from_png(png)?;
+    with(|rt| Ok(rt.ui.button_set_image(this, image)?))
+}
+
+pub fn list_box_set_image(this: Handle, index: i32, png: &[u8]) -> Result {
+    let image = image_from_png(png)?;
+    with(|rt| Ok(rt.ui.list_box_set_image(this, index, image)?))
+}
+
+pub fn group_box_new(title: &str, orientation: Orientation) -> Result<Handle> {
+    let orientation = match orientation {
+        Orientation::Vertical => press_core::Orientation::Vertical,
+        Orientation::Horizontal => press_core::Orientation::Horizontal,
+    };
+    with(|rt| Ok(rt.ui.group_box_new(title, orientation)))
+}
+
+pub fn group_box_set_title(this: Handle, value: &str) -> Result {
+    with(|rt| Ok(rt.ui.group_box_set_title(this, value)?))
+}
+
+pub fn toolbar_new() -> Result<Handle> {
+    with(|rt| Ok(rt.ui.toolbar_new()))
+}
+
+pub fn status_bar_new() -> Result<Handle> {
+    with(|rt| Ok(rt.ui.status_bar_new()))
+}
+
+pub fn status_bar_set_panels(this: Handle, value: bool) -> Result {
+    with(|rt| Ok(rt.ui.status_bar_set_panels(this, value)?))
+}
+
+pub fn stepper_new() -> Result<Handle> {
+    with(|rt| Ok(rt.ui.stepper_new()))
+}
+
+pub fn stepper_set_value(this: Handle, value: i32) -> Result {
+    with(|rt| Ok(rt.ui.stepper_set(this, 0, value)?))
+}
+
+pub fn stepper_get_value(this: Handle) -> Result<i32> {
+    with(|rt| Ok(rt.ui.stepper_value(this)?))
+}
+
+pub fn stepper_set_min(this: Handle, value: i32) -> Result {
+    with(|rt| Ok(rt.ui.stepper_set(this, 1, value)?))
+}
+
+pub fn stepper_set_max(this: Handle, value: i32) -> Result {
+    with(|rt| Ok(rt.ui.stepper_set(this, 2, value)?))
+}
+
+pub fn stepper_set_step(this: Handle, value: i32) -> Result {
+    with(|rt| Ok(rt.ui.stepper_set(this, 3, value)?))
+}
+
+pub fn combo_box_new(text: &str) -> Result<Handle> {
+    with(|rt| Ok(rt.ui.combo_box_new(text)))
+}
+
+pub fn combo_box_add(this: Handle, choice: &str) -> Result {
+    with(|rt| Ok(rt.ui.combo_box_add(this, choice)?))
+}
+
+pub fn combo_box_clear(this: Handle) -> Result {
+    with(|rt| Ok(rt.ui.combo_box_clear(this)?))
 }

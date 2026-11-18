@@ -35,24 +35,47 @@ protocol _StackView: View, _NodeView {
     var _spacing: Int { get }
     var _padding: Int { get }
     var _content: any View { get }
+    /// What the stack is dressed as, if it is more than a stack.
+    var _dress: StackDress { get }
 }
 
 extension _StackView {
     func _makeNode(_ env: EnvironmentValues) -> Node { StackNode(self, env) }
+    var _dress: StackDress { .plain }
+}
+
+/// What a stack is dressed as: a box with a title, a bar of tools, a bar of news.
+enum StackDress: Equatable {
+    case plain
+    case group(String)
+    case toolbar
+    /// With each thing it says in a cell of its own, or all on one strip.
+    case status(Bool)
 }
 
 @MainActor
 final class StackNode: Node {
     private var host: StackHost?
     private var told: (Align, Int, Int)?
+    private var toldDress: StackDress = .plain
 
     override func update() {
         let view = self.view as! any _StackView
         attempt {
             if host == nil {
-                host = try StackHost(view._orientation)
+                host = try StackHost(view._orientation, dress: view._dress)
+                toldDress = view._dress
             }
             guard let stack = host?.stack else { return }
+            // a box's title may change; what kind of thing it is may not
+            if toldDress != view._dress, case .group(let title) = view._dress, let box = stack as? PressCore.GroupBox {
+                toldDress = view._dress
+                try box.setTitle(title)
+            }
+            if toldDress != view._dress, case .status(let panels) = view._dress, let bar = stack as? PressCore.StatusBar {
+                toldDress = view._dress
+                try bar.setPanels(panels)
+            }
             let wanted = (view._align, view._spacing, view._padding)
             if told.map({ $0 != wanted }) ?? true {
                 told = wanted
@@ -564,7 +587,7 @@ extension List where SelectionValue == Never {
 /// Put rows in a list box, if they are not the rows it has.
 @MainActor
 func fill<V: _LeafView>(_ list: PressCore.ListBox, _ rows: [ItemSpec], _ node: LeafNode<V>) throws {
-    let labels = rows.map { ($0.title ?? "") + "\u{1}" + String($0.icon.rawValue) }
+    let labels = rows.map { ($0.title ?? "") + "\u{1}" + String($0.icon.rawValue) + "\u{1}" + String($0.png?.hashValue ?? 0) }
     guard node.labels != labels else { return }
     node.labels = labels
     node.memory = nil
@@ -573,6 +596,9 @@ func fill<V: _LeafView>(_ list: PressCore.ListBox, _ rows: [ItemSpec], _ node: L
         try list.add(row.title ?? "")
         if row.icon != .none {
             try list.setIcon(index, icon: row.icon)
+        }
+        if let png = row.png {
+            try list.setImage(index, png: png)
         }
     }
 }

@@ -328,6 +328,8 @@ static void palette(press_palette *p) {
     p->ink = BLACK;
     p->menu = PANEL;
     p->menu_text = BLACK;
+    p->tip = 0xffffffd8u; /* a word of help is on pale yellow */
+    p->tip_text = 0xff000000u;
 }
 
 static int32_t typeface(uint32_t face, press_type *out) {

@@ -81,7 +81,7 @@ use std::io::{Read, Write};
 use std::os::fd::{AsFd, AsRawFd, OwnedFd, RawFd};
 use std::sync::{mpsc, Arc};
 use smithay_client_toolkit::{
-    compositor::{CompositorHandler, CompositorState},
+    compositor::{CompositorHandler, CompositorState, Region},
     data_device_manager::{
         data_device::{DataDevice, DataDeviceHandler},
         data_offer::{DataOfferHandler, DragOffer},
@@ -365,6 +365,8 @@ struct MenuSurface {
     buffer: Option<Buffer>,
     configured: bool,
     viewport: Option<WpViewport>,
+    /// A word of help, not a menu: the pointer passes through it.
+    tip: bool,
 }
 
 /// Input gathered while Wayland events are dispatched, delivered afterwards.
@@ -932,13 +934,13 @@ impl State {
         // Hang, move or take down each window's menus. Those that are
         // already up and in the right place are left alone.
         for s in self.surfaces.iter_mut().filter(|s| s.configured) {
-            let want: Vec<Rect> = with(|rt| Ok(rt.ui.popups(s.handle)))?.into_iter().map(|p| p.rect).collect();
-            let same = s.menus.iter().zip(&want).take_while(|(have, want)| have.rect == **want).count();
+            let want: Vec<(Rect, bool)> = with(|rt| Ok(rt.ui.popups(s.handle)))?.into_iter().map(|p| (p.rect, p.tip)).collect();
+            let same = s.menus.iter().zip(&want).take_while(|(have, want)| (have.rect, have.tip) == **want).count();
             while s.menus.len() > same {
                 s.menus.pop(); // dropping a popup removes it from the screen; the newest goes first
             }
             let (units, inset) = (s.units, s.inset);
-            for rect in want.into_iter().skip(same) {
+            for (rect, tip) in want.into_iter().skip(same) {
                 // the engine measures from the corner of the content, the compositor from the frame's
                 let placed = Rect::new(rect.x + inset.0, rect.y + inset.1, rect.w, rect.h);
                 let Ok(positioner) = XdgPositioner::new(&self.xdg_shell) else { break };
@@ -950,11 +952,18 @@ impl State {
                 positioner.set_offset(units.at(placed.x) - ax, units.at(placed.y) - ay);
                 positioner.set_anchor(Anchor::TopLeft);
                 positioner.set_gravity(Gravity::BottomRight);
-                positioner.set_constraint_adjustment(ConstraintAdjustment::SlideX | ConstraintAdjustment::SlideY);
+                // a menu is slid back onto the screen; a word of help goes above the pointer where below will not do
+                positioner.set_constraint_adjustment(ConstraintAdjustment::SlideX | if tip { ConstraintAdjustment::FlipY } else { ConstraintAdjustment::SlideY });
                 match Popup::new(s.window.xdg_surface(), &positioner, qh, &self.compositor, &self.xdg_shell) {
                     Ok(popup) => {
                         let viewport = self.viewporter.as_ref().map(|v| v.get_viewport(popup.wl_surface(), qh, ()));
-                        s.menus.push(MenuSurface { popup, rect, at: (units.at(placed.x), units.at(placed.y)), buffer: None, configured: false, viewport });
+                        if tip {
+                            // nothing of it takes the pointer: what is under it goes on being pointed at
+                            if let Ok(nowhere) = Region::new(&self.compositor) {
+                                popup.wl_surface().set_input_region(Some(nowhere.wl_region()));
+                            }
+                        }
+                        s.menus.push(MenuSurface { popup, rect, at: (units.at(placed.x), units.at(placed.y)), buffer: None, configured: false, viewport, tip });
                     }
                     Err(_) => break,
                 }
@@ -1040,7 +1049,7 @@ impl State {
             if s.window.wl_surface() == surface {
                 // the newest menu is on top
                 let (px, py) = (x.floor() as i32, y.floor() as i32);
-                if let Some(m) = s.menus.iter().rev().find(|m| Rect::new(m.at.0, m.at.1, u.out(m.rect.w), u.out(m.rect.h)).contains(px, py)) {
+                if let Some(m) = s.menus.iter().rev().filter(|m| !m.tip).find(|m| Rect::new(m.at.0, m.at.1, u.out(m.rect.w), u.out(m.rect.h)).contains(px, py)) {
                     return Some((s.handle, u.engine(x - m.at.0 as f64) + m.rect.x, u.engine(y - m.at.1 as f64) + m.rect.y, u));
                 }
                 return Some((s.handle, u.engine(x) - s.inset.0, u.engine(y) - s.inset.1, u));
@@ -1402,7 +1411,7 @@ impl PopupHandler for State {
     }
 
     fn done(&mut self, _: &Connection, _: &QueueHandle<Self>, popup: &Popup) {
-        if let Some(s) = self.surfaces.iter().find(|s| s.menus.iter().any(|m| &m.popup == popup)) {
+        if let Some(s) = self.surfaces.iter().find(|s| s.menus.iter().any(|m| &m.popup == popup && !m.tip)) {
             self.pending.push(Pending::MenuDismissed { window: s.handle });
         }
     }

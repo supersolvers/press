@@ -710,6 +710,7 @@ final class LeafNode<V: _LeafView>: Node {
     var labels: [String] = []
     var memory: Any?
     private var wasEnabled = true
+    private var toldHelp: String?
     private var typeface = Typeface.cicero
 
     var typed: V { view as! V }
@@ -727,6 +728,10 @@ final class LeafNode<V: _LeafView>: Node {
             if env.isEnabled != wasEnabled {
                 wasEnabled = env.isEnabled
                 try widget.setEnabled(wasEnabled)
+            }
+            if env.help != toldHelp {
+                toldHelp = env.help
+                try widget.setTooltip(toldHelp ?? "")
             }
             let face = (typed._ownFont ?? env.font ?? .body).typeface
             if face != typeface {
@@ -768,8 +773,16 @@ final class StackHost {
     let stack: PressCore.Stack
     private var mounted: [UInt64] = []
 
-    init(_ orientation: Orientation) throws {
-        stack = try PressCore.Stack(orientation)
+    init(_ orientation: Orientation, dress: StackDress = .plain) throws {
+        switch dress {
+        case .plain: stack = try PressCore.Stack(orientation)
+        case .group(let title): stack = try PressCore.GroupBox(title: title, orientation: orientation)
+        case .toolbar: stack = try PressCore.Toolbar()
+        case .status(let panels):
+            let bar = try PressCore.StatusBar()
+            try bar.setPanels(panels)
+            stack = bar
+        }
     }
 
     /// Make the stack hold these widgets in this order. Widgets no longer

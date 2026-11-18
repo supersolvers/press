@@ -74,6 +74,8 @@ pub(super) enum EditAction {
     SelectAll,
     /// Not editing at all: one of a pop-up button's choices, by its index.
     Pick(usize),
+    /// Nor this: one of the things a combo box might say, by its index.
+    Fill(usize),
     /// Nor this: something asked of a window from its frame's own menu, by
     /// the number of the title bar's button that does the same.
     Frame(u8),
@@ -87,6 +89,8 @@ type Layout = (Rect, Vec<(Handle, Rect)>);
 pub struct PopupInfo {
     /// In the window's content coordinates. It may extend outside the window.
     pub rect: Rect,
+    /// A word of help, not a menu: it takes no part in what the pointer does.
+    pub tip: bool,
 }
 
 /// One line of a window's menus, for a desktop that shows the menu bar
@@ -402,7 +406,7 @@ impl Ui {
             if let Kind::MenuItem { action: Some(action), .. } = &node.kind {
                 node.enabled = match action {
                     EditAction::Cut | EditAction::Copy => selected && !secret,
-                    EditAction::Paste | EditAction::Pick(_) | EditAction::Frame(_) => true,
+                    EditAction::Paste | EditAction::Pick(_) | EditAction::Fill(_) | EditAction::Frame(_) => true,
                     EditAction::SelectAll => !empty,
                 };
             }
@@ -642,7 +646,12 @@ impl Ui {
     /// the order they opened.
     pub fn popups(&mut self, window: Handle) -> Vec<PopupInfo> {
         let shadow = self.look.m.menu_shadow;
-        self.open_layouts(window).into_iter().map(|(f, _)| PopupInfo { rect: Rect::new(f.x, f.y, f.w + shadow, f.h + shadow) }).collect()
+        let mut all: Vec<PopupInfo> = self.open_layouts(window).into_iter().map(|(f, _)| PopupInfo { rect: Rect::new(f.x, f.y, f.w + shadow, f.h + shadow), tip: false }).collect();
+        // a word of help hangs over the window as a menu does; there is never one while a menu is down
+        if let (true, Some((rect, _))) = (all.is_empty(), self.tip_place(window)) {
+            all.push(PopupInfo { rect, tip: true });
+        }
+        all
     }
 
     // ------------------------------------------------------------- drawing
@@ -664,6 +673,9 @@ impl Ui {
     /// The picture of one of the window's open menus, by its place in
     /// [`Ui::popups`]. Pixels outside its outline and shadow are transparent.
     pub fn render_popup(&mut self, window: Handle, index: usize) -> Option<Canvas> {
+        if self.open_in(window).is_none() {
+            return self.render_tip(window).filter(|_| index == 0);
+        }
         let hot = self.open_in(window)?.levels.get(index)?.hot;
         let (frame, items) = self.open_layouts(window).into_iter().nth(index)?;
         let line = self.font.line_height();
@@ -768,6 +780,7 @@ impl Ui {
                     EditAction::Paste => self.text_field_request_paste(field).map(|_| Vec::new()),
                     EditAction::SelectAll => self.text_field_select_all(field).map(|_| Vec::new()),
                     EditAction::Pick(index) => Ok(self.popup_pick(field, index)),
+                    EditAction::Fill(index) => Ok(self.combo_fill(field, index)),
                     EditAction::Frame(_) => Ok(Vec::new()),
                 };
                 done.unwrap_or_default()

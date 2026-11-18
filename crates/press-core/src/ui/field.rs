@@ -37,6 +37,8 @@ impl Ui {
         match &node.kind {
             Kind::TextField { multiline, password, scroll, follow, .. } => {
                 let mut inner = field_inner(node.rect, &self.look.m);
+                // a combo box keeps its right-hand end for its button
+                inner.w = (inner.w - self.combo_room(h)).max(0);
                 if *multiline {
                     // a text area keeps its right-hand side for the scroll bar
                     inner.w = (Self::area_bar_rect(node.rect, self.look.m.scroll_bar).x - 2 - inner.x).max(0);
@@ -361,6 +363,7 @@ impl Ui {
         if shape.multiline {
             self.bar_draw(h, false, canvas);
         }
+        self.paint_combo(h, canvas);
     }
 
     /// Where the caret is drawn, in window coordinates.

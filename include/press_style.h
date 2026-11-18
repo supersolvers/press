@@ -32,7 +32,7 @@ extern "C" {
 #endif
 
 /* The version of this interface, for press_style.abi. */
-#define PRESS_STYLE_ABI 5
+#define PRESS_STYLE_ABI 6
 
 /* Sizes, in pixels. */
 typedef struct press_metrics {
@@ -107,6 +107,9 @@ typedef struct press_palette {
     uint32_t list;            /* lists, tables and trees, where not on the paper */
     uint32_t list_ink;
     uint32_t pane;            /* what the pages of a tab view lie on, where not the window's */
+    /* from version 6 */
+    uint32_t tip;             /* a word of help beside the pointer, where not on the paper */
+    uint32_t tip_text;
 } press_palette;
 
 /* The parts a window is drawn from. */
@@ -165,8 +168,32 @@ enum {
                                        is at (a, b). CHECKED for smallest first */
     PRESS_PART_TREE_FOLD = 28,      /* before a row of a tree with rows under it: its middle is at
                                        (a, b). CHECKED when they are showing */
-    PRESS_PART_CARET = 29           /* where typing goes: one pixel wide, as tall as the line */
+    PRESS_PART_CARET = 29,          /* where typing goes: one pixel wide, as tall as the line */
+    /* from version 6. A style that returns 0 for these has them drawn
+     * plainly in its own colours: a line cut into the ground they lie on. */
+    PRESS_PART_GROUP_BOX = 30,      /* a box round things that belong together, with its title:
+                                       before what is in it. c: the colour it lies on; its words
+                                       are in ink */
+    PRESS_PART_TOOLBAR = 31,        /* a bar of tools, before the tools. c as for a box. The tools
+                                       are buttons, which the engine draws with no edge until the
+                                       pointer is over them or down on them */
+    PRESS_PART_STATUS_BAR = 32,     /* a bar of news along the foot of a window. c as for a box */
+    PRESS_PART_STEPPER = 34,        /* the two arrows of a stepper, one over the other: up, then
+                                     * down. a: 1 while the lower is held, 2 the upper; d: likewise
+                                     * the one under the pointer. c as for a box. Left undrawn, it
+                                     * is two of the style's buttons with arrows on them */
+    PRESS_PART_COMBO_BUTTON = 35,   /* the button at the end of a combo box. HELD while its list is
+                                     * down; HOT. Left undrawn, it is a button with an arrow on it */
+    PRESS_PART_STATUS_PANEL = 36,   /* one cell of a status bar that keeps each thing it says in a
+                                     * cell of its own. a: which, from 0. c as for a box */
+    PRESS_PART_TOOLTIP = 33         /* a word of help beside the pointer, with its words. c: its
+                                       ground, and ink its words' colour, both from the palette */
 };
+
+/* Two more things are drawn with parts there already: a stepper's pair of
+ * arrows is a scroll bar lying on its side with nothing to slide (b is -1),
+ * as long as two of its arrow boxes; and a combo box is a well with a small
+ * button over its end, on which the engine draws an arrow. */
 
 /* States, added together in press_part.state. */
 enum {

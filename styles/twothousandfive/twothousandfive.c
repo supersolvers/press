@@ -330,6 +330,40 @@ static int32_t draw(const press_part *p, const press_surface *surface) {
         fill((box){r.x, r.y + r.h - 1, r.w, 1}, rgb(0xa5a5a5));
         break;
     case PRESS_PART_HEADER_CELL: fill((box){r.x + r.w - 1, r.y + 2, 1, r.h - 5}, rgb(0xc4c4c4)); break;
+    case PRESS_PART_GROUP_BOX: {
+        /* its title stands over it; the box is a shade darker than what it lies on */
+        int top = p->text[0] ? line_height() + 1 : 0;
+        box in = {r.x, r.y + top, r.w, r.h - top};
+        clip_to(in);
+        fade(inset(in, 1), BLACK, 0.045f);
+        clip_off();
+        round_line(in, 4, 1, rgb(0xb4b4b4));
+        if (p->text[0]) words(p->text, r.x + 8, r.y, p->ink);
+        break;
+    }
+    case PRESS_PART_TOOLBAR:
+        /* one line under the tools, and no more */
+        fill((box){r.x, r.y + r.h - 1, r.w, 1}, rgb(0xa5a5a5));
+        break;
+    case PRESS_PART_STATUS_BAR: fill((box){r.x, r.y, r.w, 1}, rgb(0xa5a5a5)); break;
+    case PRESS_PART_STATUS_PANEL:
+        if (p->a > 0) fill((box){r.x - 2, r.y + 2, 1, r.h - 5}, rgb(0xb4b4b4));
+        break;
+    case PRESS_PART_STEPPER: {
+        /* one small lozenge, an arrow in each half */
+        box s = {r.x + (r.w - 13) / 2, r.y + (r.h - 22) / 2, 13, 22};
+        round_box(s, 5.5f, WHITE, rgb(0xdcdcdc), rgb(0x8e8e8e));
+        if (p->a) {
+            box half = {s.x, p->a == 2 ? s.y : s.y + 11, 13, 11};
+            clip_to(half);
+            round_box(s, 5.5f, rgb(0x9cc4f0), rgb(0x4a8fe0), rgb(0x3a62a8));
+            clip_off();
+        }
+        fill((box){s.x + 1, s.y + 11, 11, 1}, rgb(0x9e9e9e));
+        arrow(s.x + 6, s.y + 5, 3, 0, rgb(0x303030));
+        arrow(s.x + 6, s.y + 16, 3, 1, rgb(0x303030));
+        break;
+    }
     case PRESS_PART_FRAME: frame(p, r); break;
     case PRESS_PART_FRAME_BUTTON: frame_button(p, r); break;
     default: return 0;
@@ -380,6 +414,8 @@ static void palette(press_palette *p) {
     p->ink = BLACK;
     p->menu = 0xf4ffffffu; /* a menu lets a little of what is under it show */
     p->menu_text = BLACK;
+    p->tip = 0xffffffc7u; /* a word of help is on pale yellow */
+    p->tip_text = 0xff000000u;
 }
 
 static int32_t typeface(uint32_t face, press_type *out) {

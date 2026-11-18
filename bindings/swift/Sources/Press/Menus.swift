@@ -26,6 +26,8 @@ struct ItemSpec {
     var shortcut: KeyboardShortcut?
     var checked = false
     var icon = Icon.none
+    /// A picture in colour for a row of a list: the bytes of a PNG file.
+    var png: [UInt8]?
 
     init(_ kind: Kind, _ context: DescribeContext) {
         self.kind = kind

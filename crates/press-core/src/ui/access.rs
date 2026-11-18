@@ -176,6 +176,11 @@ impl Ui {
                     out.role = AccessRole::Slider;
                     out.range = Some((*value, *max));
                 }
+                // a stepper is told of as a slider is: a number and how far it goes
+                Kind::Spin { value, max, .. } => {
+                    out.role = AccessRole::Slider;
+                    out.range = Some((*value, *max));
+                }
                 Kind::List { .. } => {
                     out.role = AccessRole::ListBox;
                     out.value = self.list_label(at);

@@ -81,6 +81,7 @@ public struct Text: View, _LeafView, _Describable {
 public struct Label: View, _Describable {
     let title: String
     let icon: Icon
+    var png: [UInt8]?
 
     public init(_ title: some StringProtocol, systemImage: String) {
         self.title = String(title)
@@ -99,6 +100,7 @@ public struct Label: View, _Describable {
     func _describe(_ out: inout [ItemSpec], _ context: DescribeContext) {
         var spec = ItemSpec(.text(title), context)
         spec.icon = icon
+        spec.png = png
         out.append(spec)
     }
 }
@@ -153,6 +155,8 @@ public struct Button<Label: View>: View, _LeafView, _Describable {
     let role: ButtonRole?
     let action: () -> Void
     let label: Label
+    /// A picture in colour before the label: the bytes of a PNG file.
+    var png: [UInt8]?
 
     public init(action: @escaping () -> Void, @ViewBuilder label: () -> Label) {
         self.role = nil
@@ -171,6 +175,9 @@ public struct Button<Label: View>: View, _LeafView, _Describable {
     func _make(_ node: LeafNode<Self>) throws -> PressCore.Button {
         let button = try PressCore.Button(title)
         node.text = title
+        if let png {
+            try button.setImage(png)
+        }
         try button.onClicked(onMain { [weak node] in node?.event { $0.action() } })
         return button
     }
@@ -181,13 +188,15 @@ public struct Button<Label: View>: View, _LeafView, _Describable {
             node.text = title
             try widget.setLabel(title)
         }
-        // 1 for the default button, 2 for the one that cancels
+        // 1 for the default button, 2 for the one that cancels; and ten more for one that lies flat
         let shortcut = node.env.keyboardShortcut
-        let kind = shortcut == .defaultAction ? 1 : (shortcut == .cancelAction || role == .cancel) ? 2 : 0
+        let flat = node.env.buttonStyle == .borderless
+        let kind = (shortcut == .defaultAction ? 1 : (shortcut == .cancelAction || role == .cancel) ? 2 : 0) + (flat ? 10 : 0)
         if node.number != kind {
             node.number = kind
-            try widget.setIsDefault(kind == 1)
-            try widget.setIsCancel(kind == 2)
+            try widget.setIsDefault(kind % 10 == 1)
+            try widget.setIsCancel(kind % 10 == 2)
+            try widget.setFlat(flat)
         }
     }
 

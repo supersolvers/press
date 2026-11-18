@@ -10,5 +10,6 @@ let package = Package(
         .executableTarget(name: "Hello", dependencies: [.product(name: "PressCore", package: "Press")]),
         .executableTarget(name: "HelloUI", dependencies: [.product(name: "Press", package: "Press")]),
         .executableTarget(name: "GalleryUI", dependencies: [.product(name: "Press", package: "Press")]),
+        .executableTarget(name: "ToolsUI", dependencies: [.product(name: "Press", package: "Press")]),
     ]
 )
