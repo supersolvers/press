@@ -12,7 +12,8 @@
 use super::*;
 
 /// Thickness of a scroll bar, and the length of each arrow box.
-pub(super) const BAR: i32 = crate::style::SCROLL_BAR;
+#[cfg(test)]
+pub(super) const BAR: i32 = 16;
 const THUMB_MIN: i32 = 10;
 
 // Holding the button repeats: first after a pause, then steadily.
@@ -60,6 +61,11 @@ pub(super) struct Bar {
 }
 
 impl Bar {
+    /// How thick the bar is, which is also the length of each arrow box.
+    fn thick(&self) -> i32 {
+        if self.vertical { self.rect.w } else { self.rect.h }
+    }
+
     /// Start and length along the bar's direction of travel.
     fn along(&self) -> (i32, i32) {
         if self.vertical { (self.rect.y, self.rect.h) } else { (self.rect.x, self.rect.w) }
@@ -74,7 +80,7 @@ impl Bar {
     /// arrow box by a pixel so that their borders coincide at the ends.
     fn track(&self) -> (i32, i32) {
         let (start, len) = self.along();
-        (start + BAR - 1, (len - 2 * (BAR - 1)).max(0))
+        (start + self.thick() - 1, (len - 2 * (self.thick() - 1)).max(0))
     }
 
     /// Where the box is: start and length along the bar.
@@ -105,10 +111,10 @@ impl Bar {
         }
         let (start, len) = self.along();
         let pos = if self.vertical { y } else { x };
-        if pos < start + BAR {
+        if pos < start + self.thick() {
             return Some(Part::Back);
         }
-        if pos >= start + len - BAR {
+        if pos >= start + len - self.thick() {
             return Some(Part::Forward);
         }
         let (thumb, size) = self.thumb()?;
@@ -220,7 +226,7 @@ impl Ui {
     }
 
     pub fn scroll_bar_set_length(&mut self, h: Handle, to: i32) -> Result<()> {
-        self.scroll_bar_set(h, to, 2 * BAR, |k| match k {
+        self.scroll_bar_set(h, to, 2 * self.look.m.scroll_bar, |k| match k {
             Kind::ScrollBar { length, .. } => Some(length),
             _ => None,
         })
@@ -230,9 +236,9 @@ impl Ui {
 
     /// Where a text area's scroll bar goes: down its right-hand side,
     /// sharing the area's frame.
-    pub(super) fn area_bar_rect(rect: Rect) -> Rect {
+    pub(super) fn area_bar_rect(rect: Rect, thick: i32) -> Rect {
         let frame = rect.inset(1);
-        Rect::new(frame.x + frame.w - BAR, frame.y, BAR, frame.h)
+        Rect::new(frame.x + frame.w - thick, frame.y, thick, frame.h)
     }
 
     /// The scroll bar a widget is or has, down its side or (`horizontal`)
@@ -264,7 +270,7 @@ impl Ui {
                 let rows = (inner.h / self.font.line_height()).max(1);
                 let lines = self.wrap(&text, inner.w - 2, true).len() as i32;
                 let max = (lines - rows).max(0);
-                Some(Bar { rect: Self::area_bar_rect(rect), vertical: true, value: scroll.clamp(0, max), max, page: rows, step: 1, enabled })
+                Some(Bar { rect: Self::area_bar_rect(rect, self.look.m.scroll_bar), vertical: true, value: scroll.clamp(0, max), max, page: rows, step: 1, enabled })
             }
             _ => None,
         }

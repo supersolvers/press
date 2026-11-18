@@ -9,7 +9,8 @@
 use super::*;
 
 const STRIPE_MS: u64 = 60;
-const TAB_HEIGHT: i32 = crate::style::TAB_HEIGHT;
+#[cfg(test)]
+const TAB_HEIGHT: i32 = 20;
 const TAB_PAD: i32 = crate::style::TAB_PAD;
 const TAB_INDENT: i32 = 6;
 const PAGE_PAD: i32 = 8;
@@ -194,7 +195,7 @@ impl Ui {
             .iter()
             .map(|title| {
                 let w = self.font.width(title) + 2 * TAB_PAD;
-                let r = Rect::new(x, rect.y, w, TAB_HEIGHT);
+                let r = Rect::new(x, rect.y, w, self.look.m.tab_height);
                 x += w - 1; // neighbours share an edge
                 r
             })
@@ -202,8 +203,8 @@ impl Ui {
     }
 
     /// The framed area the pages show in.
-    fn tab_pane(rect: Rect) -> Rect {
-        Rect::new(rect.x, rect.y + TAB_HEIGHT - 1, rect.w, (rect.h - TAB_HEIGHT + 1).max(0))
+    fn tab_pane(rect: Rect, tab: i32) -> Rect {
+        Rect::new(rect.x, rect.y + tab - 1, rect.w, (rect.h - tab + 1).max(0))
     }
 
     pub(super) fn measure_tabs(&mut self, h: Handle) -> (i32, i32) {
@@ -219,19 +220,19 @@ impl Ui {
             tall = tall.max(ph);
         }
         let tabs = self.tab_rects(h).last().map_or(0, |r| r.x + r.w) - self.nodes.get(h).map_or(0, |n| n.rect.x);
-        ((w + 2 * PAGE_PAD + 2).max(tabs + TAB_INDENT), tall + 2 * PAGE_PAD + 1 + TAB_HEIGHT)
+        ((w + 2 * PAGE_PAD + 2).max(tabs + TAB_INDENT), tall + 2 * PAGE_PAD + 1 + self.look.m.tab_height)
     }
 
     pub(super) fn arrange_tabs(&mut self, h: Handle, rect: Rect) {
         if let Some(page) = self.tab_page(h) {
-            self.arrange(page, Self::tab_pane(rect).inset(1 + PAGE_PAD));
+            self.arrange(page, Self::tab_pane(rect, self.look.m.tab_height).inset(1 + PAGE_PAD));
         }
     }
 
     pub(super) fn paint_tabs(&mut self, h: Handle, rect: Rect, live: bool, enabled: bool, ctx: Paint, canvas: &mut Canvas) {
         let Some(Kind::Tabs { pages, selected }) = self.nodes.get(h).map(|n| &n.kind) else { return };
         let (titles, selected) = (pages.iter().map(|p| p.0.clone()).collect::<Vec<_>>(), *selected);
-        let (tabs, pane, phase) = (self.tab_rects(h), Self::tab_pane(rect), self.ants_step_public());
+        let (tabs, pane, phase) = (self.tab_rects(h), Self::tab_pane(rect, self.look.m.tab_height), self.ants_step_public());
         // the tabs behind first, then the pane over their feet, then the chosen
         // tab, which the style joins to the pane
         for i in (0..tabs.len()).filter(|i| *i != selected) {
@@ -251,7 +252,7 @@ impl Ui {
     /// tabs, otherwise whatever is there on the page that is showing.
     pub(super) fn hit_tabs(&self, h: Handle, x: i32, y: i32) -> Option<Handle> {
         let rect = self.nodes.get(h)?.rect;
-        if y < rect.y + TAB_HEIGHT {
+        if y < rect.y + self.look.m.tab_height {
             return Some(h);
         }
         self.tab_page(h).and_then(|page| self.hit(page, x, y))

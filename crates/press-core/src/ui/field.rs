@@ -39,7 +39,7 @@ impl Ui {
                 let mut inner = field_inner(node.rect, &self.look.m);
                 if *multiline {
                     // a text area keeps its right-hand side for the scroll bar
-                    inner.w = (Self::area_bar_rect(node.rect).x - 2 - inner.x).max(0);
+                    inner.w = (Self::area_bar_rect(node.rect, self.look.m.scroll_bar).x - 2 - inner.x).max(0);
                 }
                 Some((Shape { multiline: *multiline, password: *password, scroll: *scroll, follow: *follow }, inner))
             }

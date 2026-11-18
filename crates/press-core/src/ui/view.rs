@@ -10,7 +10,9 @@
 //! working in window coordinates; only drawing and hit-testing need to know
 //! the content is seen through an opening.
 
-use super::scroll::{Bar, BAR};
+use super::scroll::Bar;
+#[cfg(test)]
+use super::scroll::BAR;
 use super::*;
 
 /// How far an arrow, or a line of the wheel, moves the content, in pixels.
@@ -56,7 +58,7 @@ impl Ui {
 
     /// Set the size the view asks for, frame and bars included.
     pub fn scroll_view_set_size(&mut self, h: Handle, w: Option<i32>, hgt: Option<i32>) -> Result<()> {
-        if w.into_iter().chain(hgt).any(|v| !(3 * BAR..=16384).contains(&v)) {
+        if w.into_iter().chain(hgt).any(|v| !(3 * self.look.m.scroll_bar..=16384).contains(&v)) {
             return Err(Error::InvalidArgument);
         }
         match &mut self.node_mut(h)?.kind {
@@ -96,16 +98,16 @@ impl Ui {
         let (rect, content) = (node.rect, *content);
         let wanted = content.map_or((0, 0), |c| self.measure(c));
         // the frame, less the bar down the right, which shares its edge
-        let across = (rect.w - 1 - BAR).max(0);
+        let across = (rect.w - 1 - self.look.m.scroll_bar).max(0);
         let hbar = wanted.0 > across;
-        let down = (rect.h - if hbar { 1 + BAR } else { 2 }).max(0);
+        let down = (rect.h - if hbar { 1 + self.look.m.scroll_bar } else { 2 }).max(0);
         let port = Rect::new(rect.x + 1, rect.y + 1, across, down);
         let size = (wanted.0.max(port.w), wanted.1.max(port.h));
         Some(Layout {
             port,
             // with a bar along the bottom, the side bar stops short at the corner box
-            vbar: Rect::new(rect.x + rect.w - BAR, rect.y, BAR, rect.h - if hbar { BAR - 1 } else { 0 }),
-            hbar: hbar.then(|| Rect::new(rect.x, rect.y + rect.h - BAR, rect.w - BAR + 1, BAR)),
+            vbar: Rect::new(rect.x + rect.w - self.look.m.scroll_bar, rect.y, self.look.m.scroll_bar, rect.h - if hbar { self.look.m.scroll_bar - 1 } else { 0 }),
+            hbar: hbar.then(|| Rect::new(rect.x, rect.y + rect.h - self.look.m.scroll_bar, rect.w - self.look.m.scroll_bar + 1, self.look.m.scroll_bar)),
             content: size,
             max: (size.0 - port.w, size.1 - port.h),
         })
@@ -131,9 +133,9 @@ impl Ui {
         let node = self.nodes.get(h)?;
         let Kind::ScrollView { content, .. } = &node.kind else { return None };
         let rect = node.rect;
-        let across = (rect.w - 1 - BAR).max(0);
+        let across = (rect.w - 1 - self.look.m.scroll_bar).max(0);
         let hbar = content.and_then(|c| self.nodes.get(c)).is_some_and(|c| c.rect.w > across);
-        Some(Rect::new(rect.x + 1, rect.y + 1, across, (rect.h - if hbar { 1 + BAR } else { 2 }).max(0)))
+        Some(Rect::new(rect.x + 1, rect.y + 1, across, (rect.h - if hbar { 1 + self.look.m.scroll_bar } else { 2 }).max(0)))
     }
 
     /// One of a scroll view's bars, for the shared scroll bar code.
@@ -172,7 +174,7 @@ impl Ui {
         if let Some(hbar) = layout.hbar {
             self.bar_draw(h, true, canvas);
             // the box in the corner where the two bars meet
-            self.part(canvas, Part::new(PartKind::ScrollCorner, Rect::new(hbar.x + hbar.w - 1, hbar.y, BAR, BAR)));
+            self.part(canvas, Part::new(PartKind::ScrollCorner, Rect::new(hbar.x + hbar.w - 1, hbar.y, self.look.m.scroll_bar, self.look.m.scroll_bar)));
         }
     }
 

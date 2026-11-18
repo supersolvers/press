@@ -7,17 +7,25 @@
  *
  *     make styles PROFILE=debug
  *     PRESS_STYLE=ninetyfive ./examples/c/controls
+ *
+ * The desktops of a few years on were these in other colours and smoother
+ * type, and so is the style Two Thousand: it says what its colours, sizes
+ * and typefaces are (the STYLE_ names below) and includes this file for
+ * the rest.
  */
 #include "press_style.h"
 
 #include <stddef.h>
 
+#ifndef STYLE_NAME
+#define STYLE_NAME "ninetyfive"
 #define FACE 0xffc0c0c0u   /* what everything is made of */
 #define HILITE 0xffffffffu /* an edge the light falls on */
 #define LIGHT 0xffdfdfdfu
 #define SHADOW 0xff808080u /* an edge in shade */
 #define DARK 0xff000000u
 #define NAVY 0xff000080u   /* what is selected */
+#endif
 #define WHITE 0xffffffffu
 #define BLACK 0xff000000u
 
@@ -180,6 +188,32 @@ static void radio(const press_part *p, box r) {
         dotted((box){r.x + 12 + 4, r.y + (r.h - line) / 2 - 1, on->text_width(on->ctx, p->text) + 4, line + 2});
 }
 
+#ifdef STYLE_SMOOTH_TYPE
+/* With smooth letters there are greys between the ink and the paper, so
+ * colours are changed by how light they are: the edges stay smooth. */
+static uint32_t between(uint32_t dark, uint32_t light_, uint32_t c) {
+    uint32_t t = (((c >> 16) & 0xff) * 77 + ((c >> 8) & 0xff) * 150 + (c & 0xff) * 29) >> 8, out = 0xff000000u;
+    for (int shift = 0; shift <= 16; shift += 8)
+        out |= ((((dark >> shift) & 0xff) * (255 - t) + ((light_ >> shift) & 0xff) * t + 127) / 255) << shift;
+    return out;
+}
+
+static void select_in(box r) {
+    for (int y = r.y; y < r.y + r.h; y++)
+        for (int x = r.x; x < r.x + r.w; x++)
+            px(x, y, between(WHITE, NAVY, at(x, y)));
+}
+
+static void dim_in(box r) {
+    for (int y = r.y; y < r.y + r.h; y++)
+        for (int x = r.x; x < r.x + r.w; x++) {
+            uint32_t c = at(x, y);
+            /* dark goes grey, and the darker the more so; light is left */
+            uint32_t grey = between(SHADOW, c, c);
+            px(x, y, (c & 0xffffff) == (FACE & 0xffffff) || c == WHITE ? c : grey);
+        }
+}
+#else
 /* What is selected is white on navy; anything else there keeps its colour. */
 static void select_in(box r) {
     for (int y = r.y; y < r.y + r.h; y++) {
@@ -197,6 +231,7 @@ static void dim_in(box r) {
         for (int x = r.x; x < r.x + r.w; x++)
             if (at(x, y) == BLACK) px(x, y, SHADOW);
 }
+#endif
 
 static void slider(const press_part *p, box r) {
     int vertical = has(p, PRESS_STATE_VERTICAL);
@@ -367,6 +402,9 @@ static void metrics(press_metrics *m) {
     m->field_inset_y = 4;
     m->progress_height = 16;
     m->slider_thick = 20;
+#ifdef STYLE_METRICS
+    STYLE_METRICS(m);
+#endif
 }
 
 static void palette(press_palette *p) {
@@ -378,7 +416,11 @@ static void palette(press_palette *p) {
     p->menu_text = BLACK;
 }
 
-static const press_style style = {PRESS_STYLE_ABI, "ninetyfive", metrics, palette, draw};
+#ifndef STYLE_TYPEFACE
+#define STYLE_TYPEFACE NULL
+#endif
+
+static const press_style style = {PRESS_STYLE_ABI, STYLE_NAME, metrics, palette, draw, 0, STYLE_TYPEFACE};
 
 const press_style *press_style_entry(void) {
     return &style;

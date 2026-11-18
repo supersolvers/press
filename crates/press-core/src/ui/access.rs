@@ -190,7 +190,7 @@ impl Ui {
                 }
                 Kind::MenuBar { menus } => {
                     out.role = AccessRole::MenuBar;
-                    out.rect = Some(Rect::new(0, 0, w, BAR_HEIGHT));
+                    out.rect = Some(Rect::new(0, 0, w, self.look.m.menu_bar_height));
                     out.children = menus.clone();
                 }
                 Kind::Menu { title, items } => {

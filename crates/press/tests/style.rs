@@ -6,20 +6,23 @@ use press::abi::*;
 
 const OK: i32 = Status::Ok as i32;
 
-/// Build the style with the system's C compiler. None on a machine without one.
-fn build(out: &std::path::Path) -> Option<std::path::PathBuf> {
+/// Build a style with the system's C compiler. None on a machine without one.
+fn build(name: &str, out: &std::path::Path) -> Option<std::path::PathBuf> {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-    let lib = out.join("libpress_style_ninetyfive.so");
+    let lib = out.join(format!("libpress_style_{name}.so"));
     let done = std::process::Command::new("cc")
-        .args(["-shared", "-fPIC", "-O1", "-Wall", "-Werror"])
+        .args(["-shared", "-fPIC", "-O1", "-Wall", "-Wextra", "-Werror"])
         .arg("-I")
         .arg(root.join("include"))
-        .arg(root.join("styles/ninetyfive/ninetyfive.c"))
+        .arg("-I")
+        .arg(root.join("styles/common"))
+        .arg(root.join(format!("styles/{name}/{name}.c")))
+        .arg("-lm")
         .arg("-o")
         .arg(&lib)
         .status()
         .ok()?;
-    assert!(done.success(), "the style does not compile against press_style.h");
+    assert!(done.success(), "the style {name} does not compile against press_style.h");
     Some(lib)
 }
 
@@ -31,34 +34,71 @@ fn pixels(path: &std::path::Path) -> (png::ColorType, Vec<u8>) {
     (frame.color_type, data)
 }
 
+/// Draw a small dialog and say what its picture is made of: the kind of
+/// picture, and its pixels as red, green and blue.
+unsafe fn dialog(dir: &std::path::Path, name: &str) -> (png::ColorType, Vec<u8>) {
+    let (mut window, mut column, mut label, mut button, mut list) = (0u64, 0u64, 0u64, 0u64, 0u64);
+    assert_eq!(press_window_new("Style".as_ptr(), 5, 200, 160, &mut window), OK);
+    assert_eq!(press_stack_new(Orientation::Vertical as i32, &mut column), OK);
+    assert_eq!(press_label_new("Words".as_ptr(), 5, &mut label), OK);
+    assert_eq!(press_button_new("Press".as_ptr(), 5, &mut button), OK);
+    assert_eq!(press_list_box_new(&mut list), OK);
+    assert_eq!(press_list_box_add(list, "A row".as_ptr(), 5), OK);
+    for widget in [label, button, list] {
+        assert_eq!(press_stack_add(column, widget), OK);
+    }
+    assert_eq!(press_window_set_content(window, column), OK);
+    let picture = dir.join(format!("{name}.png"));
+    let path = picture.to_str().unwrap();
+    assert_eq!(press_window_snapshot(window, path.as_ptr(), path.len(), 1), OK);
+    assert_eq!(press_widget_destroy(window), OK);
+    pixels(&picture)
+}
+
+/// Every style that comes with the library builds as a library of its own,
+/// as anybody's would, and a window drawn wearing it is of its colour. One
+/// process wears one style, so each is tried in a process of its own: this
+/// test runs itself again for each, with the style named in the environment.
 #[test]
-fn a_window_wears_a_style_from_a_library_of_its_own() {
+fn windows_wear_styles_from_libraries_of_their_own() {
+    let styles: [(&str, [u8; 3]); 5] = [
+        ("ninetyfive", [0xc0, 0xc0, 0xc0]),
+        ("ninetynine", [0xdd, 0xdd, 0xdd]),
+        ("twothousand", [0xd4, 0xd0, 0xc8]),
+        ("twothousandone", [0xec, 0xe9, 0xd8]),
+        ("twothousandfive", [0xec, 0xec, 0xec]),
+    ];
+    if let Ok(wearing) = std::env::var("PRESS_STYLE_UNDER_TEST") {
+        let (name, colour) = styles.iter().find(|(name, _)| wearing.ends_with(&format!("libpress_style_{name}.so"))).expect("a style this test knows");
+        let dir = std::path::Path::new(&wearing).parent().unwrap().to_path_buf();
+        unsafe {
+            assert_eq!(press_app_init(), OK);
+            let (kind, data) = dialog(&dir, name);
+            // a colour black and white has none of: the window is the style's
+            assert_eq!(kind, png::ColorType::Rgb, "{name}");
+            let own = data.chunks(3).filter(|p| *p == colour).count();
+            assert!(own > 200 * 160 / 8, "{name}: much of the window is the style's colour, not {own} pixels of it");
+            // the paper of the list is white whatever the window is
+            assert!(data.chunks(3).filter(|p| *p == [0xff, 0xff, 0xff]).count() > 500, "{name}");
+            assert_eq!(press_app_shutdown(), OK);
+        }
+        return;
+    }
     let dir = std::env::temp_dir().join(format!("press-style-test-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
-    let Some(lib) = build(&dir) else {
-        eprintln!("no C compiler: the style is not tried");
-        return;
-    };
-    // this file is a process of its own, so the choice is nobody else's
-    std::env::set_var("PRESS_STYLE", &lib);
-    std::env::set_var("PRESS_BACKEND", "headless");
-    unsafe {
-        assert_eq!(press_app_init(), OK);
-        let (mut window, mut button) = (0u64, 0u64);
-        assert_eq!(press_window_new("Style".as_ptr(), 5, 160, 60, &mut window), OK);
-        assert_eq!(press_button_new("Press".as_ptr(), 5, &mut button), OK);
-        assert_eq!(press_window_set_content(window, button), OK);
-        let picture = dir.join("worn.png");
-        let name = picture.to_str().unwrap();
-        assert_eq!(press_window_snapshot(window, name.as_ptr(), name.len(), 1), OK);
-        let (kind, data) = pixels(&picture);
-        // grey, which black and white has none of: the window is the style's
-        assert_eq!(kind, png::ColorType::Rgb);
-        let grey = data.chunks(3).filter(|p| *p == [0xc0, 0xc0, 0xc0]).count();
-        assert!(grey > 160 * 60 / 2, "most of the window is the style's grey, not {grey} pixels of it");
-        // and the words on the button are still the engine's, in black
-        assert!(data.chunks(3).any(|p| p == [0, 0, 0]));
-        assert_eq!(press_app_shutdown(), OK);
+    for (name, _) in styles {
+        let Some(lib) = build(name, &dir) else {
+            eprintln!("no C compiler: the styles are not tried");
+            return;
+        };
+        let again = std::process::Command::new(std::env::current_exe().unwrap())
+            .args(["--exact", "windows_wear_styles_from_libraries_of_their_own", "--nocapture"])
+            .env("PRESS_STYLE", &lib)
+            .env("PRESS_STYLE_UNDER_TEST", &lib)
+            .env("PRESS_BACKEND", "headless")
+            .status()
+            .unwrap();
+        assert!(again.success(), "a window does not wear {name}");
     }
     let _ = std::fs::remove_dir_all(&dir);
 }

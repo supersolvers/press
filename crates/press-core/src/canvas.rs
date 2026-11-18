@@ -55,6 +55,33 @@ impl Canvas {
         }
     }
 
+    /// Lay a colour over a pixel, as far as `cover` out of 255: how smooth
+    /// edges and letters are drawn. A see-through pixel takes the colour
+    /// with that much of it showing.
+    #[inline]
+    pub fn blend(&mut self, x: i32, y: i32, color: u32, cover: u8) {
+        if x < 0 || y < 0 || x >= self.width || y >= self.height {
+            return;
+        }
+        let at = &mut self.pixels[(y * self.width + x) as usize];
+        let a = cover as u32 * (color >> 24) / 255;
+        if a == 0 {
+            return;
+        }
+        let under = *at;
+        let under_a = under >> 24;
+        if under_a == 0 {
+            *at = (a << 24) | (color & 0x00ff_ffff);
+            return;
+        }
+        let mix = |shift: u32| {
+            let (top, bottom) = ((color >> shift) & 0xff, (under >> shift) & 0xff);
+            ((top * a + bottom * (255 - a) + 127) / 255) << shift
+        };
+        let out_a = (a + under_a * (255 - a) / 255).min(255);
+        *at = (out_a << 24) | mix(16) | mix(8) | mix(0);
+    }
+
     pub fn get(&self, x: i32, y: i32) -> u32 {
         if x >= 0 && y >= 0 && x < self.width && y < self.height {
             self.pixels[(y * self.width + x) as usize]
@@ -146,8 +173,11 @@ impl Canvas {
         for sy in 0..src.height {
             for sx in 0..src.width {
                 let pixel = src.pixels[(sy * src.width + sx) as usize];
-                if pixel != TRANSPARENT {
-                    self.set(x + sx, y + sy, pixel);
+                match pixel >> 24 {
+                    0 => {}
+                    255 => self.set(x + sx, y + sy, pixel),
+                    // partly see-through, as a soft shadow is
+                    _ => self.blend(x + sx, y + sy, pixel, 255),
                 }
             }
         }

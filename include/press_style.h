@@ -32,7 +32,7 @@ extern "C" {
 #endif
 
 /* The version of this interface, for press_style.abi. */
-#define PRESS_STYLE_ABI 1
+#define PRESS_STYLE_ABI 2
 
 /* Sizes, in pixels. */
 typedef struct press_metrics {
@@ -48,6 +48,15 @@ typedef struct press_metrics {
     int32_t field_inset_y;
     int32_t progress_height;
     int32_t slider_thick;     /* a slider's size across its travel */
+    /* from version 2 */
+    int32_t scroll_bar;       /* a scroll bar's thickness, and the length of its arrow boxes */
+    int32_t slider_knob;      /* the length of a slider's knob along its travel */
+    int32_t tab_height;
+    int32_t popup_height;
+    int32_t row_height;       /* a row of a list, a table or a tree */
+    int32_t menu_bar_height;  /* a window's menu bar, the rule under it included */
+    int32_t menu_item_height;
+    int32_t menu_shadow;      /* room kept right of a menu and below it for its shadow */
 } press_metrics;
 
 /* Colours, as 0xAARRGGBB. The engine draws words and small marks itself,
@@ -64,7 +73,8 @@ typedef struct press_palette {
 /* The parts a window is drawn from. */
 enum {
     PRESS_PART_BACKGROUND = 1,      /* the whole window, before anything else */
-    PRESS_PART_BUTTON = 2,          /* with its label. DEFAULT, HELD, FOCUSED */
+    PRESS_PART_BUTTON = 2,          /* with its label. DEFAULT, HELD, FOCUSED, HOT. a: counts up
+                                       twenty times a second for a style that wants PULSE */
     PRESS_PART_CHECKBOX = 3,        /* with its label. CHECKED, HELD, FOCUSED */
     PRESS_PART_RADIO = 4,           /* with its label. CHECKED, HELD, FOCUSED */
     PRESS_PART_WELL = 5,            /* the box round a text field or list, and its paper. FOCUSED */
@@ -85,8 +95,10 @@ enum {
     PRESS_PART_MENU_BAR = 16,       /* across the top of a window, before its titles */
     PRESS_PART_MENU_TITLE = 17,     /* one title. HELD while its menu is down; ENABLED */
     PRESS_PART_MENU_FRAME = 18,     /* a menu's outline and shadow, on a picture of their own: the
-                                       items are one pixel inside, and the last column and row are
-                                       the shadow's. Pixels set to 0 show the desktop */
+                                       items are one pixel inside, and the last a columns and rows
+                                       (menu_shadow of them) are the shadow's, see-through until
+                                       drawn on. A pixel's top byte says how solid it is, so a
+                                       shadow can be soft */
     PRESS_PART_MENU_SEPARATOR = 19, /* a dividing line, in the room of one item */
     PRESS_PART_VIEW_FRAME = 20,     /* the box round a scroll view */
     PRESS_PART_HEADER = 21,         /* the row of headings over a table, before the headings */
@@ -102,8 +114,36 @@ enum {
     PRESS_STATE_CHECKED = 16,
     PRESS_STATE_VERTICAL = 32,
     PRESS_STATE_FRONT = 64,
-    PRESS_STATE_BUSY = 128
+    PRESS_STATE_BUSY = 128,
+    PRESS_STATE_HOT = 256      /* the pointer is over it: only for a style that wants HOVER */
 };
+
+/* What a style would have the engine do for it, added together in
+ * press_style.wants. */
+enum {
+    PRESS_WANTS_HOVER = 1,     /* buttons and the like are drawn again as the pointer comes
+                                  and goes, with HOT set */
+    PRESS_WANTS_PULSE = 2      /* a default button is drawn again twenty times a second */
+};
+
+/* The engine's own families, which a style may have written in one of the
+ * machine's typefaces instead. */
+enum {
+    PRESS_FACE_INTERFACE = 0,  /* menus, buttons, labels: nearly everything */
+    PRESS_FACE_SMALL = 1,
+    PRESS_FACE_SMALL_BOLD = 2,
+    PRESS_FACE_READING = 3,    /* long text */
+    PRESS_FACE_FIXED = 4,      /* every letter the same width */
+    PRESS_FACE_TITLE = 5       /* large and heavy */
+};
+
+/* A typeface of the machine's, drawn smooth from its outlines. */
+typedef struct press_type {
+    char family[128];          /* as fontconfig knows it; several, with commas between, are
+                                  tried in turn, and the nearest thing is used if none is here */
+    int32_t size;              /* in pixels */
+    int32_t bold;
+} press_type;
 
 /* One part to draw. */
 typedef struct press_part {
@@ -115,7 +155,8 @@ typedef struct press_part {
     const char *text;         /* its words, UTF-8; never NULL */
 } press_part;
 
-/* What to draw on. pixels[y * width + x] is 0xAARRGGBB. The three functions
+/* What to draw on. pixels[y * width + x] is 0xAARRGGBB, not multiplied by
+ * its alpha. The three functions
  * are the engine's own hand for words, in the typeface the part is in; pass
  * them ctx. */
 typedef struct press_surface {
@@ -138,6 +179,11 @@ typedef struct press_style {
     /* Draw the part and return 1, or return 0 to have it drawn in black
      * and white. Draw nothing outside the surface. */
     int32_t (*draw)(const press_part *part, const press_surface *on);
+    /* from version 2 */
+    uint32_t wants;           /* PRESS_WANTS_... */
+    /* Fill in the typeface to use in place of a family and return 1, or
+     * return 0 to keep the family, in its own pixels. */
+    int32_t (*typeface)(uint32_t face, press_type *out);
 } press_style;
 
 /* The one function a style library exports. What it returns must stay

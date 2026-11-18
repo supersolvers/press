@@ -35,7 +35,9 @@ mod scroll;
 mod view;
 use scroll::BarPress;
 pub use access::{AccessNode, AccessRole, AccessRun, AccessTree};
-use menu::{MenuOpen, BAR_HEIGHT};
+use menu::MenuOpen;
+#[cfg(test)]
+use menu::BAR_HEIGHT;
 pub use list::Icon;
 pub use menu::{MenuEntry, PopupInfo};
 
@@ -340,6 +342,7 @@ const RING_GAP: i32 = 3; // how far the focus ring stands off a button
 
 // Timing, in milliseconds.
 const CARET_MS: u64 = 530;
+const PULSE_MS: u64 = 50;
 const ANT_STEP_MS: u64 = 70;
 const ANT_STEPS: u64 = 8; // the focus ring marches this far on arrival, then rests
 const FLASH_MS: u64 = 110;
@@ -367,6 +370,12 @@ pub struct Ui {
     nodes: Slots<Node>,
     /// How everything looks: the style in use, its sizes and its colours.
     look: Look,
+    /// The widget under the pointer, for a style that shows it.
+    hover: Option<Handle>,
+    /// The widget being drawn.
+    painting: Option<Handle>,
+    /// The throb of a default button last drawn.
+    pulse: u64,
     font: Font,
     /// The typefaces not being worn just now, kept with what they have
     /// already drawn, and the one that is (`font`).
@@ -466,6 +475,9 @@ impl Ui {
     /// its way from now on.
     pub fn set_style(&mut self, style: std::sync::Arc<dyn Style>) {
         self.look = Look::of(style);
+        // every typeface is the new style's from now on
+        self.wardrobe.clear();
+        self.font = self.look.font(self.worn);
         self.dirty = true;
     }
 
@@ -481,7 +493,15 @@ impl Ui {
 
     /// Have the style draw a part, in the typeface being worn. What the
     /// style leaves undrawn is drawn in black and white.
-    fn part(&mut self, canvas: &mut Canvas, part: Part) {
+    fn part(&mut self, canvas: &mut Canvas, mut part: Part) {
+        if matches!(part.kind, PartKind::Button | PartKind::Checkbox | PartKind::Radio | PartKind::Popup | PartKind::Slider) {
+            if self.look.wants & crate::style::wants::HOVER != 0 && self.hover.is_some() && self.hover == self.painting {
+                part.state |= state::HOT;
+            }
+            if part.kind == PartKind::Button && self.look.wants & crate::style::wants::PULSE != 0 {
+                part.a = self.pulse_step() as i32;
+            }
+        }
         let style = self.look.style.clone();
         let mut painter = Painter { canvas, font: &mut self.font };
         if !style.draw(&part, &mut painter) {
@@ -790,7 +810,7 @@ impl Ui {
     pub fn window_fit(&mut self, window: Handle) -> Result<()> {
         let (content, bar) = match &self.node(window)?.kind {
             Kind::Window { visible: true, .. } => return Err(Error::InvalidState),
-            Kind::Window { content, menu_bar, bar_external, .. } => (*content, if menu_bar.is_some() && !bar_external { BAR_HEIGHT } else { 0 }),
+            Kind::Window { content, menu_bar, bar_external, .. } => (*content, if menu_bar.is_some() && !bar_external { self.look.m.menu_bar_height } else { 0 }),
             _ => return Err(Error::WrongType),
         };
         let (w, h) = content.map_or((0, 0), |c| self.measure(c));
@@ -860,12 +880,12 @@ impl Ui {
             return f(self);
         }
         let was = self.worn;
-        let font = self.wardrobe.remove(&want).unwrap_or_else(|| Font::of(want));
+        let font = self.wardrobe.remove(&want).unwrap_or_else(|| self.look.font(want));
         let old = std::mem::replace(&mut self.font, font);
         self.wardrobe.insert(was, old);
         self.worn = want;
         let out = f(self);
-        let back = self.wardrobe.remove(&was).unwrap_or_else(|| Font::of(was));
+        let back = self.wardrobe.remove(&was).unwrap_or_else(|| self.look.font(was));
         let worn = std::mem::replace(&mut self.font, back);
         self.wardrobe.insert(want, worn);
         self.worn = was;
@@ -1024,7 +1044,7 @@ impl Ui {
         let (content, bar, now) = match &self.node(h)?.kind {
             Kind::Window { content, menu_bar, bar_external, full_screen, width, height, .. } => {
                 // the size kept for the window is the whole of it, with a bar only if drawn in it
-                (*content, if menu_bar.is_some() && !bar_external && !full_screen { BAR_HEIGHT } else { 0 }, (*width, *height))
+                (*content, if menu_bar.is_some() && !bar_external && !full_screen { self.look.m.menu_bar_height } else { 0 }, (*width, *height))
             }
             _ => return Err(Error::WrongType),
         };
@@ -1398,7 +1418,7 @@ impl Ui {
             Kind::Slider { .. } => self.measure_slider(h),
             Kind::List { .. } => self.measure_list(h),
             Kind::ScrollBar { orientation, length, .. } => {
-                if *orientation == Orientation::Vertical { (scroll::BAR, *length) } else { (*length, scroll::BAR) }
+                if *orientation == Orientation::Vertical { (m.scroll_bar, *length) } else { (*length, m.scroll_bar) }
             }
             Kind::Label { text } => {
                 let text = text.clone();
@@ -1436,7 +1456,7 @@ impl Ui {
                 // the menu bar takes its height from the top of the window,
                 // unless the desktop is showing it somewhere else or the
                 // window fills the screen
-                let (c, bar) = (*c, if menu_bar.is_some() && !bar_external && !full_screen { BAR_HEIGHT } else { 0 });
+                let (c, bar) = (*c, if menu_bar.is_some() && !bar_external && !full_screen { self.look.m.menu_bar_height } else { 0 });
                 self.arrange(c, Rect::new(rect.x, rect.y + bar, rect.w, (rect.h - bar).max(0)));
             }
             Kind::ScrollView { .. } => self.arrange_view(h),
@@ -1510,6 +1530,7 @@ impl Ui {
 
     fn paint_in(&mut self, h: Handle, canvas: &mut Canvas, parent_enabled: bool, ctx: Paint) {
         let Some(node) = self.nodes.get(h) else { return };
+        self.painting = Some(h);
         let rect = node.rect;
         let enabled = parent_enabled && node.enabled;
         let held = self.pressed == Some((h, true)) || self.flash.is_some_and(|(f, _)| f == h);
@@ -1632,6 +1653,11 @@ impl Ui {
             return Ok(out);
         }
         let over = self.hit(window, x, y);
+        let hover = over.filter(|_| kind != PointerKind::Leave);
+        if hover != self.hover {
+            self.hover = hover;
+            self.dirty |= self.look.wants & crate::style::wants::HOVER != 0;
+        }
         if let Some(out) = self.bar_pointer(over, x, y, kind) {
             return Ok(out);
         }
@@ -1949,6 +1975,10 @@ impl Ui {
         out.extend(self.menu_tick());
         out.extend(self.bar_tick());
         self.progress_tick();
+        if self.pulsing() && self.pulse_step() != self.pulse {
+            self.pulse = self.pulse_step();
+            self.dirty = true;
+        }
         let anim = self.anim_state();
         if anim != self.anim {
             self.anim = anim;
@@ -1958,6 +1988,17 @@ impl Ui {
     }
 
     /// The time at which `tick` next has something to do, if any.
+    /// How many times a throbbing button has been drawn again by now.
+    fn pulse_step(&self) -> u64 {
+        self.now / PULSE_MS
+    }
+
+    /// Whether the style has a default button throb, and there is one to.
+    fn pulsing(&self) -> bool {
+        self.look.wants & crate::style::wants::PULSE != 0
+            && self.nodes.handles().into_iter().any(|h| matches!(self.nodes.get(h).map(|n| &n.kind), Some(Kind::Button { is_default: true, .. })))
+    }
+
     pub fn next_deadline(&self) -> Option<u64> {
         let (caret, ring) = self.animating();
         let mut deadlines = Vec::new();
@@ -1965,6 +2006,9 @@ impl Ui {
         deadlines.extend(self.menu_deadline());
         deadlines.extend(self.bar_deadline());
         deadlines.extend(self.progress_deadline());
+        if self.pulsing() {
+            deadlines.push((self.pulse_step() + 1) * PULSE_MS);
+        }
         if caret {
             deadlines.push(self.caret_epoch + ((self.now - self.caret_epoch) / CARET_MS + 1) * CARET_MS);
         }
@@ -2805,5 +2849,82 @@ mod style_tests {
         let r = ui.nodes.get(button).unwrap().rect;
         assert_eq!(canvas.get(r.x + r.w / 2, r.y), BLACK);
         assert_eq!(canvas.get(r.x + r.w / 2, r.y + 1), WHITE);
+    }
+
+    /// A style of taller rows and smooth letters that wants to hear of the pointer.
+    struct Tall;
+
+    impl Style for Tall {
+        fn name(&self) -> &str {
+            "tall"
+        }
+        fn metrics(&self) -> Metrics {
+            Metrics { row_height: 24, menu_bar_height: 30, scroll_bar: 20, ..OneBit::METRICS }
+        }
+        fn palette(&self) -> Palette {
+            OneBit::PALETTE
+        }
+        fn typeface(&self, face: Face) -> Option<crate::font::Type> {
+            (face == Face::Cicero).then(|| crate::font::Type { family: "sans".into(), size: 14, bold: false })
+        }
+        fn wants(&self) -> u32 {
+            crate::style::wants::HOVER
+        }
+        fn draw(&self, _: &Part, _: &mut Painter) -> bool {
+            false
+        }
+    }
+
+    #[test]
+    fn a_style_decides_the_height_of_rows_and_bars() {
+        let mut ui = Ui::natural();
+        let list = ui.list_box_new();
+        ui.list_box_set_rows(list, 5).unwrap();
+        let plain = ui.measure(list).1;
+        ui.set_style(std::sync::Arc::new(Tall));
+        assert_eq!(ui.measure(list).1 - plain, 5 * (24 - OneBit::METRICS.row_height));
+        let bar = ui.scroll_bar_new(Orientation::Vertical);
+        assert_eq!(ui.measure(bar).0, 20);
+    }
+
+    #[test]
+    fn a_style_may_write_in_a_typeface_of_the_machines() {
+        let mut ui = Ui::natural();
+        let (window, _) = dialog(&mut ui);
+        ui.set_style(std::sync::Arc::new(Tall));
+        if !ui.font.is_smooth() {
+            return; // a machine with no fonts of its own: the bundled family serves
+        }
+        let canvas = ui.render(window).unwrap();
+        // smooth letters have edges that are neither black nor white
+        assert!(canvas.pixels.iter().any(|p| *p != BLACK && *p != WHITE));
+        // and the line is as tall as the typeface asked for, not the bundled one
+        assert!(ui.font.line_height() >= 14);
+    }
+
+    #[test]
+    fn the_pointer_coming_over_a_button_is_news_only_to_a_style_that_wants_it() {
+        for (wants, style) in [(false, std::sync::Arc::new(OneBit) as std::sync::Arc<dyn Style>), (true, std::sync::Arc::new(Tall))] {
+            let mut ui = Ui::natural();
+            let (window, button) = dialog(&mut ui);
+            ui.set_style(style);
+            ui.render(window).unwrap();
+            ui.dirty = false;
+            let r = ui.nodes.get(button).unwrap().rect;
+            ui.pointer(window, r.x + 3, r.y + 3, PointerKind::Move).unwrap();
+            assert_eq!(ui.dirty, wants);
+        }
+    }
+
+    #[test]
+    fn a_colour_laid_over_another_is_mixed_with_it() {
+        let mut canvas = Canvas::new(2, 1);
+        canvas.blend(0, 0, BLACK, 128);
+        let grey = canvas.get(0, 0) & 0xff;
+        assert!((126..=129).contains(&grey) && canvas.get(0, 0) >> 24 == 255);
+        // on a see-through pixel it is simply that solid
+        canvas.set(1, 0, crate::canvas::TRANSPARENT);
+        canvas.blend(1, 0, BLACK, 64);
+        assert_eq!(canvas.get(1, 0), 64 << 24);
     }
 }

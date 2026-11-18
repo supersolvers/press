@@ -7,10 +7,11 @@
 //! short drag up or down picks a neighbour. A plain click leaves the list
 //! up to be clicked, which the original did not do and people now expect.
 
-use super::menu::{EditAction, ITEM_HEIGHT, ITEM_LEFT};
+use super::menu::{EditAction, ITEM_LEFT};
+#[cfg(test)]
+use super::menu::ITEM_HEIGHT;
 use super::*;
 
-const POPUP_HEIGHT: i32 = 19; // the box, and a pixel of shadow below it
 const ARROW_ROOM: i32 = 22;
 
 impl Ui {
@@ -78,7 +79,7 @@ impl Ui {
             _ => Vec::new(),
         };
         let widest = items.iter().map(|i| self.font.width(i)).max().unwrap_or(0).max(40);
-        (ITEM_LEFT + widest + ARROW_ROOM + 2, POPUP_HEIGHT)
+        (ITEM_LEFT + widest + ARROW_ROOM + 2, self.look.m.popup_height)
     }
 
     pub(super) fn paint_popup(&mut self, h: Handle, rect: Rect, live: bool, canvas: &mut Canvas) {
@@ -133,7 +134,7 @@ impl Ui {
             *slot = Some(menu);
         }
         // placed so the current choice lies exactly over the box
-        let y = rect.y - selected as i32 * ITEM_HEIGHT;
+        let y = rect.y - selected as i32 * self.look.m.menu_item_height;
         self.open_popup(window, menu, rect.x, y, Some(h));
         if let Some(open) = &mut self.menu_open {
             open.held = held;

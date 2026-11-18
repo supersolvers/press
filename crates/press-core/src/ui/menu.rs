@@ -19,10 +19,12 @@ use super::*;
 use super::picture::OtherButton;
 
 /// Height of the menu bar, including the rule under it.
+#[cfg(test)]
 pub(super) const BAR_HEIGHT: i32 = 20;
 const BAR_INDENT: i32 = 8;
 const TITLE_PAD: i32 = crate::style::MENU_TITLE_PAD;
-pub(super) const ITEM_HEIGHT: i32 = crate::style::MENU_ITEM_HEIGHT;
+#[cfg(test)]
+pub(super) const ITEM_HEIGHT: i32 = 16;
 pub(super) const ITEM_LEFT: i32 = crate::style::MENU_ITEM_LEFT; // room for a check mark
 const ITEM_RIGHT: i32 = 12;
 const SHORTCUT_GAP: i32 = 18;
@@ -274,10 +276,11 @@ impl Ui {
     /// again when the bar comes back), so a window fitted to its content
     /// stays fitted. Shortcuts keep working.
     pub fn window_set_bar_external(&mut self, window: Handle, external: bool) -> Result<()> {
+        let bar_height = self.look.m.menu_bar_height;
         match &mut self.node_mut(window)?.kind {
             Kind::Window { bar_external, menu_bar, height, .. } => {
                 if *bar_external != external && menu_bar.is_some() {
-                    *height = if external { (*height - BAR_HEIGHT).max(1) } else { *height + BAR_HEIGHT };
+                    *height = if external { (*height - bar_height).max(1) } else { *height + bar_height };
                 }
                 *bar_external = external;
             }
@@ -547,7 +550,7 @@ impl Ui {
             let Some(Kind::Menu { title, .. }) = self.nodes.get(menu).map(|n| &n.kind) else { continue };
             let title = title.clone();
             let w = self.font.width(&title) + 2 * TITLE_PAD;
-            out.push((menu, Rect::new(x, 0, w, BAR_HEIGHT - 1)));
+            out.push((menu, Rect::new(x, 0, w, self.look.m.menu_bar_height - 1)));
             x += w;
         }
         out
@@ -570,11 +573,11 @@ impl Ui {
         }
         let inner = ITEM_LEFT + label_w + if key_w > 0 { SHORTCUT_GAP + key_w } else { 0 } + ITEM_RIGHT;
         let inner = inner.max(min_inner);
-        let frame = Rect::new(x, y, inner + 2, items.len() as i32 * ITEM_HEIGHT + 2);
+        let frame = Rect::new(x, y, inner + 2, items.len() as i32 * self.look.m.menu_item_height + 2);
         let rects = items
             .into_iter()
             .enumerate()
-            .map(|(i, item)| (item, Rect::new(frame.x + 1, frame.y + 1 + i as i32 * ITEM_HEIGHT, inner, ITEM_HEIGHT)))
+            .map(|(i, item)| (item, Rect::new(frame.x + 1, frame.y + 1 + i as i32 * self.look.m.menu_item_height, inner, self.look.m.menu_item_height)))
             .collect();
         (frame, rects)
     }
@@ -582,7 +585,7 @@ impl Ui {
     /// Where a menu hangs when pulled down from the bar.
     fn menu_geometry(&mut self, window: Handle, menu: Handle) -> Option<Layout> {
         let title = self.bar_titles(window).into_iter().find(|(m, _)| *m == menu)?.1;
-        Some(self.layout(menu, title.x, BAR_HEIGHT - 1, title.w + 16))
+        Some(self.layout(menu, title.x, self.look.m.menu_bar_height - 1, title.w + 16))
     }
 
     /// The open menu of a window, if it is still there to be shown.
@@ -620,7 +623,8 @@ impl Ui {
     /// Where the window's open menu and submenus go, shadows included, in
     /// the order they opened.
     pub fn popups(&mut self, window: Handle) -> Vec<PopupInfo> {
-        self.open_layouts(window).into_iter().map(|(f, _)| PopupInfo { rect: Rect::new(f.x, f.y, f.w + 1, f.h + 1) }).collect()
+        let shadow = self.look.m.menu_shadow;
+        self.open_layouts(window).into_iter().map(|(f, _)| PopupInfo { rect: Rect::new(f.x, f.y, f.w + shadow, f.h + shadow) }).collect()
     }
 
     // ------------------------------------------------------------- drawing
@@ -629,7 +633,7 @@ impl Ui {
         if self.menu_bar_of(window).is_none() || self.bar_is_external(window) {
             return;
         }
-        self.part(canvas, Part::new(PartKind::MenuBar, Rect::new(0, 0, canvas.width, BAR_HEIGHT)));
+        self.part(canvas, Part::new(PartKind::MenuBar, Rect::new(0, 0, canvas.width, self.look.m.menu_bar_height)));
         let lit = self.open_in(window).filter(|m| m.at.is_none()).and_then(|m| m.levels.first()).map(|l| l.menu).or(self.title_flash.map(|(m, _)| m));
         for (menu, rect) in self.bar_titles(window) {
             let Some(Kind::Menu { title, .. }) = self.nodes.get(menu).map(|n| &n.kind) else { continue };
@@ -648,8 +652,12 @@ impl Ui {
         // a chosen item blinks, starting dark-on-light
         let blink = self.menu_blink.map(|(item, start)| (item, ((self.now - start) / BLINK_STEP_MS) % 2 == 1));
         let ink = self.look.pal.menu_text;
-        let mut canvas = Canvas::filled(frame.w + 1, frame.h + 1, self.look.pal.menu);
-        self.part(&mut canvas, Part::new(PartKind::MenuFrame, Rect::new(0, 0, frame.w + 1, frame.h + 1)));
+        // the menu itself is of the menu's colour; the room kept for its
+        // shadow shows the desktop until the style draws there
+        let shadow = self.look.m.menu_shadow;
+        let mut canvas = Canvas::filled(frame.w + shadow, frame.h + shadow, crate::canvas::TRANSPARENT);
+        canvas.fill(Rect::new(0, 0, frame.w, frame.h), self.look.pal.menu);
+        self.part(&mut canvas, Part::new(PartKind::MenuFrame, Rect::new(0, 0, frame.w + shadow, frame.h + shadow)).numbers(shadow, 0, 0));
         for (item, rect) in items {
             let r = Rect::new(rect.x - frame.x, rect.y - frame.y, rect.w, rect.h);
             let Some(Kind::MenuItem { label, checked, shortcut, separator, submenu, .. }) = self.nodes.get(item).map(|n| &n.kind) else { continue };
@@ -775,7 +783,7 @@ impl Ui {
             self.bar_titles(window).into_iter().find(|(_, r)| r.contains(x, y)).map(|(m, _)| m).filter(|m| self.menu_enabled(*m))
         };
         let Some((menu, held)) = self.open_in(window).map(|m| (m.levels[0].menu, m.held)) else {
-            if !(0..BAR_HEIGHT).contains(&y) || self.pressed.is_some() {
+            if !(0..self.look.m.menu_bar_height).contains(&y) || self.pressed.is_some() {
                 return None;
             }
             if let (PointerKind::Press, Some(menu)) = (kind, over_title) {

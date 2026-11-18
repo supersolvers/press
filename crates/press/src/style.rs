@@ -14,9 +14,10 @@ use std::ffi::{c_char, c_void, CStr, CString};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-/// The version of the interface below. A library that answers with another
-/// is not used.
-pub const ABI: u32 = 1;
+/// The version of the interface below. A library made for the first
+/// version is still worn, as it was written; one made for any other but
+/// these is not used.
+pub const ABI: u32 = 2;
 
 /// A part to draw, as a style library is handed it. See
 /// [`press_core::PartKind`] for what the numbers mean for each kind.
@@ -60,7 +61,29 @@ pub struct RawStyle {
     pub palette: Option<unsafe extern "C" fn(*mut Palette)>,
     /// Draw a part and say 1, or say 0 and have it drawn in black and white.
     pub draw: Option<unsafe extern "C" fn(*const RawPart, *const RawSurface) -> i32>,
+    // From here on, only in a style made for the second version or later.
+    /// What it would have the engine do for it: see [`press_core::style::wants`].
+    pub wants: u32,
+    /// Say which of the machine's typefaces to write in where the interface
+    /// would use one of its own families (numbered as [`FACES`] has them),
+    /// and say 1; or say 0 to keep the family.
+    pub typeface: Option<unsafe extern "C" fn(face: u32, out: *mut RawType) -> i32>,
 }
+
+/// A typeface asked for by a style library.
+#[repr(C)]
+pub struct RawType {
+    /// A family as fontconfig knows it, or several with commas between,
+    /// with a NUL after.
+    pub family: [c_char; 128],
+    /// In pixels.
+    pub size: i32,
+    pub bold: i32,
+}
+
+/// The engine's families in the order a style library numbers them.
+pub const FACES: [press_core::Face; 6] =
+    [press_core::Face::Cicero, press_core::Face::Agate, press_core::Face::AgateBold, press_core::Face::Brevier, press_core::Face::Pica, press_core::Face::Elite];
 
 /// What the callbacks of a surface are handed back.
 struct Hand {
@@ -126,6 +149,14 @@ impl Style for Foreign {
             field_inset_y: size(m.field_inset_y),
             progress_height: size(m.progress_height),
             slider_thick: size(m.slider_thick),
+            scroll_bar: m.scroll_bar.clamp(8, 64),
+            slider_knob: m.slider_knob.clamp(3, 64),
+            tab_height: m.tab_height.clamp(8, 128),
+            popup_height: m.popup_height.clamp(8, 128),
+            row_height: m.row_height.clamp(8, 128),
+            menu_bar_height: m.menu_bar_height.clamp(8, 128),
+            menu_item_height: m.menu_item_height.clamp(8, 128),
+            menu_shadow: m.menu_shadow.clamp(0, 32),
         }
     }
 
@@ -135,6 +166,28 @@ impl Style for Foreign {
             unsafe { f(&mut p) };
         }
         p
+    }
+
+    fn wants(&self) -> u32 {
+        if self.raw.abi >= 2 { self.raw.wants } else { 0 }
+    }
+
+    fn typeface(&self, face: press_core::Face) -> Option<press_core::Type> {
+        if self.raw.abi < 2 {
+            return None;
+        }
+        let ask = self.raw.typeface?;
+        let number = FACES.iter().position(|f| *f == face)? as u32;
+        let mut out = RawType { family: [0; 128], size: 0, bold: 0 };
+        if unsafe { ask(number, &mut out) } == 0 {
+            return None;
+        }
+        out.family[127] = 0;
+        let family = unsafe { CStr::from_ptr(out.family.as_ptr()) }.to_string_lossy().trim().to_string();
+        // a family's name goes to fontconfig as it is: nothing in it may be
+        // taken for the rest of a pattern
+        let plain = family.chars().all(|c| c.is_alphanumeric() || matches!(c, ' ' | ',' | '-' | '_' | '.'));
+        (!family.is_empty() && plain && out.size > 0).then(|| press_core::Type { family, size: out.size, bold: out.bold != 0 })
     }
 
     fn draw(&self, part: &Part, painter: &mut Painter) -> bool {
@@ -189,7 +242,7 @@ fn load(path: &Path) -> Result<Arc<dyn Style>, String> {
             return Err("it gave no style".into());
         }
         let raw: &'static RawStyle = &*raw;
-        if raw.abi != ABI {
+        if raw.abi == 0 || raw.abi > ABI {
             return Err(format!("it was made for version {} of the style interface, and this is version {ABI}", raw.abi));
         }
         let name = if raw.name.is_null() { path.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default() } else { words(raw.name).into_owned() };

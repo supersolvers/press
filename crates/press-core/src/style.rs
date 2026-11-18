@@ -15,7 +15,7 @@
 //! live in a library of its own, in any language (see `press_style.h`).
 
 use crate::canvas::{Canvas, Rect, BLACK, TRANSPARENT, WHITE};
-use crate::font::Font;
+use crate::font::{Face, Font, Type};
 
 /// The sizes a style decides, in pixels.
 #[repr(C)]
@@ -38,6 +38,20 @@ pub struct Metrics {
     pub progress_height: i32,
     /// A slider's size across its direction of travel.
     pub slider_thick: i32,
+    /// How thick a scroll bar is, and how long each of its arrow boxes.
+    pub scroll_bar: i32,
+    /// The length of a slider's knob along its travel.
+    pub slider_knob: i32,
+    /// Height of a tab, and of the row of them.
+    pub tab_height: i32,
+    pub popup_height: i32,
+    /// Height of a row in a list, a table or a tree.
+    pub row_height: i32,
+    /// Height of a window's menu bar, the rule under it included.
+    pub menu_bar_height: i32,
+    pub menu_item_height: i32,
+    /// Room kept to the right of a menu and below it for its shadow.
+    pub menu_shadow: i32,
 }
 
 /// The colours a style decides, as ARGB. The engine draws words and small
@@ -129,6 +143,19 @@ pub mod state {
     pub const VERTICAL: u32 = 32;
     pub const FRONT: u32 = 64;
     pub const BUSY: u32 = 128;
+    /// The pointer is over it. Only told to a style that [`wants`](super::wants) it.
+    pub const HOT: u32 = 256;
+}
+
+/// What a style would have the engine do for it beyond the ordinary: these
+/// are added together in what [`Style::wants`] returns.
+pub mod wants {
+    /// Buttons and the like are drawn again as the pointer comes over them
+    /// and goes, with [`HOT`](super::state::HOT) set.
+    pub const HOVER: u32 = 1;
+    /// A default button is drawn again some twenty times a second, so that
+    /// it can throb; a button's `a` counts the times.
+    pub const PULSE: u32 = 2;
 }
 
 /// One piece of a window to be drawn.
@@ -194,23 +221,26 @@ pub trait Style: Send + Sync {
     fn name(&self) -> &str;
     fn metrics(&self) -> Metrics;
     fn palette(&self) -> Palette;
+    /// The typeface to write in where the interface would use one of the
+    /// bundled families: one of the machine's, drawn smooth. None keeps
+    /// the family, in its own pixels.
+    fn typeface(&self, _face: Face) -> Option<Type> {
+        None
+    }
+    /// What it would have the engine do for it: see [`wants`].
+    fn wants(&self) -> u32 {
+        0
+    }
     /// Draw a part. A style that returns false has drawn nothing, and the
     /// part is drawn as [`OneBit`] draws it.
     fn draw(&self, part: &Part, painter: &mut Painter) -> bool;
 }
 
-/// Thickness of a scroll bar and the length of each of its arrow boxes.
-pub const SCROLL_BAR: i32 = 16;
-/// The length of a slider's knob along its travel.
-pub const SLIDER_KNOB: i32 = 9;
-/// Height of a tab, and of the row of them.
-pub const TAB_HEIGHT: i32 = 20;
 /// Room either side of a tab's title.
 pub const TAB_PAD: i32 = 10;
 /// Room either side of a title in a menu bar.
 pub const MENU_TITLE_PAD: i32 = 9;
-/// Height of an item in a menu, and where its words start.
-pub const MENU_ITEM_HEIGHT: i32 = 16;
+/// Where an item's words start in a menu, leaving room for a tick.
 pub const MENU_ITEM_LEFT: i32 = 17;
 
 /// Black and white, in the manner of the first Macintosh.
@@ -231,6 +261,14 @@ impl OneBit {
         field_inset_y: 3,
         progress_height: 12,
         slider_thick: 16,
+        scroll_bar: 16,
+        slider_knob: 9,
+        tab_height: 20,
+        popup_height: 19, // the box, and a pixel of shadow below it
+        row_height: 16,
+        menu_bar_height: 20,
+        menu_item_height: 16,
+        menu_shadow: 1,
     };
 
     pub const PALETTE: Palette = Palette { window: WHITE, text: BLACK, paper: WHITE, ink: BLACK, menu: WHITE, menu_text: BLACK };
@@ -242,13 +280,14 @@ impl OneBit {
         let (rect, vertical, live) = (part.rect, part.is(state::VERTICAL), part.is(state::ENABLED));
         let (start, len) = if vertical { (rect.y, rect.h) } else { (rect.x, rect.w) };
         let span = |start: i32, len: i32| if vertical { Rect::new(rect.x, start, rect.w, len) } else { Rect::new(start, rect.y, len, rect.h) };
-        if len < 2 * SCROLL_BAR {
+        let thick = if vertical { rect.w } else { rect.h };
+        if len < 2 * thick {
             return; // no room for the arrows: draw nothing rather than a muddle
         }
         canvas.fill(rect, WHITE);
         canvas.frame(rect, BLACK);
         // the stretch the box slides in overlaps each arrow box by a pixel
-        let (track, track_len) = (start + SCROLL_BAR - 1, (len - 2 * (SCROLL_BAR - 1)).max(0));
+        let (track, track_len) = (start + thick - 1, (len - 2 * (thick - 1)).max(0));
         // the track is grey where there is somewhere to go
         if live {
             let inside = span(track + 1, track_len - 2);
@@ -256,8 +295,8 @@ impl OneBit {
             canvas.fill(r, BLACK);
             canvas.dim(r);
         }
-        for (back, box_start) in [(true, start), (false, start + len - SCROLL_BAR)] {
-            let r = span(box_start, SCROLL_BAR);
+        for (back, box_start) in [(true, start), (false, start + len - thick)] {
+            let r = span(box_start, thick);
             canvas.frame(r, BLACK);
             // a solid arrowhead, pointing the way the content will move into view
             let (cx, cy) = (r.x + r.w / 2, r.y + r.h / 2);
@@ -452,7 +491,7 @@ impl Style for OneBit {
                 canvas.fill(face, WHITE);
                 canvas.frame(face, BLACK);
                 // the text sits where its menu item will be when the list is up
-                p.font.draw(canvas, part.text, face.x + 1 + MENU_ITEM_LEFT, face.y + 1 + (MENU_ITEM_HEIGHT - line) / 2, BLACK);
+                p.font.draw(canvas, part.text, face.x + 1 + MENU_ITEM_LEFT, face.y + 1 + (m.menu_item_height - line) / 2, BLACK);
                 // a downward arrowhead: there is more where this came from
                 let (cx, cy) = (face.x + face.w - 12, face.y + face.h / 2 - 2);
                 for d in 0..5 {
@@ -505,12 +544,23 @@ pub(crate) struct Look {
     pub style: std::sync::Arc<dyn Style>,
     pub m: Metrics,
     pub pal: Palette,
+    pub wants: u32,
+}
+
+impl Look {
+    /// A font for one of the families, as the style would have it.
+    pub fn font(&self, face: Face) -> Font {
+        match self.style.typeface(face) {
+            Some(wanted) => Font::smooth(face, &wanted),
+            None => Font::of(face),
+        }
+    }
 }
 
 impl Look {
     pub fn of(style: std::sync::Arc<dyn Style>) -> Look {
-        let (m, pal) = (style.metrics(), style.palette());
-        Look { style, m, pal }
+        let (m, pal, wants) = (style.metrics(), style.palette(), style.wants());
+        Look { style, m, pal, wants }
     }
 }
 

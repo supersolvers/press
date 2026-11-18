@@ -16,7 +16,7 @@ pub mod text;
 pub mod ui;
 
 pub use cursor::{Cursor, CursorImage};
-pub use font::{Face, Font};
+pub use font::{Face, Font, Type};
 pub use canvas::{Canvas, Rect, BLACK, TRANSPARENT, WHITE};
 pub use slots::Handle;
 pub use style::{Metrics, OneBit, Painter, Palette, Part, PartKind, Style};

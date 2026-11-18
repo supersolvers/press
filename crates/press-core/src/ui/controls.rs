@@ -7,7 +7,8 @@
 
 use super::*;
 
-const KNOB: i32 = crate::style::SLIDER_KNOB; // the slider's knob, along its direction of travel
+#[cfg(test)]
+const KNOB: i32 = 9; // the slider's knob, along its direction of travel
 #[cfg(test)]
 use super::list::ROW_HEIGHT;
 
@@ -162,7 +163,7 @@ impl Ui {
     }
 
     pub fn slider_set_length(&mut self, h: Handle, to: i32) -> Result<()> {
-        if !(3 * KNOB..=16384).contains(&to) {
+        if !(3 * self.look.m.slider_knob..=16384).contains(&to) {
             return Err(Error::InvalidArgument);
         }
         match &mut self.node_mut(h)?.kind {
@@ -180,7 +181,7 @@ impl Ui {
         let Kind::Slider { orientation, value, max, .. } = &node.kind else { return None };
         let vertical = *orientation == Orientation::Vertical;
         let (start, len) = if vertical { (node.rect.y, node.rect.h) } else { (node.rect.x, node.rect.w) };
-        Some((vertical, start, (len - KNOB).max(1), *value, (*max).max(1)))
+        Some((vertical, start, (len - self.look.m.slider_knob).max(1), *value, (*max).max(1)))
     }
 
     /// Where the knob starts, along the slider. A vertical slider has its
@@ -226,7 +227,7 @@ impl Ui {
     pub(super) fn paint_slider(&mut self, h: Handle, rect: Rect, live: bool, canvas: &mut Canvas) {
         let (Some((vertical, ..)), Some(knob)) = (self.slider_shape(h), self.knob_at(h)) else { return };
         let held = self.slider_drag.is_some_and(|(held, _)| held == h);
-        let part = Part::new(PartKind::Slider, rect).numbers(knob, KNOB, 0).phase(self.ants_step_public());
+        let part = Part::new(PartKind::Slider, rect).numbers(knob, self.look.m.slider_knob, 0).phase(self.ants_step_public());
         self.part(canvas, part.when(state::VERTICAL, vertical).when(state::FOCUSED, live).when(state::HELD, held));
     }
 
@@ -271,7 +272,7 @@ impl Ui {
                 let (pos, knob) = (if vertical { y } else { x }, self.knob_at(h)?);
                 // on the knob: hold it where it was taken. Elsewhere on the
                 // groove: the knob comes to the pointer, then follows it.
-                let grip = if (knob..knob + KNOB).contains(&pos) { pos - knob } else { KNOB / 2 };
+                let grip = if (knob..knob + self.look.m.slider_knob).contains(&pos) { pos - knob } else { self.look.m.slider_knob / 2 };
                 self.slider_drag = Some((h, grip));
                 self.dirty = true;
                 Some(self.slider_value_at(h, pos - grip).map(|v| self.slider_move(h, v)).unwrap_or_default())

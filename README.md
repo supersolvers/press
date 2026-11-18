@@ -14,6 +14,10 @@ any of them without being built again.
 | One bit | Ninety-Five |
 | --- | --- |
 | ![The gallery example in black and white](docs/press.png) | ![The same program, in the manner of the middle 1990s](docs/press-ninetyfive.png) |
+| **Ninety-Nine** | **Two Thousand** |
+| ![The same program, in the manner of the end of the 1990s](docs/press-ninetynine.png) | ![The same program, in the manner of 2000](docs/press-twothousand.png) |
+| **Two Thousand and One** | **Two Thousand and Five** |
+| ![The same program, in the manner of 2001](docs/press-twothousandone.png) | ![The same program, in the manner of 2005](docs/press-twothousandfive.png) |
 
 ```swift
 import Press
@@ -61,6 +65,22 @@ make styles
 
 ```bash
 PRESS_STYLE=ninetyfive swift run --package-path examples/swift GalleryUI
+```
+
+```bash
+PRESS_STYLE=ninetynine swift run --package-path examples/swift GalleryUI
+```
+
+```bash
+PRESS_STYLE=twothousand swift run --package-path examples/swift GalleryUI
+```
+
+```bash
+PRESS_STYLE=twothousandone swift run --package-path examples/swift GalleryUI
+```
+
+```bash
+PRESS_STYLE=twothousandfive swift run --package-path examples/swift GalleryUI
 ```
 
 ```bash
@@ -125,7 +145,12 @@ its headers and the styles under `PREFIX` (`/usr/local`).
 | `crates/press-idl` | Parses the definition; generates the C header, Rust exports and the Python and Swift bindings |
 | `crates/press-core` | The engine: handles, widget tree, layout, input, text, and the style interface with the one-bit style. No platform or FFI code |
 | `crates/press` | `libpress.so`: the generated exports, their implementation, the display backends, and the loader of styles |
-| `styles/ninetyfive` | A style in the manner of the middle 1990s, in C, as a library of its own |
+| `styles/ninetyfive` | A style in the manner of the middle 1990s, in C, as a library of its own: grey, bevelled, in the engine's own pixel type |
+| `styles/ninetynine` | A style in the manner of the platinum desktops of the end of the 1990s: black outlines and rounded corners in shades of grey, in the engine's own pixel type |
+| `styles/twothousand` | A style in the manner of 2000: Ninety-Five told other colours, sizes and smooth type, in forty lines |
+| `styles/twothousandone` | A style in the manner of 2001: rounded and shaded, with a glow under the pointer and smooth type |
+| `styles/twothousandfive` | A style in the manner of 2005: gel buttons, a default button that throbs, striped windows, soft shadows |
+| `styles/common/smooth.h` | What the two smooth styles draw with: blending, gradients, rounded shapes, shadows. Not part of the style interface |
 | `fonts/` | The fonts' sources: the scripts that draw them, hand-drawn pixels, the build, and what they borrow (see `fonts/README.md`) |
 | `crates/press-fontgen` | Takes the pixels out of the built font files and writes them in the form the engine bundles |
 | `assets/fonts` | The bundled fonts, as written by `press-fontgen`, and their licence |
@@ -135,20 +160,51 @@ its headers and the styles under `PREFIX` (`/usr/local`).
 
 The engine knows what a button is: where it is, what it says, whether the
 pointer is down on it. A style knows what a button looks like. The engine
-asks the style in use for three things:
+asks the style in use for these things:
 
 - its **sizes**: how tall a button is, how large a checkbox, how far a text
-  field's words stand from its edge;
+  field's words stand from its edge, how thick a scroll bar is, how tall a
+  row of a list, a tab, a menu's items and the menu bar are, and how much
+  room a menu's shadow wants;
 - its **colours**: what a window is made of, what paper and ink are in a
   text field, what a menu is;
+- its **type**: for each of the engine's six families, one of the machine's
+  typefaces and a size, to be drawn smooth from its outlines, or nothing,
+  to keep the family in its own pixels;
+- what it **wants** of the engine: to be told when the pointer is over a
+  button, to have a default button drawn again twenty times a second;
 - and, each time a window is drawn, to **draw each part** of it: a button
   with its label, the well round a list, a scroll bar, a tab, a menu's
-  frame, the mark of what is selected, the look of what is out of use.
+  frame and shadow, the mark of what is selected, the look of what is out
+  of use.
 
 Whatever a style does not draw is drawn in black and white, so a style can
 be written a part at a time and is never left with holes in it.
 
-![A table, tabs and progress bars in the Ninety-Five style](docs/ninetyfive.png)
+Six come with PRESS. `one-bit` is built into the engine. The other five
+are libraries of their own, and are there as much to show how a style is
+written as to be worn:
+
+| | |
+| --- | --- |
+| `ninetyfive` | Grey and bevelled, in the manner of the middle 1990s. Whole pixels and the engine's own type: what a style can be with nothing smooth in it |
+| `ninetynine` | Platinum, in the manner of the end of the 1990s: the black-and-white Macintosh in shades of grey. Black outlines, rounded corners, faces lit from the top left; lavender for what is selected in a list and deep blue in a menu. Whole pixels and the engine's own type, which was drawn for a desktop like it |
+| `twothousand` | In the manner of 2000: Ninety-Five in a warmer grey and a deeper blue, with smooth type. It is written as that: its colours, sizes and typefaces, and then Ninety-Five's file for the rest |
+| `twothousandone` | In the manner of 2001: buttons rounded and shaded from top to bottom, gold where the pointer is, blue for what is selected, green in the progress bar, smooth type, a shadow under menus |
+| `twothousandfive` | In the manner of 2005: lozenges of clear and blue gel, a default button that throbs, finely striped windows, a glow round what has the keyboard, menus that cast a soft shadow |
+
+| | |
+| --- | --- |
+| ![A table, tabs and progress bars in Ninety-Five](docs/ninetyfive.png) | ![The same in Two Thousand and One](docs/twothousandone.png) |
+| ![The same in Two Thousand and Five](docs/twothousandfive.png) | ![Menus in Two Thousand and Five](docs/twothousandfive-menus.png) |
+| ![The same in Ninety-Nine](docs/ninetynine.png) | ![Menus in Ninety-Nine](docs/ninetynine-menus.png) |
+| ![The same in Two Thousand](docs/twothousand.png) | |
+
+They are drawn here from nothing, in the manner of what they recall: no
+picture, colour table or font of Apple's or Microsoft's is in them. For
+type they ask for the faces those desktops had, where the machine happens
+to have them, and take the nearest thing fontconfig offers where it does
+not (DejaVu Sans, on most).
 
 **Choosing one.** `PRESS_STYLE=ninetyfive` in a program's environment
 dresses that program; the first line of `~/.config/press/style` dresses
@@ -160,11 +216,18 @@ program runs in black and white.
 **Writing one.** A style is a shared library named
 `libpress_style_NAME.so` that exports one function, `press_style_entry`,
 written against `include/press_style.h` and nothing else, in any language
-that can make such a library. `styles/ninetyfive/ninetyfive.c` is one in
-three hundred lines of C, and `make styles` builds it. It is looked for in
-the folders named in `PRESS_STYLE_PATH`, in `styles/` beside `libpress.so`
-and beside it, in `~/.local/lib/press/styles`, and in
-`/usr/local/lib/press/styles` and `/usr/lib/press/styles`.
+that can make such a library. It is handed the pixels of the window, as
+colour with alpha, and the engine's own hand for words, and may put
+anything there. `styles/ninetyfive/ninetyfive.c` is one in four hundred
+lines of C; the two smooth ones share their drawing, `styles/common/smooth.h`,
+which another style is free to take or leave. `make styles` builds all
+five. A style is looked for in the folders named in `PRESS_STYLE_PATH`, in
+`styles/` beside `libpress.so` and beside it, in
+`~/.local/lib/press/styles`, and in `/usr/local/lib/press/styles` and
+`/usr/lib/press/styles`.
+
+The interface is at its second version. A style made for the first is
+still worn as it was written.
 
 A Rust program that embeds the engine can dress it directly:
 `press_core::Style` is the same interface as a trait, and
@@ -172,20 +235,24 @@ A Rust program that embeds the engine can dress it directly:
 
 **What a style does not decide yet.**
 
-- The typefaces. Every style writes in the engine's bitmap faces, one size
-  each.
-- Some sizes: a scroll bar's thickness, the height of a menu's items and of
-  a tab, the rows of a list. A style draws these parts but cannot yet
-  change their measure.
-- Pixels are whole and unsmoothed, so the looks within reach are those of
-  displays that were: flat colour, bevels, patterns. Gradients, shadows
-  with soft edges and smooth type, which the looks of the 2000s are made
-  of, need a canvas and a rasteriser the engine does not have.
-- A window's frame and title bar, which belong to the desktop it is on.
-- What a program draws itself on a `Canvas` or a `Picture` is its own, and
-  is one bit deep (a photo apart) whatever the style.
+- A window's frame and title bar, which belong to the desktop it is on:
 - The manners that go with a look: where the menu bar is, which way round
-  OK and Cancel go, which key is the command key.
+  OK and Cancel go, which key is the command key, where a scroll bar keeps
+  its arrows.
+- A few sizes: the room round a menu's words and a tab's, the cell of an
+  icon view, the border of a menu, which is one pixel.
+- Smooth things are drawn a pixel to a pixel and then magnified whole, so
+  on a screen magnified two or three times (`PRESS_SCALE`, or a display
+  that asks for it) they are as coarse as the pixels are large. Drawing
+  them at the screen's own fineness is not done.
+- Letters are placed on whole pixels and are not hinted, so small sizes
+  are a little softer than those desktops drew them.
+- What a program draws itself on a `Canvas` or a `Picture` is its own, and
+  is one bit deep (a photo apart) whatever the style, though its words are
+  in the style's type.
+- The pointer over a tab, a table's heading or a scroll bar is not told to
+  a style, only over buttons, checkboxes, radio buttons, pop-ups and
+  sliders.
 
 ## The ABI
 

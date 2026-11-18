@@ -25,7 +25,7 @@ CC ?= cc
 SWIFT ?= swift
 FONT_PYTHON ?= fonts/.venv/bin/python
 FAMILIES = Cicero-Regular Agate-Regular Agate-Bold Brevier-Regular Pica-Regular Elite-Regular Fleuron-Regular Vignette-Regular Cartouche-Regular
-STYLES = ninetyfive
+STYLES = ninetyfive ninetynine twothousand twothousandone twothousandfive
 OUT = target/$(PROFILE)
 
 build:
@@ -36,7 +36,7 @@ build:
 styles:
 	mkdir -p $(OUT)
 	for s in $(STYLES); do \
-		$(CC) -shared -fPIC -O2 -Wall -Wextra -Iinclude styles/$$s/$$s.c -o $(OUT)/libpress_style_$$s.so || exit 1; \
+		$(CC) -shared -fPIC -O2 -Wall -Wextra -Iinclude -Istyles/common styles/$$s/$$s.c -lm -o $(OUT)/libpress_style_$$s.so || exit 1; \
 	done
 
 test:

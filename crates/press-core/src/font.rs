@@ -62,6 +62,27 @@ struct Glyph {
     top: i32,
     advance: i32,
     bits: Vec<bool>,
+    /// For a letter drawn smooth from an outline: how much of each pixel it
+    /// covers, 0 to 255, in place of `bits`.
+    cover: Option<Vec<u8>>,
+}
+
+/// A typeface of the machine's, to be drawn smooth from its outlines at a
+/// size in pixels: what a style may ask for in place of a bundled family.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Type {
+    /// A family as fontconfig knows it; several, with commas between, are
+    /// tried in turn.
+    pub family: String,
+    pub size: i32,
+    pub bold: bool,
+}
+
+/// The outline a smooth font draws its letters from.
+#[derive(Clone)]
+struct Outline {
+    face: Arc<fontdue::Font>,
+    size: f32,
 }
 
 /// One bundled family, read where it lies: nothing is unpacked until a
@@ -107,7 +128,7 @@ impl Strike {
                     let (width, height) = (head[3] as i32, head[4] as i32);
                     let packed = self.data.get(at + 5..at + 5 + ((width * height + 7) / 8) as usize)?;
                     let bits = (0..(width * height) as usize).map(|i| packed[i / 8] & (0x80 >> (i % 8)) != 0).collect();
-                    return Some(Glyph { width, height, left: head[1] as i8 as i32, top: head[2] as i8 as i32, advance: head[0] as i8 as i32, bits });
+                    return Some(Glyph { width, height, left: head[1] as i8 as i32, top: head[2] as i8 as i32, advance: head[0] as i8 as i32, bits, cover: None });
                 }
             }
         }
@@ -122,6 +143,9 @@ impl Strike {
 pub struct Font {
     /// The family's own letters.
     own: Strike,
+    /// Set for a font drawn smooth; the bundled family is then only what
+    /// it falls back on for signs and pictures.
+    outline: Option<Outline>,
     glyphs: HashMap<char, Glyph>,
     pub ascent: i32,
     pub descent: i32,
@@ -168,16 +192,7 @@ fn borrow(ch: char) -> Option<Arc<fontdue::Font>> {
     let mut b = borrowed().lock().unwrap_or_else(|e| e.into_inner());
     let page = ch as u32 >> 8;
     if !b.pages.contains_key(&page) {
-        let face = offered(ch).and_then(|(file, index)| {
-            if let Some((_, _, face)) = b.faces.iter().find(|(f, i, _)| *f == file && *i == index) {
-                return Some(face.clone());
-            }
-            let bytes = std::fs::read(&file).ok()?;
-            let settings = fontdue::FontSettings { collection_index: index, ..Default::default() };
-            let face = Arc::new(fontdue::Font::from_bytes(bytes, settings).ok()?);
-            b.faces.push((file, index, face.clone()));
-            Some(face)
-        });
+        let face = offered(ch).and_then(|(file, index)| face_at(&mut b, file, index));
         b.pages.insert(page, face);
     }
     let has = |f: &Arc<fontdue::Font>| f.lookup_glyph_index(ch) != 0;
@@ -185,6 +200,39 @@ fn borrow(ch: char) -> Option<Arc<fontdue::Font>> {
         Some(Some(face)) if has(face) => Some(face.clone()),
         _ => b.faces.iter().map(|(_, _, f)| f).find(|f| has(f)).cloned(),
     }
+}
+
+/// Read a font file, or find it among those already read.
+fn face_at(b: &mut Borrowed, file: PathBuf, index: u32) -> Option<Arc<fontdue::Font>> {
+    if let Some((_, _, face)) = b.faces.iter().find(|(f, i, _)| *f == file && *i == index) {
+        return Some(face.clone());
+    }
+    let bytes = std::fs::read(&file).ok()?;
+    let settings = fontdue::FontSettings { collection_index: index, ..Default::default() };
+    let face = Arc::new(fontdue::Font::from_bytes(bytes, settings).ok()?);
+    b.faces.push((file, index, face.clone()));
+    Some(face)
+}
+
+/// The machine's font for a family by name, as fontconfig chooses it: the
+/// family itself where it is installed, and the nearest thing where not.
+fn named(family: &str, bold: bool) -> Option<Arc<fontdue::Font>> {
+    static NAMED: OnceLock<Mutex<HashMap<(String, bool), Option<Arc<fontdue::Font>>>>> = OnceLock::new();
+    let key = (family.to_string(), bold);
+    let known = NAMED.get_or_init(Default::default);
+    if let Some(found) = known.lock().unwrap_or_else(|e| e.into_inner()).get(&key) {
+        return found.clone();
+    }
+    let pattern = format!("{family}{}:scalable=true", if bold { ":bold" } else { "" });
+    let found = Command::new("fc-match").args(["-f", "%{file}\n%{index}\n", &pattern]).output().ok().and_then(|out| {
+        let text = String::from_utf8(out.stdout).ok()?;
+        let mut lines = text.lines();
+        let file = PathBuf::from(lines.next().filter(|l| !l.is_empty())?);
+        let index = lines.next().and_then(|l| l.parse().ok()).unwrap_or(0);
+        face_at(&mut borrowed().lock().unwrap_or_else(|e| e.into_inner()), file, index)
+    });
+    known.lock().unwrap_or_else(|e| e.into_inner()).insert(key, found.clone());
+    found
 }
 
 /// Whether a character is a mark that is written after a letter and sits
@@ -215,7 +263,28 @@ impl Font {
             Face::Pica => PICA,
             Face::Elite => ELITE,
         });
-        Font { own, glyphs: HashMap::new(), ascent: own.ascent, descent: own.descent }
+        Font { own, outline: None, glyphs: HashMap::new(), ascent: own.ascent, descent: own.descent }
+    }
+
+    /// A typeface of the machine's, drawn smooth. `face` is the bundled
+    /// family it stands in for, which it falls back on for signs and
+    /// pictures, and is all there is if the machine has no such font.
+    pub fn smooth(face: Face, wanted: &Type) -> Font {
+        let mut font = Font::of(face);
+        let size = wanted.size.clamp(6, 96) as f32;
+        if let Some(outline) = named(&wanted.family, wanted.bold) {
+            if let Some(line) = outline.horizontal_line_metrics(size) {
+                font.ascent = line.ascent.round() as i32;
+                font.descent = (-line.descent).round().max(1.0) as i32;
+                font.outline = Some(Outline { face: outline, size });
+            }
+        }
+        font
+    }
+
+    /// Whether letters are drawn smooth, from an outline.
+    pub fn is_smooth(&self) -> bool {
+        self.outline.is_some()
     }
 
     /// Height of a line of text: ascent plus descent.
@@ -252,9 +321,14 @@ impl Font {
             // a tab, kept in a text area, is the width of four spaces: an
             // indent lines up as it would at tab stops
             let space = self.glyph(' ').advance;
-            self.glyphs.insert(ch, Glyph { width: 0, height: 0, left: 0, top: 0, advance: 4 * space, bits: Vec::new() });
+            self.glyphs.insert(ch, Glyph { width: 0, height: 0, left: 0, top: 0, advance: 4 * space, bits: Vec::new(), cover: None });
         }
         if !self.glyphs.contains_key(&ch) {
+            if let Some(outline) = self.outline.clone() {
+                let glyph = self.smooth_glyph(ch, &outline);
+                self.glyphs.insert(ch, glyph);
+                return &self.glyphs[&ch];
+            }
             let size = self.own.size;
             let glyph = self.bundled(ch).or_else(|| {
                 // not one of ours: borrowed from the machine, and drawn from its outline
@@ -263,13 +337,37 @@ impl Font {
                 // less than half coverage as ink keeps their strokes whole.
                 let ink = if dense(ch) { 96 } else { 112 };
                 let (m, coverage) = other.rasterize(ch, size as f32);
-                Some(Glyph { width: m.width as i32, height: m.height as i32, left: m.xmin, top: m.ymin + m.height as i32, advance: m.advance_width.round() as i32, bits: coverage.iter().map(|&c| c >= ink).collect() })
+                Some(Glyph { width: m.width as i32, height: m.height as i32, left: m.xmin, top: m.ymin + m.height as i32, advance: m.advance_width.round() as i32, bits: coverage.iter().map(|&c| c >= ink).collect(), cover: None })
             });
             // a character nobody has takes the room of a space and shows nothing
-            let glyph = glyph.unwrap_or_else(|| Glyph { width: 0, height: 0, left: 0, top: 0, advance: self.own.glyph(' ').map_or(size / 3, |space| space.advance), bits: Vec::new() });
+            let glyph = glyph.unwrap_or_else(|| Glyph { width: 0, height: 0, left: 0, top: 0, advance: self.own.glyph(' ').map_or(size / 3, |space| space.advance), bits: Vec::new(), cover: None });
             self.glyphs.insert(ch, glyph);
         }
         &self.glyphs[&ch]
+    }
+
+    /// A character for a smooth font: from its own outline, or one borrowed
+    /// from another of the machine's fonts, or failing both a bundled sign.
+    fn smooth_glyph(&self, ch: char, outline: &Outline) -> Glyph {
+        let drawn = |face: &fontdue::Font| {
+            let (m, coverage) = face.rasterize(ch, outline.size);
+            Glyph { width: m.width as i32, height: m.height as i32, left: m.xmin, top: m.ymin + m.height as i32, advance: m.advance_width.round() as i32, bits: Vec::new(), cover: Some(coverage) }
+        };
+        if outline.face.lookup_glyph_index(ch) != 0 {
+            return drawn(&outline.face);
+        }
+        if !ch.is_control() && !ch.is_whitespace() {
+            if let Some(mut glyph) = self.bundled(ch).filter(|_| !dense(ch)) {
+                // a sign of the engine's own (a tick, an arrow), set on this line
+                glyph.top = glyph.top.min(self.ascent);
+                return glyph;
+            }
+            if let Some(other) = borrow(ch) {
+                return drawn(&other);
+            }
+        }
+        let space = outline.face.metrics(' ', outline.size).advance_width.round() as i32;
+        Glyph { width: 0, height: 0, left: 0, top: 0, advance: space.max(1), bits: Vec::new(), cover: None }
     }
 
     /// How far the pen moves for one character. An accent written after
@@ -288,6 +386,17 @@ impl Font {
 
     /// Put a glyph's ink on a canvas, its origin at `x` on the baseline.
     fn ink(canvas: &mut Canvas, g: &Glyph, x: i32, baseline: i32, color: u32) {
+        if let Some(cover) = &g.cover {
+            for row in 0..g.height {
+                for col in 0..g.width {
+                    let c = cover[(row * g.width + col) as usize];
+                    if c > 0 {
+                        canvas.blend(x + g.left + col, baseline - g.top + row, color, c);
+                    }
+                }
+            }
+            return;
+        }
         for row in 0..g.height {
             for col in 0..g.width {
                 if g.bits[(row * g.width + col) as usize] {

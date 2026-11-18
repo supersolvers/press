@@ -537,6 +537,14 @@ fn magnify(bytes: &mut [u8], width: i32, height: i32, canvas: &Canvas, k: i32, b
             } else {
                 beyond
             };
+            // the display wants colour already scaled by how solid it is
+            let a = pixel >> 24;
+            let pixel = if a == 0 || a == 255 {
+                pixel
+            } else {
+                let scale = |shift: u32| (((pixel >> shift) & 0xff) * a / 255) << shift;
+                (a << 24) | scale(16) | scale(8) | scale(0)
+            };
             *dst = pixel.to_le_bytes();
         }
     }
