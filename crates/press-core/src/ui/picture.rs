@@ -434,21 +434,13 @@ impl Ui {
         if !words.is_empty() {
             // words are drawn on a sheet the picture's size, then laid on, so
             // that they too stop at its edges; white is left as it was
-            let mut sheet = Canvas::new(rect.w, rect.h);
-            for y in 0..rect.h {
-                for x in 0..rect.w {
-                    sheet.set(x, y, canvas.get(rect.x + x, rect.y + y));
-                }
-            }
+            let mut sheet = Canvas::like(canvas, rect.w, rect.h, WHITE);
+            sheet.copy(canvas, rect, (0, 0));
             let own = self.nodes.get(h).and_then(|n| n.face).unwrap_or_default();
             for (x, y, text, face, color) in &words {
                 self.wearing(face.unwrap_or(own), |ui| ui.font.draw(&mut sheet, text, *x, *y, *color));
             }
-            for y in 0..rect.h {
-                for x in 0..rect.w {
-                    canvas.set(rect.x + x, rect.y + y, sheet.get(x, y));
-                }
-            }
+            canvas.copy(&sheet, Rect::new(0, 0, rect.w, rect.h), (rect.x, rect.y));
         }
     }
 

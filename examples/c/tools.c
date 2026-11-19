@@ -3,8 +3,8 @@
  * What a whole program has round its dialogs: a bar of tools with pictures
  * on them and a word of help for each, a box with a title round things
  * that belong together, a number with arrows to step it, a text field with
- * a list of things it might say, a list with pictures in colour, and a bar
- * of news along the foot of the window.
+ * a list of things it might say, a list with pictures in colour, the two
+ * buttons of a dialog, and a bar of news along the foot of the window.
  *
  *   cc examples/c/tools.c -Iinclude -Ltarget/debug -lpress -o examples/c/tools
  *   LD_LIBRARY_PATH=target/debug ./examples/c/tools
@@ -158,7 +158,8 @@ int main(int argc, char **argv) {
     press_combo_box_t size;
     press_checkbox_t both;
     press_list_box_t inks;
-    press_button_t save;
+    press_button_t save, print, cancel;
+    press_button_row_t ask;
 
     CHECK(press_app_init());
     CHECK(press_window_new(PRESS_S("Tools"), 330, 250, &window));
@@ -221,6 +222,18 @@ int main(int argc, char **argv) {
     CHECK(press_list_box_set_selected(inks, 1));
     CHECK(press_stack_add(body, inks));
     CHECK(press_stack_add(column, body));
+
+    /* the buttons of a dialog, in the order the style has them */
+    CHECK(press_button_row_new(&ask));
+    CHECK(press_stack_set_padding(ask, 12));
+    CHECK(press_button_new(PRESS_S("Print"), &print));
+    CHECK(press_button_set_is_default(print, true));
+    CHECK(press_button_on_clicked(print, on_tool, (void *)"Printed.", NULL));
+    CHECK(press_button_new(PRESS_S("Cancel"), &cancel));
+    CHECK(press_button_on_clicked(cancel, on_tool, (void *)"Never mind.", NULL));
+    CHECK(press_stack_add(ask, print));
+    CHECK(press_stack_add(ask, cancel));
+    CHECK(press_stack_add(column, ask));
 
     /* the bar of news */
     CHECK(press_status_bar_new(&foot));

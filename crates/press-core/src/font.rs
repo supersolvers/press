@@ -152,6 +152,10 @@ pub struct Font {
     /// it falls back on for signs and pictures.
     outline: Option<Outline>,
     glyphs: HashMap<char, Glyph>,
+    /// Letters drawn finer than the interface's pixels, for a canvas that
+    /// is: by the letter and how many times finer. None where the letter
+    /// is not from an outline, and is drawn as coarse as ever.
+    fine: HashMap<(char, i32), Option<Glyph>>,
     pub ascent: i32,
     pub descent: i32,
 }
@@ -268,7 +272,7 @@ impl Font {
             Face::Pica => PICA,
             Face::Elite => ELITE,
         });
-        Font { own, outline: None, glyphs: HashMap::new(), ascent: own.ascent, descent: own.descent }
+        Font { own, outline: None, glyphs: HashMap::new(), fine: HashMap::new(), ascent: own.ascent, descent: own.descent }
     }
 
     /// A typeface of the machine's, drawn smooth. `face` is the bundled
@@ -424,8 +428,64 @@ impl Font {
         }
     }
 
+    /// A letter of a smooth font drawn `scale` times as fine as the
+    /// interface's pixels, if it comes from an outline.
+    fn fine_glyph(&mut self, ch: char, scale: i32) -> Option<&Glyph> {
+        if !self.fine.contains_key(&(ch, scale)) {
+            let outline = self.outline.clone()?;
+            let face = if outline.face.lookup_glyph_index(ch) != 0 {
+                Some(outline.face.clone())
+            } else if ch.is_control() || ch.is_whitespace() || self.bundled(ch).filter(|_| !dense(ch)).is_some() {
+                None // a space, or a sign of the engine's own
+            } else {
+                borrow(ch)
+            };
+            let glyph = face.map(|face| {
+                let (m, coverage) = face.rasterize(ch, outline.size * scale as f32);
+                Glyph { width: m.width as i32, height: m.height as i32, left: m.xmin, top: m.ymin + m.height as i32, advance: 0, bits: Vec::new(), cover: Some(coverage) }
+            });
+            self.fine.insert((ch, scale), glyph);
+        }
+        self.fine[&(ch, scale)].as_ref()
+    }
+
+    /// Draw smooth letters on a canvas finer than the interface's pixels:
+    /// each is where it would be on a coarse one, and as sharp as the
+    /// canvas lets it be.
+    fn draw_fine(&mut self, canvas: &mut Canvas, text: &str, x: i32, y: i32, color: u32) {
+        let scale = canvas.scale;
+        let baseline = y + self.ascent;
+        let mut pen = x;
+        // a letter and the accents written after it are one letter where the font has it so
+        let composed: String = text.nfc().collect();
+        for ch in composed.chars() {
+            let advance = self.advance(ch);
+            match self.fine_glyph(ch, scale).cloned() {
+                Some(g) => {
+                    let Some(cover) = &g.cover else { continue };
+                    for row in 0..g.height {
+                        for col in 0..g.width {
+                            let c = cover[(row * g.width + col) as usize];
+                            if c > 0 {
+                                canvas.blend_fine(pen * scale + g.left + col, baseline * scale - g.top + row, color, c);
+                            }
+                        }
+                    }
+                }
+                None => {
+                    let g = self.glyph(ch).clone();
+                    Self::ink(canvas, &g, pen, baseline, color);
+                }
+            }
+            pen += advance;
+        }
+    }
+
     /// Draw with the top of the line at `y`.
     pub fn draw(&mut self, canvas: &mut Canvas, text: &str, x: i32, y: i32, color: u32) {
+        if canvas.scale > 1 && self.outline.as_ref().is_some_and(|o| !o.crisp) {
+            return self.draw_fine(canvas, text, x, y, color);
+        }
         let baseline = y + self.ascent;
         let mut pen = x;
         let mut chars = text.chars().peekable();

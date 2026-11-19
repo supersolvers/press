@@ -51,6 +51,8 @@ enum StackDress: Equatable {
     case toolbar
     /// With each thing it says in a cell of its own, or all on one strip.
     case status(Bool)
+    /// The row of buttons at the foot of a dialog.
+    case buttons
 }
 
 @MainActor

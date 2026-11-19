@@ -184,6 +184,7 @@ typedef press_handle_t press_menu_item_t;
 typedef press_handle_t press_group_box_t;
 typedef press_handle_t press_toolbar_t;
 typedef press_handle_t press_status_bar_t;
+typedef press_handle_t press_button_row_t;
 typedef press_handle_t press_stepper_t;
 typedef press_handle_t press_combo_box_t;
 
@@ -1009,6 +1010,11 @@ PRESS_API press_status_t press_status_bar_new(press_status_bar_t *out);
 
 /** Whether each child is shown in a cell of its own, the last reaching the end of the bar. At first they are all on one strip. */
 PRESS_API press_status_t press_status_bar_set_panels(press_status_bar_t self, bool value);
+
+/* ---- ButtonRow (a Stack): The row of buttons at the foot of a dialog: a Stack that lays its children out in a row at its far end, in the order the style of the program has them. Add the button that agrees first, then the one that calls it off, then any others; where the style has OK before Cancel they are shown as added, and where it has Cancel before OK, last first. */
+
+/** Create an empty row of buttons. */
+PRESS_API press_status_t press_button_row_new(press_button_row_t *out);
 
 /* ---- Stepper (a Widget): A whole number with a pair of arrows beside it, one over the other, to step it up and down. An arrow held down steps again and again. The arrow keys step it too when it has the keyboard. */
 

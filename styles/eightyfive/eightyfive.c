@@ -266,6 +266,7 @@ static void metrics(press_metrics *m) {
     m->menu_shadow = 1;
     /* a frame of its own; its menus are the screen's where a desktop has a bar for them */
     m->frame_title = 18;
+    m->ok_leads = 1; /* OK, then Cancel */
     m->frame_border = 2;
     m->frame_button_width = 19;
     m->frame_button_height = 14;

@@ -502,6 +502,7 @@ static void metrics(press_metrics *m) {
     m->slider_thick = 20;
     /* a frame of its own, with its menus in it */
     m->frame_title = 23;
+    m->ok_leads = 1; /* OK, then Cancel */
     m->frame_border = 4;
     m->frame_button_width = 16;
     m->frame_button_height = 14;

@@ -32,7 +32,7 @@ extern "C" {
 #endif
 
 /* The version of this interface, for press_style.abi. */
-#define PRESS_STYLE_ABI 7
+#define PRESS_STYLE_ABI 9
 
 /* Sizes, in pixels. */
 typedef struct press_metrics {
@@ -83,6 +83,9 @@ typedef struct press_metrics {
     int32_t scroll_arrows;    /* 0 an arrow at each end of a scroll bar; 1 both at the far end */
     int32_t tab_align;        /* 0 tabs from the left of a tab view; 1 in the middle */
     int32_t menu_border;      /* thickness of a menu's edge, inside which its items lie */
+    /* from version 8 */
+    int32_t frame_shadow;     /* how far a soft shadow reaches round a window with its own frame; 0 none */
+    int32_t ok_leads;         /* in a row of a dialog's buttons: 1 OK then Cancel; 0 Cancel then OK */
 } press_metrics;
 
 /* The buttons of a title bar. */
@@ -216,6 +219,8 @@ enum {
 enum {
     PRESS_WANTS_HOVER = 1,     /* buttons and the like are drawn again as the pointer comes
                                   and goes, with HOT set */
+    PRESS_WANTS_FINE = 4,      /* from version 9: on a screen that magnifies, be drawn on a
+                                * surface as fine as the screen: see press_surface.scale */
     PRESS_WANTS_PULSE = 2      /* a default button is drawn again twenty times a second */
 };
 
@@ -270,6 +275,16 @@ typedef struct press_surface {
     int32_t (*text_width)(void *ctx, const char *text);
     /* the top of the line of words is at y */
     void (*draw_text)(void *ctx, const char *text, int32_t x, int32_t y, uint32_t color);
+    /* from version 9. A style that asks for PRESS_WANTS_FINE may be given
+     * a surface finer than the interface's pixels: scale of the screen's
+     * along each side of one, stride to a row, so that the pixel at (x, y)
+     * of the interface is the square of them whose corner is
+     * pixels[y * scale * stride + x * scale]. Parts, width and height are
+     * in the interface's pixels as ever, and so are the places words are
+     * drawn at; only what the style draws smooth need use the finer ones.
+     * A style that does not ask always has a scale of 1. */
+    int32_t scale;
+    int32_t stride;
 } press_surface;
 
 /* A style. Any of the three functions may be NULL. */

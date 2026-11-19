@@ -1615,6 +1615,16 @@ class StatusBar(Stack):
         _check(_lib.press_status_bar_set_panels(self.handle, value))
 
 
+class ButtonRow(Stack):
+    """The row of buttons at the foot of a dialog: a Stack that lays its children out in a row at its far end, in the order the style of the program has them. Add the button that agrees first, then the one that calls it off, then any others; where the style has OK before Cancel they are shown as added, and where it has Cancel before OK, last first."""
+    def __init__(self):
+        """Create an empty row of buttons."""
+        _lib.press_button_row_new.argtypes = [ctypes.POINTER(ctypes.c_uint64)]
+        out = ctypes.c_uint64()
+        _check(_lib.press_button_row_new(ctypes.byref(out)))
+        _Object.__init__(self, out.value)
+
+
 class Stepper(Widget):
     """A whole number with a pair of arrows beside it, one over the other, to step it up and down. An arrow held down steps again and again. The arrow keys step it too when it has the keyboard."""
     def __init__(self):

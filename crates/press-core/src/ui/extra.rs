@@ -23,6 +23,9 @@ pub(super) enum Dress {
     /// A bar of news along the foot of a window; with each thing it
     /// says in a cell of its own, or all on one strip.
     Status(bool),
+    /// The row of buttons at the foot of a dialog, in the order the style
+    /// has them and at the end of the row.
+    Buttons,
 }
 
 /// How long the pointer rests on a thing before its word of help shows.
@@ -140,6 +143,23 @@ impl Ui {
         }
     }
 
+    /// The row of buttons at the foot of a dialog. Add the button that
+    /// agrees first, then the one that calls it off, then any others: the
+    /// row shows them in the order the style has them, at its far end.
+    pub fn button_row_new(&mut self) -> Handle {
+        self.dressed(Orientation::Horizontal, Dress::Buttons, 10)
+    }
+
+    /// Whether a stack shows its children last first: a row of buttons,
+    /// in a style that has the one that agrees at the far end.
+    pub(super) fn runs_backwards(&self, h: Handle) -> bool {
+        self.look.m.ok_leads == 0 && self.dress.get(&h) == Some(&Dress::Buttons)
+    }
+
+    pub(super) fn is_button_row(&self, h: Handle) -> bool {
+        self.dress.get(&h) == Some(&Dress::Buttons)
+    }
+
     /// The class a dressed stack or a text field with choices goes by,
     /// beside the one its kind gives it.
     pub(super) fn dressed_as(&self, h: Handle) -> Option<&'static str> {
@@ -147,6 +167,7 @@ impl Ui {
             Some(Dress::Group(_)) => Some("GroupBox"),
             Some(Dress::Toolbar) => Some("Toolbar"),
             Some(Dress::Status(_)) => Some("StatusBar"),
+            Some(Dress::Buttons) => Some("ButtonRow"),
             None => self.choices.contains_key(&h).then_some("ComboBox"),
         }
     }
@@ -161,17 +182,17 @@ impl Ui {
             Some(Dress::Toolbar) => (4, 3, 4, 5),
             Some(Dress::Status(false)) => (6, 5, 6, 3),
             Some(Dress::Status(true)) => (7, 5, 7, 4),
-            None => (0, 0, 0, 0),
+            Some(Dress::Buttons) | None => (0, 0, 0, 0),
         }
     }
 
     /// Draw a stack's dress, before what is in it.
     pub(super) fn paint_dress(&mut self, h: Handle, rect: Rect, canvas: &mut Canvas) {
-        let Some(dress) = self.dress.get(&h).cloned() else { return };
+        let Some(dress) = self.dress.get(&h).cloned().filter(|d| *d != Dress::Buttons) else { return };
         let (kind, title) = match &dress {
             Dress::Group(title) => (PartKind::GroupBox, title.as_str()),
             Dress::Toolbar => (PartKind::Toolbar, ""),
-            Dress::Status(_) => (PartKind::StatusBar, ""),
+            Dress::Status(_) | Dress::Buttons => (PartKind::StatusBar, ""),
         };
         let (ground, ink) = (self.ground, self.look.pal.text);
         self.part(canvas, Part::new(kind, rect).text(title).numbers(0, 0, ground as i32).ink(ink));
@@ -304,7 +325,7 @@ impl Ui {
     pub(super) fn render_tip(&mut self, window: Handle) -> Option<Canvas> {
         let (rect, text) = self.tip_place(window)?;
         let (ground, ink) = (self.look.pal.tip, self.look.pal.tip_text);
-        let mut canvas = Canvas::filled(rect.w, rect.h, crate::canvas::TRANSPARENT);
+        let mut canvas = self.sheet(rect.w, rect.h, crate::canvas::TRANSPARENT);
         self.part(&mut canvas, Part::new(PartKind::Tooltip, Rect::new(0, 0, rect.w, rect.h)).text(&text).numbers(0, 0, ground as i32).ink(ink));
         Some(canvas)
     }

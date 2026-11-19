@@ -323,7 +323,32 @@ A style may say what colours the pointer's arrow is, in its palette: white
 edged with black in the styles of 1990, 1995, 2000 and 2001, red in that
 of 1985, and black edged with white where nothing is said.
 
-The interface is at its seventh version. A style made for an earlier one is
+A style whose windows cast a shadow says how far it reaches
+(`frame_shadow`): the engine draws it, soft, a little below the window
+and deeper under the one in front, and the display is told that the
+window is the picture less its shadow, so that pointing, placing and
+sizing go by the window. The style of 2005 casts one. A style also says
+which way round a dialog's buttons go (`ok_leads`): OK then Cancel in
+the styles of 1985, 1988, 1990, 1993, 1995, 2000 and 2001, Cancel then
+OK in the rest.
+
+A style whose edges and letters are smooth may ask to be drawn fine
+(`PRESS_WANTS_FINE`). On a screen that magnifies (`PRESS_SCALE`, or a
+display that asks for it) it is then given a surface as fine as the
+screen: parts and places are in the interface's pixels as ever, a pixel
+set is a square of the screen's, letters are drawn from their outlines at
+the screen's own size, and whatever the style draws with the smooth
+shapes of `styles/common/smooth.h` is as sharp as the screen can show it.
+A style that does not ask is drawn a pixel to a pixel and magnified
+whole, each pixel a square, which is what a style made of pixels wants:
+the looks of 1984 to 2000 stay exactly so. The styles of 2001, 2004 and
+2005 ask. `press_window_snapshot` at a scale above one draws such a style
+that fine too.
+
+Shortcuts are Control with a letter in every style; a style decides only
+how a menu writes them (`shortcut_form`).
+
+The interface is at its ninth version. A style made for an earlier one is
 still worn as it was written, in the desktop's frame.
 
 A Rust program that embeds the engine can dress it directly:
@@ -332,16 +357,15 @@ A Rust program that embeds the engine can dress it directly:
 
 **What a style does not decide yet.**
 
-- The rest of the manners that go with a look: which way round OK and
-  Cancel go, and which key is the command key.
-- A window's shadow, and the shape of the pointer: a style gives the
-  arrow its colours, but its outline is the engine's own everywhere.
+- The shape of the pointer: a style gives the arrow its colours, but its
+  outline is the engine's own everywhere.
 - A few sizes: the room round a menu's words and a tab's, and the cell of an
   icon view.
-- Smooth things are drawn a pixel to a pixel and then magnified whole, so
-  on a screen magnified two or three times (`PRESS_SCALE`, or a display
-  that asks for it) they are as coarse as the pixels are large. Drawing
-  them at the screen's own fineness is not done.
+- On a screen magnified two or three times, a style that asks to be
+  drawn fine has its letters, rounded boxes, gradients and shadows as
+  sharp as the screen; the marks it draws pixel by pixel (a tick, an
+  arrow, the buttons of a title bar) are still squares of pixels, and so
+  are a program's own pictures.
 - Letters are placed on whole pixels and are not hinted, so small sizes
   are a little softer than those desktops drew them.
 - What a program draws itself on a `Canvas` or a `Picture` is its own:
@@ -656,7 +680,7 @@ Lists, tables and trees can do more when asked:
 
 ### Boxes, bars, tools, help, steppers and combo boxes
 
-![The tools example in six styles: a bar of tools with one under the pointer and its word of help, a box with a stepper and a combo box, a list with pictures in colour, and a bar of news](docs/tools.png)
+![The tools example in six styles: a bar of tools with one under the pointer and its word of help, a box with a stepper and a combo box, a list with pictures in colour, the buttons of a dialog in each style's order, and a bar of news; the last casts a shadow](docs/tools.png)
 
 What a whole program has round its dialogs.
 
@@ -681,6 +705,11 @@ What a whole program has round its dialogs.
   over the window as a menu does, on a surface of its own, so it may reach
   past the window's edge; it stays where it came up until the pointer
   leaves or is pressed.
+- A **button row** (`press_button_row_new`) is the row of buttons at the
+  foot of a dialog. Add the button that agrees first, then the one that
+  calls it off, then any others: the row shows them in the order the
+  style has them, at its far end, and the keyboard goes along them as
+  they are shown.
 - A **stepper** (`press_stepper_new`) is a whole number with a pair of
   arrows beside it, one over the other; an arrow held down steps again
   and again, and the arrow keys step it too. It raises `changed`.
@@ -1033,7 +1062,7 @@ for different things. `examples/swift` has this dialog with its menus as
 | State | `@State`, `@Binding`, `@Bindable`, `@Environment` (by key path or by an observable type), `@Observable` objects, `EnvironmentKey` |
 | Structure | `ViewBuilder` with `if`, `if`/`else` and `if let`; `ForEach`, `Group`, `AnyView`, `EmptyView`, `ViewModifier` |
 | Layout | `VStack`, `HStack`, `Spacer`, `Form`, `Section`, `LabeledContent`, `ScrollView`, `TabView`, `.padding`, `.frame`, `.fixedSize` |
-| Programs' furniture | `GroupBox`, `Stepper`, `.help`, `.buttonStyle(.borderless)`; and not in SwiftUI: `Toolbar { }` and `StatusBar(panels:) { }` for the top and foot of a window's column, `ComboBox(_:text:choices:)`, whose choices may change, and `Button(_:png:action:)` and `Label(_:png:)` for a button and a row of a list with a picture in colour |
+| Programs' furniture | `GroupBox`, `Stepper`, `.help`, `.buttonStyle(.borderless)`; and not in SwiftUI: `Toolbar { }` and `StatusBar(panels:) { }` for the top and foot of a window's column, `ButtonRow { }` for a dialog's buttons in the order the style has them, `ComboBox(_:text:choices:)`, whose choices may change, and `Button(_:png:action:)` and `Label(_:png:)` for a button and a row of a list with a picture in colour |
 | Controls | `Text`, `Label`, `Button`, `Toggle`, `TextField`, `SecureField`, `TextEditor` (with a `TextSelection` binding, or without), `Slider`, `ProgressView`, `Picker` (as a pop-up or with `.pickerStyle(.radioGroup)`) |
 | Collections | `List` with one selection or a set, `Table` with `TableColumn` |
 | Drawing | `Canvas` with `Path`, `stroke`, `fill` and `draw`; `Color.black`, `.white` and the greys made of them, or a colour: `.red`, `.blue` and the rest, or `Color(red:green:blue:)`; words drawn in their own `.font`; a one-bit `Image(bitmap:width:height:)`; `.onTapGesture(count:)` and `.gesture(DragGesture(...).onChanged {}.onEnded {})`; `.onScroll {}` for the wheel, and `.onKeyboard(typed:pressed:)` to take the keyboard, or `.onKeyboard(typed:down:)` to hear every key; `.onRightButton {}` and `.onMiddleButton {}` for the other buttons; `.frame(minWidth:maxWidth: .infinity, ...)` for a canvas that grows with its window, drawn at the room it is given, with `.onResize {}` to hear of it |

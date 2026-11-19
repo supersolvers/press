@@ -307,6 +307,7 @@ static void metrics(press_metrics *m) {
     m->menu_item_height = 20;
     /* a frame of its own, with its menus in it */
     m->frame_title = 27;
+    m->ok_leads = 1; /* OK, then Cancel */
     m->frame_border = 7;
     m->frame_button_width = 18;
     m->frame_button_height = 19;

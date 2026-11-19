@@ -685,7 +685,7 @@ impl Ui {
         // the menu itself is of the menu's colour; the room kept for its
         // shadow shows the desktop until the style draws there
         let shadow = self.look.m.menu_shadow;
-        let mut canvas = Canvas::filled(frame.w + shadow, frame.h + shadow, crate::canvas::TRANSPARENT);
+        let mut canvas = self.sheet(frame.w + shadow, frame.h + shadow, crate::canvas::TRANSPARENT);
         canvas.fill(Rect::new(0, 0, frame.w, frame.h), self.look.pal.menu);
         self.part(&mut canvas, Part::new(PartKind::MenuFrame, Rect::new(0, 0, frame.w + shadow, frame.h + shadow)).numbers(shadow, self.look.m.menu_border, 0));
         for (item, rect) in items {

@@ -387,6 +387,9 @@ pub struct Ui {
     bar_hot: Option<Handle>,
     /// Windows draw their own frames, where the style has one.
     own_frames: bool,
+    /// How many of the screen's pixels lie along one of the interface's,
+    /// where the display magnifies; 0 or 1 where it does not.
+    fineness: i32,
     /// The button of a title bar the pointer is over, and the one it went
     /// down on: the window, and which button.
     frame_hot: Option<(Handle, u8)>,
@@ -562,6 +565,23 @@ impl Ui {
         if !style.draw(&part, &mut painter) {
             crate::style::EightyFour.draw(&part, &mut painter);
         }
+    }
+
+    /// Tell the engine how far the display magnifies: how many of the
+    /// screen's pixels lie along one of the interface's. A style that asks
+    /// to be drawn fine is then drawn on canvases that fine.
+    pub fn set_fineness(&mut self, scale: i32) {
+        self.fineness = scale.clamp(1, 8);
+    }
+
+    /// How fine the canvases are that the style is drawn on.
+    pub fn fine_scale(&self) -> i32 {
+        if self.look.wants & crate::style::wants::FINE != 0 { self.fineness.max(1) } else { 1 }
+    }
+
+    /// A canvas to draw part of the interface on, as fine as the rest.
+    fn sheet(&self, width: i32, height: i32, color: u32) -> Canvas {
+        Canvas::fine(width, height, self.fine_scale(), color)
     }
 
     /// Have the style draw a part if it will, and say whether it did: for
@@ -1447,6 +1467,7 @@ impl Ui {
     fn children(&self, h: Handle) -> Vec<Handle> {
         match self.nodes.get(h).map(|n| &n.kind) {
             Some(Kind::Window { content, .. }) => content.iter().copied().collect(),
+            Some(Kind::Stack { children, .. }) if self.runs_backwards(h) => children.iter().rev().copied().collect(),
             Some(Kind::Stack { children, .. }) => children.clone(),
             Some(Kind::ScrollView { content, .. }) => content.iter().copied().collect(),
             // only the page that is showing takes part in layout, drawing and focus
@@ -1535,7 +1556,10 @@ impl Ui {
             Kind::ScrollView { .. } => self.arrange_view(h),
             Kind::Tabs { .. } => self.arrange_tabs(h, rect),
             Kind::Stack { orientation, spacing, padding, align, children } => {
-                let (orientation, spacing, align, children, padding) = (*orientation, *spacing, *align, children.clone(), *padding);
+                let (orientation, spacing, align, mut children, padding) = (*orientation, *spacing, *align, children.clone(), *padding);
+                if self.runs_backwards(h) {
+                    children.reverse();
+                }
                 // inside its dress, if it wears one
                 let (dl, dt, dr, db) = self.dress_insets(h);
                 let inner = Rect::new(rect.x + dl, rect.y + dt, (rect.w - dl - dr).max(0), (rect.h - dt - db).max(0)).inset(padding);
@@ -1548,6 +1572,10 @@ impl Ui {
                 let needed: i32 = sizes.iter().map(|(w, hh)| if vertical { *hh } else { *w }).sum::<i32>() + spacing * (children.len() as i32 - 1).max(0);
                 let growers = children.iter().filter(|c| self.grows(**c, vertical)).count() as i32;
                 let spare = ((if vertical { inner.h } else { inner.w }) - needed).max(0);
+                // a row of a dialog's buttons stands at the far end of its room
+                if growers == 0 && self.is_button_row(h) {
+                    pos += spare;
+                }
                 let mut shared = 0;
                 for (c, (w, hh)) in children.into_iter().zip(sizes) {
                     let (mut along, across) = if vertical { (hh, w) } else { (w, hh) };
@@ -1590,7 +1618,7 @@ impl Ui {
         if let Some(target) = self.reveal.take() {
             self.reveal_now(window, target);
         }
-        let mut canvas = Canvas::new(w, h);
+        let mut canvas = self.sheet(w, h, WHITE);
         self.ground = self.look.pal.window;
         self.part(&mut canvas, Part::new(PartKind::Background, Rect::new(0, 0, w, h)));
         for c in self.children(window) {
@@ -3122,6 +3150,148 @@ mod style_tests {
         // black and white has no frame of its own
         ui.set_style(std::sync::Arc::new(EightyFour));
         assert_eq!(ui.frame_insets(window), (0, 0, 0, 0));
+    }
+
+    /// A style with a frame that casts a shadow, and OK before Cancel.
+    struct Shadowed;
+
+    impl Style for Shadowed {
+        fn name(&self) -> &str {
+            "shadowed"
+        }
+        fn metrics(&self) -> Metrics {
+            Metrics { frame_shadow: 12, ok_leads: 1, ..Framed.metrics() }
+        }
+        fn palette(&self) -> Palette {
+            EightyFour::PALETTE
+        }
+        fn draw(&self, _: &Part, _: &mut Painter) -> bool {
+            false
+        }
+    }
+
+    /// A style that asks to be drawn as fine as the screen, and draws nothing itself.
+    struct Fine;
+
+    impl Style for Fine {
+        fn name(&self) -> &str {
+            "fine"
+        }
+        fn metrics(&self) -> Metrics {
+            Metrics { frame_shadow: 6, ..Framed.metrics() }
+        }
+        fn palette(&self) -> Palette {
+            EightyFour::PALETTE
+        }
+        fn wants(&self) -> u32 {
+            crate::style::wants::FINE
+        }
+        fn draw(&self, _: &Part, _: &mut Painter) -> bool {
+            false
+        }
+    }
+
+    #[test]
+    fn a_style_that_asks_is_drawn_as_fine_as_the_screen_and_what_is_made_of_pixels_keeps_them() {
+        let mut ui = Ui::natural();
+        let (window, _) = dialog(&mut ui);
+        let list = ui.list_box_new();
+        ui.list_box_add(list, "Row").unwrap();
+        let column = ui.children(window)[0];
+        ui.stack_add(column, list).unwrap();
+        let field = ui.text_field_new("Typed");
+        ui.stack_add(column, field).unwrap();
+        // black and white does not ask: it is a pixel to a pixel however far the screen magnifies
+        ui.set_fineness(3);
+        assert_eq!((ui.fine_scale(), ui.render(window).unwrap().scale), (1, 1));
+        ui.set_style(std::sync::Arc::new(Fine));
+        ui.set_own_frames(true);
+        ui.set_fineness(1);
+        let (coarse, _) = ui.render_shadowed(window).unwrap();
+        ui.set_fineness(2);
+        let (fine, reach) = ui.render_shadowed(window).unwrap();
+        // the same picture in the interface's pixels, kept twice as fine
+        assert_eq!((fine.scale, fine.width, fine.height, reach), (2, coarse.width, coarse.height, 6));
+        assert_eq!(fine.pixels.len(), 4 * coarse.pixels.len());
+        // everything here is made of whole pixels (the letters are the bundled ones),
+        // so inside the window each is a square of four alike, the colour it was
+        let (wide, _) = fine.span();
+        for y in reach..coarse.height - reach {
+            for x in reach..coarse.width - reach {
+                let was = coarse.get(x, y);
+                for (dx, dy) in [(0, 0), (1, 0), (0, 1), (1, 1)] {
+                    assert_eq!(fine.pixels[((2 * y + dy) * wide + 2 * x + dx) as usize], was, "at {x},{y}");
+                }
+            }
+        }
+        // a menu and a word of help are as fine as the window
+        let bar = ui.menu_bar_new();
+        let menu = ui.menu_new("File");
+        let item = ui.menu_item_new("Open");
+        ui.menu_add(menu, item).unwrap();
+        ui.menu_bar_add(bar, menu).unwrap();
+        ui.window_set_menu_bar(window, bar).unwrap();
+        ui.render(window).unwrap();
+        ui.pointer(window, 12, 8, PointerKind::Press).unwrap();
+        assert_eq!(ui.popups(window).len(), 1);
+        assert_eq!(ui.render_popup(window, 0).unwrap().scale, 2);
+    }
+
+    #[test]
+    fn a_window_casts_a_shadow_where_the_style_has_one() {
+        let mut ui = Ui::natural();
+        let (window, _) = dialog(&mut ui);
+        ui.set_style(std::sync::Arc::new(Framed));
+        ui.set_own_frames(true);
+        let framed = ui.render_framed(window).unwrap();
+        // no shadow in a style that casts none: the picture is the frame's
+        let (plain, reach) = ui.render_shadowed(window).unwrap();
+        assert_eq!((reach, plain.width), (0, framed.width));
+        ui.set_style(std::sync::Arc::new(Shadowed));
+        let (canvas, reach) = ui.render_shadowed(window).unwrap();
+        assert_eq!((reach, canvas.width, canvas.height), (12, framed.width + 24, framed.height + 24));
+        // the window is where it was, further in by the shadow's reach
+        assert_eq!(canvas.get(12 + 50, 12 + 60), framed.get(50, 60));
+        // below it the shadow is black and part see-through, fading to nothing; above, there is less
+        let under = |y: i32| canvas.get(12 + framed.width / 2, y) >> 24;
+        let foot = 12 + framed.height;
+        assert!(under(foot + 1) > 0 && under(foot + 1) < 255 && under(foot + 1) > under(foot + 9));
+        assert_eq!(canvas.get(12 + framed.width / 2, foot + 1) & 0xff_ffff, 0);
+        assert!(under(2) < under(foot + 2));
+        assert_eq!(canvas.get(0, 0) >> 24, 0);
+        // it may be taken hold of by an edge a few pixels out into its shadow, and no further
+        assert_eq!(ui.frame_grip(window), 5);
+        assert_eq!(ui.frame_pointer(window, -3, 60, PointerKind::Press), FrameAct::Resize { left: true, right: false, top: false, bottom: false });
+        assert_eq!(ui.frame_pointer(window, framed.width + 2, framed.height + 2, PointerKind::Press), FrameAct::Resize { left: false, right: true, top: false, bottom: true });
+        assert_eq!(ui.frame_pointer(window, -9, 60, PointerKind::Press), FrameAct::Nothing);
+        // made as large as it can be, it casts none
+        ui.window_set_zoomed(window, true);
+        assert_eq!((ui.frame_shadow(window), ui.frame_grip(window)), (0, 0));
+    }
+
+    #[test]
+    fn a_row_of_buttons_is_in_the_order_the_style_has_them_at_the_far_end() {
+        let mut ui = Ui::natural();
+        let window = ui.window_new("Ask", 300, 60).unwrap();
+        let row = ui.button_row_new();
+        let (ok, cancel) = (ui.button_new("OK"), ui.button_new("Cancel"));
+        ui.stack_add(row, ok).unwrap();
+        ui.stack_add(row, cancel).unwrap();
+        ui.window_set_content(window, row).unwrap();
+        assert!(ui.is_a(row, "ButtonRow").unwrap() && ui.is_a(row, "Stack").unwrap());
+        let places = |ui: &mut Ui| {
+            ui.render(window).unwrap();
+            (ui.nodes.get(ok).unwrap().rect, ui.nodes.get(cancel).unwrap().rect)
+        };
+        // black and white has the one that agrees last, at the right of the window
+        let (o, c) = places(&mut ui);
+        assert!(c.x < o.x && o.x + o.w == 300, "{c:?} {o:?}");
+        // and the keyboard goes along them as they are shown
+        assert_eq!(ui.children(row), vec![cancel, ok]);
+        // a style that has OK first shows them as they were added, still at the far end
+        ui.set_style(std::sync::Arc::new(Shadowed));
+        let (o, c) = places(&mut ui);
+        assert!(o.x < c.x && c.x + c.w == 300, "{o:?} {c:?}");
     }
 
     #[test]

@@ -215,7 +215,7 @@ impl Ui {
             _ => String::new(),
         };
         let (active, zoomed, rolled) = (self.is_active(window), self.zoomed.contains(&window), self.rolled.contains(&window));
-        let mut canvas = Canvas::filled(outer.w, outer.h, crate::canvas::TRANSPARENT);
+        let mut canvas = self.sheet(outer.w, outer.h, crate::canvas::TRANSPARENT);
         self.painting = None;
         let bar = self.frame_bar_width(window);
         let frame = Part::new(PartKind::Frame, outer).text(&title).numbers(t, l, bar);
@@ -232,12 +232,80 @@ impl Ui {
             return Ok(canvas);
         }
         // the content has no see-through pixels of its own
-        for y in 0..content.height {
-            for x in 0..content.width {
-                canvas.set(l + x, t + y, content.pixels[(y * content.width + x) as usize]);
+        canvas.copy(&content, Rect::new(0, 0, content.width, content.height), (l, t));
+        Ok(canvas)
+    }
+
+    /// How far out into its shadow a window may be taken hold of by an
+    /// edge: a few pixels, for a window that has a shadow and can change
+    /// size. A display lets the pointer be the window's that far out.
+    pub fn frame_grip(&self, window: Handle) -> i32 {
+        if resizable_at_all(self, window) && !self.rolled.contains(&window) { self.frame_shadow(window).min(5) } else { 0 }
+    }
+
+    /// How far a window's shadow reaches past its frame, on every side:
+    /// nothing for a window whose frame is the desktop's, or that fills
+    /// the screen, or in a style that casts none.
+    pub fn frame_shadow(&self, window: Handle) -> i32 {
+        if self.frame_insets(window).1 > 0 && !self.zoomed.contains(&window) { self.look.m.frame_shadow } else { 0 }
+    }
+
+    /// Draw a window with its frame and the shadow it casts, and say how
+    /// far the shadow reaches: the frame's corner is that far in from the
+    /// picture's, both ways. The shadow is soft, falls a little below the
+    /// window, and is deeper under the window in front.
+    pub fn render_shadowed(&mut self, window: Handle) -> Result<(Canvas, i32)> {
+        let framed = self.render_framed(window)?;
+        let reach = self.frame_shadow(window);
+        if reach == 0 {
+            return Ok((framed, 0));
+        }
+        let deepest = if self.is_active(window) { 110.0 } else { 60.0 };
+        let (w, h) = (framed.width + 2 * reach, framed.height + 2 * reach);
+        let mut canvas = Canvas::like(&framed, w, h, crate::canvas::TRANSPARENT);
+        // what casts it: the frame, moved down a little and drawn in a little
+        let (drop, blur) = (reach / 3, reach as f32);
+        let cast = Rect::new(reach + reach / 3, reach + drop + reach / 3, framed.width - 2 * (reach / 3), framed.height - 2 * (reach / 3));
+        let core = Rect::new(reach + 12, reach + 12, framed.width - 24, framed.height - 24);
+        // as fine as the canvas is: the pixels it keeps, measured in the interface's
+        let (s, (wide, tall)) = (canvas.scale, canvas.span());
+        let (left, top, right, bottom) = (cast.x as f32, cast.y as f32, (cast.x + cast.w) as f32, (cast.y + cast.h) as f32);
+        for y in 0..tall {
+            for x in 0..wide {
+                if core.contains(x / s, y / s) {
+                    continue; // the window covers it
+                }
+                let (fx, fy) = ((x as f32 + 0.5) / s as f32, (y as f32 + 0.5) / s as f32);
+                let dx = (left + 0.5 - fx).max(fx - (right - 0.5)).max(0.0);
+                let dy = (top + 0.5 - fy).max(fy - (bottom - 0.5)).max(0.0);
+                let far = ((dx * dx + dy * dy).sqrt() / blur).min(1.0);
+                let a = (deepest * (1.0 - far) * (1.0 - far)) as u32;
+                if a > 0 {
+                    canvas.pixels[(y * wide + x) as usize] = a << 24;
+                }
             }
         }
-        Ok(canvas)
+        // the window lies on its shadow, which shows through where the window lets it
+        let (from_wide, from_tall) = framed.span();
+        for y in 0..from_tall {
+            for x in 0..from_wide {
+                let over = framed.pixels[(y * from_wide + x) as usize];
+                let i = ((y + reach * s) * wide + x + reach * s) as usize;
+                let under = canvas.pixels[i];
+                let (oa, ua) = (over >> 24, under >> 24);
+                canvas.pixels[i] = match oa {
+                    255 => over,
+                    0 => under,
+                    _ => {
+                        // one see-through colour over black that is see-through too
+                        let a = oa + ua * (255 - oa) / 255;
+                        let part = |shift: u32| (((over >> shift) & 0xff) * oa / a.max(1)).min(255) << shift;
+                        (a << 24) | part(16) | part(8) | part(0)
+                    }
+                };
+            }
+        }
+        Ok((canvas, reach))
     }
 
     /// Take a pointer event on a window, measured from the corner of its
@@ -303,6 +371,9 @@ impl Ui {
         if sides != Sides::default() {
             return FrameAct::Resize { left: sides.left, right: sides.right, top: sides.top, bottom: sides.bottom };
         }
+        if !outer.contains(x, y) {
+            return FrameAct::Nothing; // out in its shadow, and not by an edge
+        }
         if y < t {
             // twice on the title bar does what the style says; once takes hold of the window
             self.frame_click = if twice { (0, 0, 0) } else { (self.now, x, y) };
@@ -327,7 +398,10 @@ impl Ui {
     fn frame_sides(&self, window: Handle, x: i32, y: i32) -> Sides {
         let (l, t, _, b) = self.frame_insets(window);
         let none = Sides::default();
-        let Some(outer) = self.frame_outer(window).filter(|o| t > 0 && o.contains(x, y)) else { return none };
+        // a window with a shadow may be taken hold of a little way out into
+        // it: its edge may be a single pixel, which is not much to aim at
+        let out = self.frame_grip(window);
+        let Some(outer) = self.frame_outer(window).filter(|o| t > 0 && Rect::new(o.x - out, o.y - out, o.w + 2 * out, o.h + 2 * out).contains(x, y)) else { return none };
         let resizable = matches!(self.nodes.get(window).map(|n| &n.kind), Some(Kind::Window { resizable: true, .. }));
         if !resizable || self.zoomed.contains(&window) || self.rolled.contains(&window) {
             return none;

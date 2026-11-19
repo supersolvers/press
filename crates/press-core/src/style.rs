@@ -94,6 +94,13 @@ pub struct Metrics {
     pub tab_align: i32,
     /// How thick the edge of a menu is, inside which its items lie.
     pub menu_border: i32,
+    /// How far a soft shadow reaches round a window that draws its own
+    /// frame; 0 for none.
+    pub frame_shadow: i32,
+    /// Which of a dialog's buttons comes first in a row of them: 1 the
+    /// one that agrees, then the one that calls it off, as Windows has
+    /// them; 0 the other way round, the one that agrees at the far end.
+    pub ok_leads: i32,
 }
 
 /// The colours a style decides, as ARGB. The engine draws words and small
@@ -261,6 +268,12 @@ pub mod wants {
     /// A default button is drawn again some twenty times a second, so that
     /// it can throb; a button's `a` counts the times.
     pub const PULSE: u32 = 2;
+    /// On a screen that magnifies, the style draws on a canvas as fine as
+    /// the screen, with its letters and whatever else it draws smooth as
+    /// sharp as the screen can show them. A style that does not ask is
+    /// drawn a pixel to a pixel and magnified whole, each pixel a square,
+    /// which is what a style made of pixels wants.
+    pub const FINE: u32 = 4;
 }
 
 /// One piece of a window to be drawn.
@@ -408,6 +421,8 @@ impl EightyFour {
         scroll_arrows: 0,
         tab_align: 0,
         menu_border: 1,
+        frame_shadow: 0,
+        ok_leads: 0,
     };
 
     pub const PALETTE: Palette = Palette { window: WHITE, text: BLACK, paper: WHITE, ink: BLACK, menu: WHITE, menu_text: BLACK, list: WHITE, list_ink: BLACK, pane: WHITE, tip: WHITE, tip_text: BLACK, pointer: BLACK, pointer_edge: WHITE };

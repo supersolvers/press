@@ -165,7 +165,7 @@ impl Ui {
         self.part(canvas, Part::new(PartKind::ViewFrame, rect));
         // The content is drawn on a sheet of its own and only the part that
         // falls in the opening is copied across: that is the clipping.
-        let mut sheet = Canvas::filled(canvas.width, canvas.height, self.ground);
+        let mut sheet = Canvas::like(canvas, canvas.width, canvas.height, self.ground);
         for c in self.children(h) {
             self.paint(c, &mut sheet, enabled, ctx);
         }

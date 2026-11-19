@@ -17,7 +17,7 @@ use std::sync::Arc;
 /// The version of the interface below. A library made for an earlier
 /// version is still worn, as it was written; one made for any other but
 /// these is not used.
-pub const ABI: u32 = 7;
+pub const ABI: u32 = 9;
 
 /// A part to draw, as a style library is handed it. See
 /// [`press_core::PartKind`] for what the numbers mean for each kind.
@@ -53,6 +53,11 @@ pub struct RawSurface {
     pub text_width: unsafe extern "C" fn(ctx: *mut c_void, text: *const c_char) -> i32,
     /// Draw words with the top of their line at `y`.
     pub draw_text: unsafe extern "C" fn(ctx: *mut c_void, text: *const c_char, x: i32, y: i32, color: u32),
+    /// From version 9: how many pixels are kept along one of the
+    /// interface's, and how many to a row. A style that has not asked to
+    /// be drawn fine is never given more than one.
+    scale: i32,
+    stride: i32,
 }
 
 /// What a style library gives of itself, from `press_style_entry`.
@@ -199,6 +204,8 @@ impl Style for Foreign {
             scroll_arrows: if self.raw.abi >= 5 { m.scroll_arrows.clamp(0, 1) } else { 0 },
             tab_align: if self.raw.abi >= 5 { m.tab_align.clamp(0, 1) } else { 0 },
             menu_border: if self.raw.abi >= 5 { m.menu_border.clamp(1, 8) } else { 1 },
+            frame_shadow: if self.raw.abi >= 8 { m.frame_shadow.clamp(0, 48) } else { 0 },
+            ok_leads: i32::from(self.raw.abi >= 8 && m.ok_leads != 0),
         }
     }
 
@@ -225,7 +232,9 @@ impl Style for Foreign {
     }
 
     fn wants(&self) -> u32 {
-        if self.raw.abi >= 2 { self.raw.wants } else { 0 }
+        // (asking to be drawn fine came with the surface that says how fine)
+        let known = if self.raw.abi >= 9 { !0 } else { !press_core::style::wants::FINE };
+        if self.raw.abi >= 2 { self.raw.wants & known } else { 0 }
     }
 
     fn typeface(&self, face: press_core::Face) -> Option<press_core::Type> {
@@ -270,6 +279,8 @@ impl Style for Foreign {
                 line_height,
                 text_width,
                 draw_text,
+                scale: (*canvas).scale,
+                stride: (*canvas).width * (*canvas).scale,
             };
             draw(&raw, &surface) != 0
         }

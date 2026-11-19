@@ -778,6 +778,7 @@ final class StackHost {
         case .plain: stack = try PressCore.Stack(orientation)
         case .group(let title): stack = try PressCore.GroupBox(title: title, orientation: orientation)
         case .toolbar: stack = try PressCore.Toolbar()
+        case .buttons: stack = try PressCore.ButtonRow()
         case .status(let panels):
             let bar = try PressCore.StatusBar()
             try bar.setPanels(panels)

@@ -1621,7 +1621,7 @@ impl Ui {
         let (items, meta, scroll) = (items.clone(), meta.clone(), (*scroll).clamp(0, (count - fit).max(0)));
         self.part(canvas, Part::new(PartKind::Well, rect).numbers(1, 0, 0).when(state::FOCUSED, live));
         let editing = self.list_edit.as_ref().filter(|e| e.list == h).map(|e| e.item);
-        let mut clip = Canvas::filled(area.w.max(1), area.h.max(1), self.look.pal.list);
+        let mut clip = Canvas::like(canvas, area.w.max(1), area.h.max(1), self.look.pal.list);
         let _ = across;
         for (place, row) in rows.iter().enumerate() {
             let (x, y) = self.icon_cell(h, place, row.item);
@@ -1655,7 +1655,7 @@ impl Ui {
         let (paper, ink) = (self.look.pal.list, self.look.pal.list_ink);
         self.part(canvas, Part::new(PartKind::Well, rect).numbers(1, 0, 0).when(state::FOCUSED, live));
         // headings and rows share one sheet so that both are clipped to the list
-        let mut clip = Canvas::filled(area.w.max(1), (area.h + header).max(1), paper);
+        let mut clip = Canvas::like(canvas, area.w.max(1), (area.h + header).max(1), paper);
         if header > 0 {
             self.part(&mut clip, Part::new(PartKind::Header, Rect::new(0, 0, area.w, header)));
             // the heading the pointer is over, for a style that lights it
@@ -1763,7 +1763,7 @@ impl Ui {
         let cell_box = Rect::new(x, y, w, self.look.m.row_height);
         clip.fill(cell_box, paper);
         clip.frame(cell_box, ink);
-        let mut inner = Canvas::filled((w - 4).max(1), self.look.m.row_height - 2, paper);
+        let mut inner = Canvas::like(clip, (w - 4).max(1), self.look.m.row_height - 2, paper);
         let line = self.font.line_height();
         // what an input method is still composing shows where it will go, underlined
         let pre = self.preedit.as_ref().filter(|(f, _)| *f == h).map(|(_, t)| t.clone()).unwrap_or_default();

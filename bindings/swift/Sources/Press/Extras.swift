@@ -35,7 +35,7 @@ struct _Bar<Content: View>: View, _StackView {
 
     var _orientation: Orientation { .horizontal }
     var _align: Align { .center }
-    var _spacing: Int { dress == .toolbar ? 2 : 12 }
+    var _spacing: Int { dress == .toolbar ? 2 : (dress == .buttons ? 10 : 12) }
     var _padding: Int { 0 }
     var _content: any View { content }
     var _dress: StackDress { dress }
@@ -70,6 +70,23 @@ public struct StatusBar<Content: View>: View {
 
     public var body: some View {
         _Bar(dress: .status(panels), content: content)
+    }
+}
+
+/// The row of buttons at the foot of a dialog. Put the button that agrees
+/// first, then the one that calls it off, then any others: they are shown
+/// in the order the style of the program has them (OK then Cancel in the
+/// manner of Windows, Cancel then OK in that of the Macintosh), at the far
+/// end of the row. Not in SwiftUI, which orders an alert's buttons itself.
+public struct ButtonRow<Content: View>: View {
+    let content: Content
+
+    public init(@ViewBuilder content: () -> Content) {
+        self.content = content()
+    }
+
+    public var body: some View {
+        _Bar(dress: .buttons, content: content)
     }
 }
 

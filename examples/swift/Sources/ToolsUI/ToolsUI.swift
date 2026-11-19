@@ -39,6 +39,11 @@ struct Sheet: View {
                 Toggle("Both sides", isOn: $both)
             }
             .padding(12)
+            ButtonRow {
+                Button("Print") { news = "Printed." }
+                Button("Cancel") { news = "Never mind." }
+            }
+            .padding(12)
             StatusBar(panels: true) {
                 Text(news)
                 Text("\(copies) of \(size)\(both ? ", both sides" : "")")

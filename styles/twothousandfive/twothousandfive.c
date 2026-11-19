@@ -86,9 +86,7 @@ static void checkbox(const press_part *p, box r) {
     gel(b, 3, has(p, PRESS_STATE_HELD) ? DEEP : on_ ? WATER : CLEAR, 0);
     if (on_) {
         /* a tick that runs up out of the box, as a pen would leave it */
-        static const int rise[9] = {4, 5, 6, 5, 4, 3, 2, 1, 0};
-        for (int i = 0; i < 9; i++)
-            fill((box){b.x + 3 + i, b.y + 2 + rise[i], 1, 3}, BLACK);
+        tick(b.x + 3, b.y + 2, 9, 2, 3, BLACK);
     }
     label(p, r.x + 14 + 6, r);
 }
@@ -260,10 +258,7 @@ static void frame_button(const press_part *p, box r) {
         int cx = r.x + r.w / 2, cy = r.y + r.h / 2;
         uint32_t ink = with_alpha(BLACK, 0.65f);
         if (p->a == PRESS_FRAME_CLOSE) {
-            for (int i = -2; i <= 2; i++) {
-                blend(cx + i, cy + i, ink, 1);
-                blend(cx - i, cy + i, ink, 1);
-            }
+            cross(cx, cy, 2, 0, 1, ink);
         } else {
             fill_over((box){cx - 3, cy, 7, 1}, ink);
             if (p->a == PRESS_FRAME_ZOOM) fill_over((box){cx, cy - 3, 1, 7}, ink);
@@ -394,6 +389,7 @@ static void metrics(press_metrics *m) {
     m->menu_shadow = 9;
     /* a frame of its own; its menus go to the top of the screen where a desktop has them there */
     m->frame_title = 22;
+    m->frame_shadow = 18; /* a window stands off the desktop on a soft shadow */
     m->frame_border = 1;
     m->frame_button_width = 13;
     m->frame_button_height = 13;
@@ -433,7 +429,7 @@ static int32_t typeface(uint32_t face, press_type *out) {
     return 1;
 }
 
-static const press_style style = {PRESS_STYLE_ABI, "twothousandfive", metrics, palette, draw, PRESS_WANTS_PULSE | PRESS_WANTS_HOVER, typeface};
+static const press_style style = {PRESS_STYLE_ABI, "twothousandfive", metrics, palette, draw, PRESS_WANTS_FINE | PRESS_WANTS_PULSE | PRESS_WANTS_HOVER, typeface};
 
 const press_style *press_style_entry(void) {
     return &style;

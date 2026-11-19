@@ -347,6 +347,10 @@ struct Surface {
     /// How far the window's own frame reaches past its content, in engine
     /// pixels: left, top, right, bottom. Nothing where the frame is the desktop's.
     inset: (i32, i32, i32, i32),
+    /// How far the window's shadow reaches past its frame, in engine
+    /// pixels: the picture shown is that much larger all round than what
+    /// the compositor is told the window is.
+    shadow: i32,
     /// The compositor has made it as large as it can be.
     zoomed: bool,
     /// Whether the window has asked the compositor to fill the screen, or
@@ -537,15 +541,19 @@ fn zoom_from_env() -> i32 {
 }
 
 /// Magnify a canvas into a buffer of `width` x `height` device pixels, each
-/// canvas pixel becoming a `k` x `k` square. Anything left over is white.
+/// of the interface's pixels becoming a `k` x `k` square: a canvas already
+/// that fine is copied as it is. Anything left over is white.
 fn magnify(bytes: &mut [u8], width: i32, height: i32, canvas: &Canvas, k: i32, beyond: u32) {
+    // how many of the screen's pixels to one the canvas keeps
+    let k = (k / canvas.scale.max(1)).max(1);
+    let (wide, tall) = canvas.span();
     let (rows, _) = bytes.as_chunks_mut::<4>();
     for (y, row) in rows.chunks_mut(width.max(1) as usize).take(height.max(0) as usize).enumerate() {
         let cy = y as i32 / k;
         for (x, dst) in row.iter_mut().enumerate() {
             let cx = x as i32 / k;
-            let pixel = if cx < canvas.width && cy < canvas.height {
-                canvas.pixels[(cy * canvas.width + cx) as usize]
+            let pixel = if cx < wide && cy < tall {
+                canvas.pixels[(cy * wide + cx) as usize]
             } else {
                 beyond
             };
@@ -925,6 +933,7 @@ impl State {
                         _fraction: fraction,
                         size: None,
                         inset,
+                        shadow: 0,
                         zoomed: false,
                         full,
                     });
@@ -989,15 +998,39 @@ impl State {
 
     fn draw(&mut self) {
         for s in self.surfaces.iter_mut().filter(|s| s.configured && s.needs_draw) {
-            let Ok(canvas) = with(|rt| Ok(rt.ui.render_framed(s.handle)?)) else { continue };
+            // as fine as this window's screen, for a style that draws fine
+            let fineness = s.units.k;
+            let Ok((canvas, shadow)) = with(|rt| {
+                rt.ui.set_fineness(fineness);
+                Ok(rt.ui.render_shadowed(s.handle)?)
+            }) else {
+                continue;
+            };
             s.inset = with(|rt| Ok(rt.ui.frame_insets(s.handle))).unwrap_or_default();
             let (units, k) = (s.units, s.units.k);
+            let pad = units.out(shadow);
             // The buffer is exactly the size the compositor gave the window,
             // in the screen's own pixels, even when that is not a whole
             // number of engine pixels.
             // (a window rolled up into its title bar is as small as its picture, whatever it was given)
             let rolled = with(|rt| Ok(rt.ui.window_rolled(s.handle))).unwrap_or(false);
-            let size = s.size.filter(|_| !rolled).unwrap_or((units.out(canvas.width), units.out(canvas.height)));
+            // (and its shadow lies outside what the compositor gave it)
+            let size = s.size.filter(|_| !rolled).map(|(w, h)| (w + 2 * pad, h + 2 * pad)).unwrap_or((units.out(canvas.width), units.out(canvas.height)));
+            if shadow > 0 || s.shadow > 0 {
+                // the window is the picture less its shadow, which takes no part in pointing
+                let within = (size.0 - 2 * pad, size.1 - 2 * pad);
+                s.window.xdg_surface().set_window_geometry(pad, pad, within.0.max(1), within.1.max(1));
+                // (save a few pixels round the window, where its edges may be taken hold of)
+                let grip = units.out(with(|rt| Ok(rt.ui.frame_grip(s.handle))).unwrap_or(0));
+                match Region::new(&self.compositor).ok().filter(|_| shadow > 0) {
+                    Some(region) => {
+                        region.add(pad - grip, pad - grip, within.0 + 2 * grip, within.1 + 2 * grip);
+                        s.window.wl_surface().set_input_region(Some(region.wl_region()));
+                    }
+                    None => s.window.wl_surface().set_input_region(None),
+                }
+                s.shadow = shadow;
+            }
             let (w, h) = (units.device(size.0), units.device(size.1));
             let Ok((buffer, bytes)) = self.pool.create_buffer(w, h, w * 4, wl_shm::Format::Argb8888) else { continue };
             // beyond a frame of its own a window is see-through, as outside its corners
@@ -1047,6 +1080,8 @@ impl State {
                 return Some((s.handle, u.engine(x) + rect.x, u.engine(y) + rect.y, u));
             }
             if s.window.wl_surface() == surface {
+                // the window's corner is inside the picture's by its shadow
+                let (x, y) = (x - u.out(s.shadow) as f64, y - u.out(s.shadow) as f64);
                 // the newest menu is on top
                 let (px, py) = (x.floor() as i32, y.floor() as i32);
                 if let Some(m) = s.menus.iter().rev().filter(|m| !m.tip).find(|m| Rect::new(m.at.0, m.at.1, u.out(m.rect.w), u.out(m.rect.h)).contains(px, py)) {
@@ -1125,9 +1160,10 @@ impl State {
         // only the window the input method is attending to can use it
         let window = self.ime_surface.as_ref().and_then(|s| self.handle_for(s)).filter(|w| Some(*w) == self.key_focus);
         let units = window.and_then(|w| self.surfaces.iter().find(|s| s.handle == w)).map_or(Units::whole(self.zoom, 1), |s| s.units);
+        let shadow = window.and_then(|w| self.surfaces.iter().find(|s| s.handle == w)).map_or(0, |s| s.shadow);
         let caret = window
             .and_then(|w| with(|rt| Ok(rt.ui.ime_target(w).map(|r| (r, rt.ui.frame_insets(w))))).ok().flatten())
-            .map(|(r, inset)| Rect::new(units.at(r.x + inset.0), units.at(r.y + inset.1), units.out(r.w), units.out(r.h)));
+            .map(|(r, inset)| Rect::new(units.at(r.x + inset.0 + shadow), units.at(r.y + inset.1 + shadow), units.out(r.w), units.out(r.h)));
         if caret == self.ime_caret {
             return;
         }

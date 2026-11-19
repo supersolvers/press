@@ -77,9 +77,7 @@ static void checkbox(const press_part *p, box r) {
         round_line(inset(b, 1), 0, 2, GLOW);
     if (has(p, PRESS_STATE_CHECKED)) {
         /* a tick, three pixels heavy */
-        static const int rise[7] = {2, 3, 4, 3, 2, 1, 0};
-        for (int i = 0; i < 7; i++)
-            fill((box){b.x + 3 + i, b.y + 3 + rise[i], 1, 3}, GREEN);
+        tick(b.x + 3, b.y + 3, 7, 2, 3, GREEN);
     }
     label(p, r.x + 13 + 5, r);
 }
@@ -279,10 +277,7 @@ static void frame_button(const press_part *p, box r) {
     int cx = r.x + r.w / 2, cy = r.y + r.h / 2;
     switch (p->a) {
     case PRESS_FRAME_CLOSE:
-        for (int i = -4; i <= 4; i++) {
-            fill((box){cx + i - 1, cy + i, 3, 1}, WHITE);
-            fill((box){cx - i - 1, cy + i, 3, 1}, WHITE);
-        }
+        cross(cx, cy, 4, 1, 3, WHITE);
         break;
     case PRESS_FRAME_MINIMIZE: fill((box){cx - 5, cy + 3, 8, 3}, WHITE); break;
     default:
@@ -429,6 +424,7 @@ static void metrics(press_metrics *m) {
     m->menu_shadow = 4;
     /* a frame of its own, with its menus in it */
     m->frame_title = 29;
+    m->ok_leads = 1; /* OK, then Cancel */
     m->frame_border = 4;
     m->frame_button_width = 21;
     m->frame_button_height = 21;
@@ -473,7 +469,7 @@ static int32_t typeface(uint32_t face, press_type *out) {
     return 1;
 }
 
-static const press_style style = {PRESS_STYLE_ABI, "twothousandone", metrics, palette, draw, PRESS_WANTS_HOVER, typeface};
+static const press_style style = {PRESS_STYLE_ABI, "twothousandone", metrics, palette, draw, PRESS_WANTS_HOVER | PRESS_WANTS_FINE, typeface};
 
 const press_style *press_style_entry(void) {
     return &style;

@@ -221,27 +221,34 @@ pub fn window_snapshot(this: Handle, path: &str, scale: i32) -> Result {
         return Err(Status::InvalidArgument);
     }
     let canvas = with(|rt| {
+        // as fine as the picture is to be, for a style that draws fine: sharp, not magnified
+        rt.ui.set_fineness(scale);
         // with its own frame, if it has one: the picture is of the window as it is shown
-        let window = rt.ui.render_framed(this)?;
+        // (and its shadow, on white as on a desktop of paper)
+        let (window, shadow) = rt.ui.render_shadowed(this)?;
         let (left, top, ..) = rt.ui.frame_insets(this);
+        let (left, top) = (left + shadow, top + shadow);
         // an open menu hangs over the window and may reach past its edges
         let popups = rt.ui.popups(this);
         if popups.is_empty() && top == 0 {
+            rt.ui.set_fineness(1);
             return Ok(window);
         }
         let right = popups.iter().map(|p| left + p.rect.x + p.rect.w).max().unwrap_or(0);
         let bottom = popups.iter().map(|p| top + p.rect.y + p.rect.h).max().unwrap_or(0);
         // on white, which shows through where a frame's corners are rounded off
-        let mut whole = press_core::Canvas::new(window.width.max(right), window.height.max(bottom));
+        let mut whole = press_core::Canvas::like(&window, window.width.max(right), window.height.max(bottom), press_core::WHITE);
         whole.blit(&window, 0, 0);
         for (index, at) in popups.iter().enumerate() {
             if let Some(menu) = rt.ui.render_popup(this, index) {
                 whole.blit(&menu, left + at.rect.x, top + at.rect.y);
             }
         }
+        rt.ui.set_fineness(1);
         Ok(whole)
-    })?
-    .scaled(scale);
+    })?;
+    // what was not drawn that fine is magnified to it, each pixel a square
+    let canvas = canvas.scaled(scale / canvas.scale.max(1));
     let file = std::fs::File::create(path).map_err(|_| Status::Io)?;
     let mut encoder = png::Encoder::new(std::io::BufWriter::new(file), canvas.width as u32, canvas.height as u32);
     // a window with a photo in it is kept in colour; any other, as it is
@@ -1108,6 +1115,10 @@ pub fn group_box_set_title(this: Handle, value: &str) -> Result {
 
 pub fn toolbar_new() -> Result<Handle> {
     with(|rt| Ok(rt.ui.toolbar_new()))
+}
+
+pub fn button_row_new() -> Result<Handle> {
+    with(|rt| Ok(rt.ui.button_row_new()))
 }
 
 pub fn status_bar_new() -> Result<Handle> {

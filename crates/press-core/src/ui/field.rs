@@ -318,7 +318,7 @@ impl Ui {
         };
 
         // Draw on a canvas of the inner size so that what overflows is clipped.
-        let mut clip = Canvas::filled(inner.w, inner.h, paper);
+        let mut clip = Canvas::like(canvas, inner.w, inner.h, paper);
         let top = |row: usize| if shape.multiline { (row - first) as i32 * line } else { (inner.h - line) / 2 };
         if shown.is_empty() {
             self.font.draw(&mut clip, &placeholder, 1, top(first), ink);

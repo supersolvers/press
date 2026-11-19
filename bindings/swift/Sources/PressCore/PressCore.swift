@@ -2129,6 +2129,20 @@ public class StatusBar: Stack {
     }
 }
 
+/// The row of buttons at the foot of a dialog: a Stack that lays its children out in a row at its far end, in the order the style of the program has them. Add the button that agrees first, then the one that calls it off, then any others; where the style has OK before Cancel they are shown as added, and where it has Cancel before OK, last first.
+public class ButtonRow: Stack {
+    public override init(handle: UInt64) {
+        super.init(handle: handle)
+    }
+
+    /// Create an empty row of buttons.
+    public init() throws {
+        var out = UInt64(0)
+        try _check(press_button_row_new(&out))
+        super.init(handle: out)
+    }
+}
+
 /// A whole number with a pair of arrows beside it, one over the other, to step it up and down. An arrow held down steps again and again. The arrow keys step it too when it has the keyboard.
 public class Stepper: Widget {
     public override init(handle: UInt64) {

@@ -74,9 +74,7 @@ static void checkbox(const press_part *p, box r) {
     outline(b, has(p, PRESS_STATE_HOT) ? EDGE_DEEP : EDGE);
     fill((box){b.x + 1, b.y + 1, b.w - 2, 1}, rgb(0xddd8d2));
     if (has(p, PRESS_STATE_CHECKED)) {
-        static const int rise[7] = {2, 3, 4, 3, 2, 1, 0};
-        for (int i = 0; i < 7; i++)
-            fill((box){b.x + 3 + i, b.y + 3 + rise[i], 1, 3}, rgb(0x2e2a26));
+        tick(b.x + 3, b.y + 3, 7, 2, 3, rgb(0x2e2a26));
     }
     label(p, r.x + 13 + 6, r);
 }
@@ -223,10 +221,7 @@ static void frame_button(const press_part *p, box r) {
     int cx = r.x + r.w / 2, cy = r.y + r.h / 2;
     switch (p->a) {
     case PRESS_FRAME_CLOSE:
-        for (int i = -3; i <= 3; i++) {
-            fill((box){cx + i, cy + i, 2, 1}, ink);
-            fill((box){cx - i, cy + i, 2, 1}, ink);
-        }
+        cross(cx, cy, 3, 0, 2, ink);
         break;
     case PRESS_FRAME_MINIMIZE: fill((box){cx - 3, cy + 2, 7, 2}, ink); break;
     default:
@@ -375,7 +370,7 @@ static int32_t typeface(uint32_t face_, press_type *out) {
     return 1;
 }
 
-static const press_style style = {PRESS_STYLE_ABI, "twothousandfour", metrics, palette, draw, PRESS_WANTS_HOVER, typeface};
+static const press_style style = {PRESS_STYLE_ABI, "twothousandfour", metrics, palette, draw, PRESS_WANTS_HOVER | PRESS_WANTS_FINE, typeface};
 
 const press_style *press_style_entry(void) {
     return &style;
