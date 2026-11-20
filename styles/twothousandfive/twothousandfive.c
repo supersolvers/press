@@ -13,24 +13,38 @@
 
 #include <string.h>
 
-#define WINDOW rgb(0xececec)
-#define STRIPE rgb(0xe4e4e4)
-#define BLUE rgb(0x3875d7)      /* what is selected */
-#define HALO rgb(0x5a9cf0)      /* round what has the keyboard */
-#define EDGE rgb(0x767676)
-#define GREY rgb(0x9a9a9a)
-#define WHITE rgb(0xffffff)
-#define BLACK rgb(0x000000)
+COLOUR(WINDOW, 0xececec);
+FOLLOWER(STRIPE, 0xe4e4e4);
+#define STRIPE follows(STRIPE, WINDOW)
+COLOUR(BLUE, 0x3875d7);     /* what is selected */
+FOLLOWER(HALO, 0x5a9cf0);    /* round what has the keyboard */
+#define HALO follows(HALO, BLUE)
+FOLLOWER(EDGE, 0x767676);
+#define EDGE follows(EDGE, WINDOW)
+FOLLOWER(GREY, 0x9a9a9a);
+#define GREY follows(GREY, WINDOW)
+COLOUR(WHITE, 0xffffff);
+COLOUR(BLACK, 0x000000);
 
 /* The colours of a piece of gel, from its top to its bottom, and its edge. */
 typedef struct {
     uint32_t top, middle, bottom, edge;
 } gel_of;
 
-static const gel_of CLEAR = {0xfff8f8f8u, 0xffe0e0e0u, 0xfffcfcfcu, 0xff767676u};
-static const gel_of WATER = {0xff8dbff6u, 0xff3585e8u, 0xffa6d8ffu, 0xff2c4fa0u};
-static const gel_of DEEP = {0xff6a9fe0u, 0xff2468c8u, 0xff86bdf0u, 0xff223f86u};
-static const gel_of DULL = {0xfff4f4f4u, 0xffe6e6e6u, 0xfff6f6f6u, 0xffb0b0b0u};
+static const gel_of CLEAR_MADE = {0xfff8f8f8u, 0xffe0e0e0u, 0xfffcfcfcu, 0xff767676u};
+static const gel_of WATER_MADE = {0xff8dbff6u, 0xff3585e8u, 0xffa6d8ffu, 0xff2c4fa0u};
+static const gel_of DEEP_MADE = {0xff6a9fe0u, 0xff2468c8u, 0xff86bdf0u, 0xff223f86u};
+static const gel_of DULL_MADE = {0xfff4f4f4u, 0xffe6e6e6u, 0xfff6f6f6u, 0xffb0b0b0u};
+
+/* A gel whose colours go with one of the style's own, as like() has it. */
+static gel_of gel_like(gel_of g, uint32_t now, uint32_t was) {
+    gel_of out = {moved(now, was, g.top), moved(now, was, g.middle), moved(now, was, g.bottom), moved(now, was, g.edge)};
+    return out;
+}
+#define CLEAR gel_like(CLEAR_MADE, WINDOW, rgb(WINDOW_WAS))
+#define DULL gel_like(DULL_MADE, WINDOW, rgb(WINDOW_WAS))
+#define WATER gel_like(WATER_MADE, BLUE, rgb(BLUE_WAS))
+#define DEEP gel_like(DEEP_MADE, BLUE, rgb(BLUE_WAS))
 
 /* A piece of gel: shaded from its top, darkest in the middle and light
  * again at its foot, with the light caught along its top and a little
@@ -106,10 +120,10 @@ static void well(const press_part *p, box r) {
     if (has(p, PRESS_STATE_FOCUSED))
         halo(inset(r, 1), 1);
     fill(r, WHITE);
-    outline(r, rgb(0xb4b4b4));
+    outline(r, like(WINDOW, 0xb4b4b4));
     /* set into the window: its top edge in shade, and a little shade under that */
-    fill((box){r.x, r.y, r.w, 1}, rgb(0x8a8a8a));
-    fill((box){r.x + 1, r.y + 1, r.w - 2, 1}, rgb(0xe2e2e2));
+    fill((box){r.x, r.y, r.w, 1}, like(WINDOW, 0x8a8a8a));
+    fill((box){r.x + 1, r.y + 1, r.w - 2, 1}, like(WINDOW, 0xe2e2e2));
 }
 
 static void dim_in(box r) {
@@ -130,7 +144,7 @@ static void slider(const press_part *p, box r) {
         groove = (box){r.x + p->b / 2, r.y + r.h / 2 - 2, r.w - p->b + 1, 5};
         knob = (box){p->a, r.y + (r.h - p->b) / 2, p->b, p->b};
     }
-    round_box(groove, 2.5f, rgb(0x9c9c9c), rgb(0xe2e2e2), rgb(0x6e6e6e));
+    round_box(groove, 2.5f, like(WINDOW, 0x9c9c9c), like(WINDOW, 0xe2e2e2), like(WINDOW, 0x6e6e6e));
     if (has(p, PRESS_STATE_FOCUSED))
         halo(knob, p->b / 2.0f);
     gel(knob, p->b / 2.0f, has(p, PRESS_STATE_HELD) ? WATER : CLEAR, 0);
@@ -138,7 +152,7 @@ static void slider(const press_part *p, box r) {
 
 static void progress(const press_part *p, box r) {
     float radius = r.h / 2.0f;
-    round_box(r, radius, rgb(0xd6d6d6), WHITE, rgb(0x7e7e7e));
+    round_box(r, radius, like(WINDOW, 0xd6d6d6), WHITE, like(WINDOW, 0x7e7e7e));
     box done = r;
     if (!has(p, PRESS_STATE_BUSY))
         done.w = (int)((long long)r.w * p->a / (p->b > 0 ? p->b : 1));
@@ -159,14 +173,14 @@ static void scroll_bar(const press_part *p, box r) {
     int thick = vertical ? r.w : r.h, length = vertical ? r.h : r.w;
     if (length < 2 * thick) return;
     /* the track is a trough, in shade along one side */
-    fill(r, rgb(0xf2f2f2));
-    outline(r, rgb(0xb8b8b8));
+    fill(r, like(WINDOW, 0xf2f2f2));
+    outline(r, like(WINDOW, 0xb8b8b8));
     if (vertical) {
-        fill((box){r.x + 1, r.y + 1, 2, r.h - 2}, rgb(0xdadada));
-        fill((box){r.x + 3, r.y + 1, 2, r.h - 2}, rgb(0xe8e8e8));
+        fill((box){r.x + 1, r.y + 1, 2, r.h - 2}, like(WINDOW, 0xdadada));
+        fill((box){r.x + 3, r.y + 1, 2, r.h - 2}, like(WINDOW, 0xe8e8e8));
     } else {
-        fill((box){r.x + 1, r.y + 1, r.w - 2, 2}, rgb(0xdadada));
-        fill((box){r.x + 1, r.y + 3, r.w - 2, 2}, rgb(0xe8e8e8));
+        fill((box){r.x + 1, r.y + 1, r.w - 2, 2}, like(WINDOW, 0xdadada));
+        fill((box){r.x + 1, r.y + 3, r.w - 2, 2}, like(WINDOW, 0xe8e8e8));
     }
     for (int second = 0; second < 2; second++) {
         /* both arrows are together at the far end of the bar */
@@ -174,7 +188,7 @@ static void scroll_bar(const press_part *p, box r) {
         box b = vertical ? (box){r.x, from, thick, thick} : (box){from, r.y, thick, thick};
         int held = live && p->a == second + 1;
         gel(b, 2, !live ? DULL : held ? WATER : CLEAR, 0);
-        arrow(b.x + b.w / 2, b.y + b.h / 2, 4, vertical ? second : 2 + second, live ? rgb(0x303030) : GREY);
+        arrow(b.x + b.w / 2, b.y + b.h / 2, 4, vertical ? second : 2 + second, live ? like(WINDOW, 0x303030) : GREY);
     }
     if (p->b >= 0) {
         box t = vertical ? (box){r.x + 1, p->b, r.w - 2, p->c} : (box){p->b, r.y + 1, p->c, r.h - 2};
@@ -216,7 +230,7 @@ static void popup(const press_part *p, box r) {
         }
     }
     round_fill((box){cap.x + 1, cap.y + 1, cap.w - 3, cap.h / 2 - 1}, 3, with_alpha(WHITE, 0.7f), with_alpha(WHITE, 0.1f));
-    round_line(r, radius, 1, rgb(0x5a5a5a));
+    round_line(r, radius, 1, like(WINDOW, 0x5a5a5a));
     arrow(cap.x + cap.w / 2, cap.y + cap.h / 2 - 4, 4, 0, BLACK);
     arrow(cap.x + cap.w / 2, cap.y + cap.h / 2 + 4, 4, 1, BLACK);
     words(p->text, r.x + 9, r.y + (r.h - line_height()) / 2, BLACK);
@@ -227,7 +241,7 @@ static void popup(const press_part *p, box r) {
  * round the rest. */
 static void frame(const press_part *p, box r) {
     int active = has(p, PRESS_STATE_ENABLED), line = line_height();
-    uint32_t top = active ? rgb(0xf2f2f2) : rgb(0xf6f6f6), bottom = active ? rgb(0xc6c6c6) : rgb(0xe4e4e4), edge = active ? rgb(0x6e6e6e) : rgb(0x9a9a9a);
+    uint32_t top = active ? like(WINDOW, 0xf2f2f2) : like(WINDOW, 0xf6f6f6), bottom = active ? like(WINDOW, 0xc6c6c6) : like(WINDOW, 0xe4e4e4), edge = active ? like(WINDOW, 0x6e6e6e) : like(WINDOW, 0x9a9a9a);
     round_fill((box){r.x, r.y, r.w, p->a + 8}, 5, edge, edge);
     fill((box){r.x, r.y + p->a, r.w, r.h - p->a}, edge);
     box shape = {r.x + 1, r.y + 1, r.w - 2, p->a + 8};
@@ -239,7 +253,7 @@ static void frame(const press_part *p, box r) {
         }
     }
     fill((box){r.x + 1, r.y + 1, r.w - 2, 1}, with_alpha(WHITE, 0.6f));
-    fill((box){r.x + 1, r.y + p->a - 1, r.w - 2, 1}, active ? rgb(0x8a8a8a) : rgb(0xb4b4b4));
+    fill((box){r.x + 1, r.y + p->a - 1, r.w - 2, 1}, active ? like(WINDOW, 0x8a8a8a) : like(WINDOW, 0xb4b4b4));
     words(p->text, r.x + (r.w - text_width(p->text)) / 2, r.y + (p->a - line) / 2, active ? BLACK : GREY);
 }
 
@@ -281,7 +295,7 @@ static int32_t draw(const press_part *p, const press_surface *surface) {
     case PRESS_PART_WELL: well(p, r); break;
     case PRESS_PART_SELECT:
         /* a row or a menu's item goes blue with white words; words picked out in a text keep their black on a pale blue */
-        if (p->a == 1) recolour(r, rgb(0xb5d5ff), BLACK);
+        if (p->a == 1) recolour(r, like(BLUE, 0xb5d5ff), BLACK);
         else recolour(r, BLUE, WHITE);
         break;
     case PRESS_PART_DIM: dim_in(r); break;
@@ -289,22 +303,22 @@ static int32_t draw(const press_part *p, const press_surface *surface) {
     case PRESS_PART_SLIDER: slider(p, r); break;
     case PRESS_PART_PROGRESS: progress(p, r); break;
     case PRESS_PART_SCROLL_BAR: scroll_bar(p, r); break;
-    case PRESS_PART_SCROLL_CORNER: fill(r, rgb(0xf2f2f2)); break;
+    case PRESS_PART_SCROLL_CORNER: fill(r, like(WINDOW, 0xf2f2f2)); break;
     case PRESS_PART_TAB: tab(p, r); break;
     case PRESS_PART_TAB_PANE: {
         /* a box let into the window, a shade darker than it */
-        round_box(r, 5, rgb(0xdcdcdc), rgb(0xe6e6e6), rgb(0xa8a8a8));
+        round_box(r, 5, like(WINDOW, 0xdcdcdc), like(WINDOW, 0xe6e6e6), like(WINDOW, 0xa8a8a8));
         break;
     }
     case PRESS_PART_POPUP: popup(p, r); break;
     case PRESS_PART_MENU_BAR:
-        gradient((box){r.x, r.y, r.w, r.h / 2}, WHITE, rgb(0xededed));
-        gradient((box){r.x, r.y + r.h / 2, r.w, r.h - r.h / 2 - 1}, rgb(0xe2e2e2), rgb(0xf4f4f4));
-        fill((box){r.x, r.y + r.h - 1, r.w, 1}, rgb(0x8c8c8c));
+        gradient((box){r.x, r.y, r.w, r.h / 2}, WHITE, like(WINDOW, 0xededed));
+        gradient((box){r.x, r.y + r.h / 2, r.w, r.h - r.h / 2 - 1}, like(WINDOW, 0xe2e2e2), like(WINDOW, 0xf4f4f4));
+        fill((box){r.x, r.y + r.h - 1, r.w, 1}, like(WINDOW, 0x8c8c8c));
         break;
     case PRESS_PART_MENU_TITLE: {
         int lit = has(p, PRESS_STATE_HELD) && has(p, PRESS_STATE_ENABLED);
-        if (lit) gradient((box){r.x, r.y, r.w, r.h}, rgb(0x5d8fe8), rgb(0x2a5fd0));
+        if (lit) gradient((box){r.x, r.y, r.w, r.h}, like(BLUE, 0x5d8fe8), like(BLUE, 0x2a5fd0));
         words(p->text, r.x + 9, r.y + (r.h - line_height()) / 2, lit ? WHITE : has(p, PRESS_STATE_ENABLED) ? BLACK : GREY);
         break;
     }
@@ -315,16 +329,16 @@ static int32_t draw(const press_part *p, const press_surface *surface) {
         outline(frame, with_alpha(BLACK, 0.28f));
         break;
     }
-    case PRESS_PART_MENU_SEPARATOR: fill((box){r.x + 1, r.y + r.h / 2, r.w - 2, 1}, rgb(0xd4d4d4)); break;
+    case PRESS_PART_MENU_SEPARATOR: fill((box){r.x + 1, r.y + r.h / 2, r.w - 2, 1}, like(WINDOW, 0xd4d4d4)); break;
     case PRESS_PART_VIEW_FRAME:
         fill(r, WINDOW);
-        outline(r, rgb(0x9e9e9e));
+        outline(r, like(WINDOW, 0x9e9e9e));
         break;
     case PRESS_PART_HEADER:
-        gradient((box){r.x, r.y, r.w, r.h - 1}, WHITE, rgb(0xe4e4e4));
-        fill((box){r.x, r.y + r.h - 1, r.w, 1}, rgb(0xa5a5a5));
+        gradient((box){r.x, r.y, r.w, r.h - 1}, WHITE, like(WINDOW, 0xe4e4e4));
+        fill((box){r.x, r.y + r.h - 1, r.w, 1}, like(WINDOW, 0xa5a5a5));
         break;
-    case PRESS_PART_HEADER_CELL: fill((box){r.x + r.w - 1, r.y + 2, 1, r.h - 5}, rgb(0xc4c4c4)); break;
+    case PRESS_PART_HEADER_CELL: fill((box){r.x + r.w - 1, r.y + 2, 1, r.h - 5}, like(WINDOW, 0xc4c4c4)); break;
     case PRESS_PART_GROUP_BOX: {
         /* its title stands over it; the box is a shade darker than what it lies on */
         int top = p->text[0] ? line_height() + 1 : 0;
@@ -332,31 +346,31 @@ static int32_t draw(const press_part *p, const press_surface *surface) {
         clip_to(in);
         fade(inset(in, 1), BLACK, 0.045f);
         clip_off();
-        round_line(in, 4, 1, rgb(0xb4b4b4));
+        round_line(in, 4, 1, like(WINDOW, 0xb4b4b4));
         if (p->text[0]) words(p->text, r.x + 8, r.y, p->ink);
         break;
     }
     case PRESS_PART_TOOLBAR:
         /* one line under the tools, and no more */
-        fill((box){r.x, r.y + r.h - 1, r.w, 1}, rgb(0xa5a5a5));
+        fill((box){r.x, r.y + r.h - 1, r.w, 1}, like(WINDOW, 0xa5a5a5));
         break;
-    case PRESS_PART_STATUS_BAR: fill((box){r.x, r.y, r.w, 1}, rgb(0xa5a5a5)); break;
+    case PRESS_PART_STATUS_BAR: fill((box){r.x, r.y, r.w, 1}, like(WINDOW, 0xa5a5a5)); break;
     case PRESS_PART_STATUS_PANEL:
-        if (p->a > 0) fill((box){r.x - 2, r.y + 2, 1, r.h - 5}, rgb(0xb4b4b4));
+        if (p->a > 0) fill((box){r.x - 2, r.y + 2, 1, r.h - 5}, like(WINDOW, 0xb4b4b4));
         break;
     case PRESS_PART_STEPPER: {
         /* one small lozenge, an arrow in each half */
         box s = {r.x + (r.w - 13) / 2, r.y + (r.h - 22) / 2, 13, 22};
-        round_box(s, 5.5f, WHITE, rgb(0xdcdcdc), rgb(0x8e8e8e));
+        round_box(s, 5.5f, WHITE, like(WINDOW, 0xdcdcdc), like(WINDOW, 0x8e8e8e));
         if (p->a) {
             box half = {s.x, p->a == 2 ? s.y : s.y + 11, 13, 11};
             clip_to(half);
-            round_box(s, 5.5f, rgb(0x9cc4f0), rgb(0x4a8fe0), rgb(0x3a62a8));
+            round_box(s, 5.5f, like(BLUE, 0x9cc4f0), like(BLUE, 0x4a8fe0), like(BLUE, 0x3a62a8));
             clip_off();
         }
-        fill((box){s.x + 1, s.y + 11, 11, 1}, rgb(0x9e9e9e));
-        arrow(s.x + 6, s.y + 5, 3, 0, rgb(0x303030));
-        arrow(s.x + 6, s.y + 16, 3, 1, rgb(0x303030));
+        fill((box){s.x + 1, s.y + 11, 11, 1}, like(WINDOW, 0x9e9e9e));
+        arrow(s.x + 6, s.y + 5, 3, 0, like(WINDOW, 0x303030));
+        arrow(s.x + 6, s.y + 16, 3, 1, like(WINDOW, 0x303030));
         break;
     }
     case PRESS_PART_FRAME: frame(p, r); break;
@@ -429,7 +443,20 @@ static int32_t typeface(uint32_t face, press_type *out) {
     return 1;
 }
 
-static const press_style style = {PRESS_STYLE_ABI, "twothousandfive", metrics, palette, draw, PRESS_WANTS_FINE | PRESS_WANTS_PULSE | PRESS_WANTS_HOVER, typeface};
+/* What a theme may change, by these names. */
+static const press_colour colours[] = {
+    {"window", &WINDOW},
+    {"stripe", &STRIPE_SAID},
+    {"blue", &BLUE},
+    {"halo", &HALO_SAID},
+    {"edge", &EDGE_SAID},
+    {"grey", &GREY_SAID},
+    {"white", &WHITE},
+    {"black", &BLACK},
+    {NULL, NULL},
+};
+
+static const press_style style = {PRESS_STYLE_ABI, "twothousandfive", metrics, palette, draw, PRESS_WANTS_FINE | PRESS_WANTS_PULSE | PRESS_WANTS_HOVER, typeface, colours};
 
 const press_style *press_style_entry(void) {
     return &style;

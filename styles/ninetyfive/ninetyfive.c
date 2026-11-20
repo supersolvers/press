@@ -19,15 +19,29 @@
 
 #ifndef STYLE_NAME
 #define STYLE_NAME "ninetyfive"
-#define FACE 0xffc0c0c0u   /* what everything is made of */
-#define HILITE 0xffffffffu /* an edge the light falls on */
-#define LIGHT 0xffdfdfdfu
-#define SHADOW 0xff808080u /* an edge in shade */
-#define DARK 0xff000000u
-#define NAVY 0xff000080u   /* what is selected */
+#define STYLE_FACE 0xffc0c0c0u
+#define STYLE_HILITE 0xffffffffu
+#define STYLE_LIGHT 0xffdfdfdfu
+#define STYLE_SHADOW 0xff808080u
+#define STYLE_DARK 0xff000000u
+#define STYLE_NAVY 0xff000080u
 #endif
-#define WHITE 0xffffffffu
-#define BLACK 0xff000000u
+
+/* The colours, kept where a theme can change them: see the list of them
+ * at the foot of this file. */
+static uint32_t FACE = STYLE_FACE;     /* what everything is made of */
+static uint32_t HILITE = STYLE_HILITE; /* an edge the light falls on */
+static uint32_t LIGHT = STYLE_LIGHT;
+static uint32_t SHADOW = STYLE_SHADOW; /* an edge in shade */
+static uint32_t DARK = STYLE_DARK;
+static uint32_t NAVY = STYLE_NAVY;     /* what is selected, and the title bar of the window in front */
+static uint32_t WHITE = 0xffffffffu;
+static uint32_t BLACK = 0xff000000u;
+#ifdef STYLE_TITLE_FADE
+/* what the colour of a title bar runs out to at its right: in front, and behind */
+static uint32_t TITLE_FADE = STYLE_TITLE_FADE;
+static uint32_t TITLE_FADE_IDLE = STYLE_TITLE_FADE_IDLE;
+#endif
 
 typedef struct {
     int x, y, w, h;
@@ -370,7 +384,7 @@ static void frame(const press_part *p, box r) {
 #ifdef STYLE_TITLE_FADE
     /* the colour of the bar runs out towards the right */
     for (int x = 0; x < bar.w; x++)
-        fill((box){bar.x + x, bar.y, 1, bar.h}, part_way(active ? NAVY : SHADOW, active ? STYLE_TITLE_FADE : STYLE_TITLE_FADE_IDLE, x, bar.w - 1));
+        fill((box){bar.x + x, bar.y, 1, bar.h}, part_way(active ? NAVY : SHADOW, active ? TITLE_FADE : TITLE_FADE_IDLE, x, bar.w - 1));
 #else
     fill(bar, active ? NAVY : SHADOW);
 #endif
@@ -540,7 +554,24 @@ static void palette(press_palette *p) {
 #define STYLE_WANTS 0
 #endif
 
-static const press_style style = {PRESS_STYLE_ABI, STYLE_NAME, metrics, palette, draw, STYLE_WANTS, STYLE_TYPEFACE};
+/* What a theme may change, by these names. */
+static const press_colour colours[] = {
+    {"face", &FACE},
+    {"hilite", &HILITE},
+    {"light", &LIGHT},
+    {"shadow", &SHADOW},
+    {"dark", &DARK},
+    {"navy", &NAVY},
+    {"white", &WHITE},
+    {"black", &BLACK},
+#ifdef STYLE_TITLE_FADE
+    {"title_fade", &TITLE_FADE},
+    {"title_fade_idle", &TITLE_FADE_IDLE},
+#endif
+    {NULL, NULL},
+};
+
+static const press_style style = {PRESS_STYLE_ABI, STYLE_NAME, metrics, palette, draw, STYLE_WANTS, STYLE_TYPEFACE, colours};
 
 const press_style *press_style_entry(void) {
     return &style;

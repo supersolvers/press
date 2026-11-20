@@ -1,0 +1,7 @@
+# Two Thousand and Four with its orange and brown turned to blue slate.
+name = "Two Thousand and Four, Slate"
+style = "twothousandfour"
+
+[colours]
+orange = "#4f7fb5"
+brown = "#2f4a6b"

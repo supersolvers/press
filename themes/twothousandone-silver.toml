@@ -1,0 +1,7 @@
+# Two Thousand and One in silver: the blues taken down to a cool grey.
+name = "Two Thousand and One, Silver"
+style = "twothousandone"
+
+[colours]
+blue = "#7d8499"
+sand = "#e9e9ee"

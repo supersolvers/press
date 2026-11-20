@@ -14,16 +14,21 @@
  */
 #include "smooth.h"
 
-#define GROUND rgb(0xaeb2c3)  /* what windows are made of */
-#define LIT rgb(0xdcdee5)
-#define SHADE rgb(0x5d6069)
-#define TROUGH rgb(0x9397a5)  /* what is pressed in, and the bed of a scroll bar */
-#define PAPER rgb(0xfff7e9)
-#define ROSE rgb(0xb24d7a)    /* the frame of the window in front */
-#define ROSE_LIT rgb(0xe0b0c6)
-#define ROSE_SHADE rgb(0x5e2840)
-#define BLACK rgb(0x000000)
-#define WHITE rgb(0xffffff)
+COLOUR(GROUND, 0xaeb2c3); /* what windows are made of */
+FOLLOWER(LIT, 0xdcdee5);
+#define LIT follows(LIT, GROUND)
+FOLLOWER(SHADE, 0x5d6069);
+#define SHADE follows(SHADE, GROUND)
+FOLLOWER(TROUGH, 0x9397a5); /* what is pressed in, and the bed of a scroll bar */
+#define TROUGH follows(TROUGH, GROUND)
+COLOUR(PAPER, 0xfff7e9);
+COLOUR(ROSE, 0xb24d7a);   /* the frame of the window in front */
+FOLLOWER(ROSE_LIT, 0xe0b0c6);
+#define ROSE_LIT follows(ROSE_LIT, ROSE)
+FOLLOWER(ROSE_SHADE, 0x5e2840);
+#define ROSE_SHADE follows(ROSE_SHADE, ROSE)
+COLOUR(BLACK, 0x000000);
+COLOUR(WHITE, 0xffffff);
 
 /* Two pixels of edge: one colour along the top and left, another along
  * the bottom and right. */
@@ -332,7 +337,22 @@ static void palette(press_palette *p) {
 }
 
 /* No typeface is asked for: that desktop's was in whole pixels, as the engine's own is. */
-static const press_style style = {PRESS_STYLE_ABI, "ninetythree", metrics, palette, draw, 0, NULL};
+/* What a theme may change, by these names. */
+static const press_colour colours[] = {
+    {"ground", &GROUND},
+    {"lit", &LIT_SAID},
+    {"shade", &SHADE_SAID},
+    {"trough", &TROUGH_SAID},
+    {"paper", &PAPER},
+    {"rose", &ROSE},
+    {"rose_lit", &ROSE_LIT_SAID},
+    {"rose_shade", &ROSE_SHADE_SAID},
+    {"black", &BLACK},
+    {"white", &WHITE},
+    {NULL, NULL},
+};
+
+static const press_style style = {PRESS_STYLE_ABI, "ninetythree", metrics, palette, draw, 0, NULL, colours};
 
 const press_style *press_style_entry(void) {
     return &style;

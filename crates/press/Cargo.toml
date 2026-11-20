@@ -15,6 +15,7 @@ accesskit = "0.25"
 accesskit_unix = "0.24"
 libc = "0.2"
 png = "0.18"
+toml = { version = "0.9", default-features = false, features = ["parse", "serde", "std"] }
 smithay-client-toolkit = { version = "0.19", default-features = false, features = ["xkbcommon"] }
 wayland-client = "0.31"
 wayland-protocols = { version = "0.32", features = ["client", "staging"] }

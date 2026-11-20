@@ -13,11 +13,12 @@
  */
 #include "smooth.h"
 
-#define GREY rgb(0xc0c0c0)
-#define SHADE rgb(0x808080)
-#define NAVY rgb(0x000080)
-#define WHITE rgb(0xffffff)
-#define BLACK rgb(0x000000)
+COLOUR(GREY, 0xc0c0c0);
+FOLLOWER(SHADE, 0x808080);
+#define SHADE follows(SHADE, GREY)
+COLOUR(NAVY, 0x000080);
+COLOUR(WHITE, 0xffffff);
+COLOUR(BLACK, 0x000000);
 
 /* A grey plate in a black line with the corners left off, lit along its
  * top and left and two pixels deep in shade along its bottom and right. */
@@ -383,7 +384,17 @@ static void palette(press_palette *p) {
     p->pointer_edge = 0xff000000u;
 }
 
-static const press_style style = {PRESS_STYLE_ABI, "ninety", metrics, palette, draw, 0, NULL};
+/* What a theme may change, by these names. */
+static const press_colour colours[] = {
+    {"grey", &GREY},
+    {"shade", &SHADE_SAID},
+    {"navy", &NAVY},
+    {"white", &WHITE},
+    {"black", &BLACK},
+    {NULL, NULL},
+};
+
+static const press_style style = {PRESS_STYLE_ABI, "ninety", metrics, palette, draw, 0, NULL, colours};
 
 const press_style *press_style_entry(void) {
     return &style;

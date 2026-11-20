@@ -15,18 +15,23 @@
 
 #include <string.h>
 
-#define PANEL rgb(0xd8d8d8)   /* what windows are made of */
-#define LIT rgb(0xffffff)
-#define SOFT rgb(0xb8b8b8)
-#define SHADE rgb(0x989898)
-#define LINE rgb(0x606060)    /* round a button */
-#define YELLOW rgb(0xffcb00)  /* the tab of the window in front */
-#define YELLOW_LIT rgb(0xffe880)
-#define YELLOW_SHADE rgb(0xd2a000)
-#define KEY rgb(0x0000e5)     /* where the keyboard is */
-#define BLUE rgb(0x3296ff)    /* work done */
-#define WHITE rgb(0xffffff)
-#define BLACK rgb(0x000000)
+COLOUR(PANEL, 0xd8d8d8);  /* what windows are made of */
+COLOUR(LIT, 0xffffff);
+FOLLOWER(SOFT, 0xb8b8b8);
+#define SOFT follows(SOFT, PANEL)
+FOLLOWER(SHADE, 0x989898);
+#define SHADE follows(SHADE, PANEL)
+FOLLOWER(LINE, 0x606060);  /* round a button */
+#define LINE follows(LINE, PANEL)
+COLOUR(YELLOW, 0xffcb00); /* the tab of the window in front */
+FOLLOWER(YELLOW_LIT, 0xffe880);
+#define YELLOW_LIT follows(YELLOW_LIT, YELLOW)
+FOLLOWER(YELLOW_SHADE, 0xd2a000);
+#define YELLOW_SHADE follows(YELLOW_SHADE, YELLOW)
+COLOUR(KEY, 0x0000e5);    /* where the keyboard is */
+COLOUR(BLUE, 0x3296ff);   /* work done */
+COLOUR(WHITE, 0xffffff);
+COLOUR(BLACK, 0x000000);
 
 static void edge(box r, uint32_t top_left, uint32_t bottom_right) {
     if (r.w <= 1 || r.h <= 1) return;
@@ -38,7 +43,7 @@ static void edge(box r, uint32_t top_left, uint32_t bottom_right) {
 
 /* A plate in a thin dark line, lit at the top left. */
 static void plate(box r, int held) {
-    fill(r, held ? SOFT : rgb(0xe8e8e8));
+    fill(r, held ? SOFT : like(PANEL, 0xe8e8e8));
     outline(r, LINE);
     edge(inset(r, 1), held ? SHADE : LIT, held ? PANEL : SOFT);
 }
@@ -82,8 +87,8 @@ static void checkbox(const press_part *p, box r) {
     if (has(p, PRESS_STATE_CHECKED)) {
         /* a cross in blue, drawn with a broad pen */
         for (int i = 0; i < 7; i++) {
-            fill((box){b.x + 3 + i, b.y + 3 + i, 2, 1}, rgb(0x1b52c8));
-            fill((box){b.x + 9 - i, b.y + 3 + i, 2, 1}, rgb(0x1b52c8));
+            fill((box){b.x + 3 + i, b.y + 3 + i, 2, 1}, like(BLUE, 0x1b52c8));
+            fill((box){b.x + 9 - i, b.y + 3 + i, 2, 1}, like(BLUE, 0x1b52c8));
         }
     }
     label(p, r.x + 13 + 6, r);
@@ -95,7 +100,7 @@ static void radio(const press_part *p, box r) {
     round_fill(inset(b, 1), 5.5f, LINE, LINE);
     round_fill(inset(b, 2), 4.5f, has(p, PRESS_STATE_HELD) ? SOFT : WHITE, has(p, PRESS_STATE_HELD) ? SOFT : WHITE);
     if (has(p, PRESS_STATE_CHECKED))
-        round_fill(inset(b, 4), 2.5f, rgb(0x4d8cf0), rgb(0x1b52c8));
+        round_fill(inset(b, 4), 2.5f, like(BLUE, 0x4d8cf0), like(BLUE, 0x1b52c8));
     if (has(p, PRESS_STATE_FOCUSED)) round_line(b, 6.5f, 1, KEY);
     label(p, r.x + 13 + 6, r);
 }
@@ -112,7 +117,7 @@ static void scroll_bar(const press_part *p, box r) {
     int vertical = has(p, PRESS_STATE_VERTICAL), live = has(p, PRESS_STATE_ENABLED);
     int thick = vertical ? r.w : r.h, length = vertical ? r.h : r.w;
     if (length < 2 * thick) return;
-    fill(r, live ? rgb(0xc4c4c4) : PANEL);
+    fill(r, live ? like(PANEL, 0xc4c4c4) : PANEL);
     outline(r, LINE);
     if (live) {
         if (vertical) fill((box){r.x + 1, r.y + 1, 1, r.h - 2}, SHADE);
@@ -131,7 +136,7 @@ static void slider(const press_part *p, box r) {
     int vertical = has(p, PRESS_STATE_VERTICAL);
     box groove = vertical ? (box){r.x + r.w / 2 - 3, r.y + 2, 6, r.h - 4} : (box){r.x + 2, r.y + r.h / 2 - 3, r.w - 4, 6};
     box knob = vertical ? (box){r.x + 1, p->a, r.w - 2, p->b} : (box){p->a, r.y + 1, p->b, r.h - 2};
-    let_in(groove, rgb(0x9c9c9c));
+    let_in(groove, like(PANEL, 0x9c9c9c));
     plate(knob, has(p, PRESS_STATE_HELD));
     if (has(p, PRESS_STATE_FOCUSED)) outline(knob, KEY);
 }
@@ -140,7 +145,7 @@ static void tab(const press_part *p, box r) {
     int front = has(p, PRESS_STATE_FRONT), line = line_height();
     int top = r.y + (front ? 0 : 3), foot = r.y + r.h - 1;
     box shape = {r.x, top, r.w, foot - top + 5};
-    round_box(shape, 4, front ? PANEL : rgb(0xc8c8c8), front ? PANEL : rgb(0xc8c8c8), LINE);
+    round_box(shape, 4, front ? PANEL : like(PANEL, 0xc8c8c8), front ? PANEL : like(PANEL, 0xc8c8c8), LINE);
     round_line(inset(shape, 1), 3, 1, with_alpha(WHITE, front ? 0.9f : 0.5f));
     if (front) fill((box){r.x + 1, foot, r.w - 2, 5}, PANEL);
     else fill((box){r.x, foot, r.w, 5}, PANEL);
@@ -164,7 +169,7 @@ static void frame(const press_part *p, box r) {
     int active = has(p, PRESS_STATE_ENABLED), line = line_height(), b = p->b;
     box body = {r.x, r.y + p->a - b, r.w, r.h - p->a + b};
     box tab_ = {r.x, r.y, p->c, p->a - b + 1};
-    uint32_t face = active ? YELLOW : rgb(0xe8e8e8), lit = active ? YELLOW_LIT : WHITE, shade = active ? YELLOW_SHADE : SOFT;
+    uint32_t face = active ? YELLOW : like(PANEL, 0xe8e8e8), lit = active ? YELLOW_LIT : WHITE, shade = active ? YELLOW_SHADE : SOFT;
     /* the rim: a dark line, light, two of the panel, and a line of shade within */
     fill(body, PANEL);
     outline(body, LINE);
@@ -176,7 +181,7 @@ static void frame(const press_part *p, box r) {
     fill((box){tab_.x, tab_.y, tab_.w, 1}, LINE);
     fill((box){tab_.x, tab_.y, 1, tab_.h}, LINE);
     fill((box){tab_.x + tab_.w - 1, tab_.y, 1, tab_.h}, LINE);
-    words(p->text, r.x + 24, r.y + (p->a - b - line) / 2 + 1, active ? BLACK : rgb(0x505050));
+    words(p->text, r.x + 24, r.y + (p->a - b - line) / 2 + 1, active ? BLACK : like(PANEL, 0x505050));
 }
 
 /* The boxes in the tab: at its left the one that closes, a small square;
@@ -213,7 +218,7 @@ static int32_t draw(const press_part *p, const press_surface *surface) {
             outline(inset(r, 1), KEY);
         }
         break;
-    case PRESS_PART_SELECT: recolour(r, rgb(0x9c9c9c), BLACK); break;
+    case PRESS_PART_SELECT: recolour(r, like(PANEL, 0x9c9c9c), BLACK); break;
     case PRESS_PART_DIM: dim_in(r); break;
     case PRESS_PART_FOCUS: outline(r, KEY); break;
     case PRESS_PART_SLIDER: slider(p, r); break;
@@ -230,7 +235,7 @@ static int32_t draw(const press_part *p, const press_surface *surface) {
         }
         if (done.w > 0) {
             fill(done, BLUE);
-            edge(done, rgb(0x8cc3ff), rgb(0x1e6ec8));
+            edge(done, like(BLUE, 0x8cc3ff), like(BLUE, 0x1e6ec8));
         }
         break;
     }
@@ -250,7 +255,7 @@ static int32_t draw(const press_part *p, const press_surface *surface) {
         break;
     case PRESS_PART_MENU_TITLE: {
         int lit = has(p, PRESS_STATE_HELD) && has(p, PRESS_STATE_ENABLED);
-        if (lit) fill((box){r.x, r.y + 1, r.w, r.h - 2}, rgb(0x9c9c9c));
+        if (lit) fill((box){r.x, r.y + 1, r.w, r.h - 2}, like(PANEL, 0x9c9c9c));
         words(p->text, r.x + 9, r.y + (r.h - line_height()) / 2, has(p, PRESS_STATE_ENABLED) ? BLACK : SHADE);
         break;
     }
@@ -348,7 +353,24 @@ static int32_t typeface(uint32_t face, press_type *out) {
     return 1;
 }
 
-static const press_style style = {PRESS_STYLE_ABI, "ninetyeight", metrics, palette, draw, 0, typeface};
+/* What a theme may change, by these names. */
+static const press_colour colours[] = {
+    {"panel", &PANEL},
+    {"lit", &LIT},
+    {"soft", &SOFT_SAID},
+    {"shade", &SHADE_SAID},
+    {"line", &LINE_SAID},
+    {"yellow", &YELLOW},
+    {"yellow_lit", &YELLOW_LIT_SAID},
+    {"yellow_shade", &YELLOW_SHADE_SAID},
+    {"key", &KEY},
+    {"blue", &BLUE},
+    {"white", &WHITE},
+    {"black", &BLACK},
+    {NULL, NULL},
+};
+
+static const press_style style = {PRESS_STYLE_ABI, "ninetyeight", metrics, palette, draw, 0, typeface, colours};
 
 const press_style *press_style_entry(void) {
     return &style;

@@ -1,0 +1,11 @@
+# Ninety-Five in the colours of sand, with teal for what is selected. That
+# desktop's bevels were colours a scheme set one by one, and so are they
+# here.
+name = "Ninety-Five, Desert"
+style = "ninetyfive"
+
+[colours]
+face = "#d5ccbb"
+light = "#e8e2d6"
+shadow = "#a89d84"
+navy = "#008080"

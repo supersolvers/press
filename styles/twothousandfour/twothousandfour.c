@@ -15,23 +15,30 @@
 
 #include <string.h>
 
-#define PARCHMENT rgb(0xefebe7) /* what windows are made of */
-#define EDGE rgb(0x8d8072)      /* round a button or a field */
-#define EDGE_DEEP rgb(0x5e5246)
-#define FACE_TOP rgb(0xfbf9f7)
-#define FACE_FOOT rgb(0xe1dad1)
-#define ORANGE rgb(0xe07b24)    /* what is selected */
-#define ORANGE_LIGHT rgb(0xf6c07a)
-#define ORANGE_DEEP rgb(0xb85a12)
-#define BROWN rgb(0x6b4a2b)
-#define GREY rgb(0xa39a8f)
-#define WHITE rgb(0xffffff)
-#define BLACK rgb(0x000000)
+COLOUR(PARCHMENT, 0xefebe7); /* what windows are made of */
+FOLLOWER(EDGE, 0x8d8072);    /* round a button or a field */
+#define EDGE follows(EDGE, PARCHMENT)
+FOLLOWER(EDGE_DEEP, 0x5e5246);
+#define EDGE_DEEP follows(EDGE_DEEP, PARCHMENT)
+FOLLOWER(FACE_TOP, 0xfbf9f7);
+#define FACE_TOP follows(FACE_TOP, PARCHMENT)
+FOLLOWER(FACE_FOOT, 0xe1dad1);
+#define FACE_FOOT follows(FACE_FOOT, PARCHMENT)
+COLOUR(ORANGE, 0xe07b24);   /* what is selected */
+FOLLOWER(ORANGE_LIGHT, 0xf6c07a);
+#define ORANGE_LIGHT follows(ORANGE_LIGHT, ORANGE)
+FOLLOWER(ORANGE_DEEP, 0xb85a12);
+#define ORANGE_DEEP follows(ORANGE_DEEP, ORANGE)
+COLOUR(BROWN, 0x6b4a2b);
+FOLLOWER(GREY, 0xa39a8f);
+#define GREY follows(GREY, PARCHMENT)
+COLOUR(WHITE, 0xffffff);
+COLOUR(BLACK, 0x000000);
 
 /* A face: shaded from top to bottom in a thin dark edge, its corners just off. */
 static void face(box r, int held, int hot) {
-    if (held) round_box(r, 2.5f, rgb(0xd3ccc2), rgb(0xe3ddd5), EDGE_DEEP);
-    else if (hot) round_box(r, 2.5f, WHITE, rgb(0xece6de), EDGE);
+    if (held) round_box(r, 2.5f, like(PARCHMENT, 0xd3ccc2), like(PARCHMENT, 0xe3ddd5), EDGE_DEEP);
+    else if (hot) round_box(r, 2.5f, WHITE, like(PARCHMENT, 0xece6de), EDGE);
     else round_box(r, 2.5f, FACE_TOP, FACE_FOOT, EDGE);
     if (!held) fill_over((box){r.x + 2, r.y + 1, r.w - 4, 1}, with_alpha(WHITE, 0.8f));
 }
@@ -70,20 +77,20 @@ static void button(const press_part *p, box r) {
 
 static void checkbox(const press_part *p, box r) {
     box b = {r.x, r.y + (r.h - 13) / 2, 13, 13};
-    fill(b, has(p, PRESS_STATE_HELD) ? rgb(0xddd6cd) : WHITE);
+    fill(b, has(p, PRESS_STATE_HELD) ? like(PARCHMENT, 0xddd6cd) : WHITE);
     outline(b, has(p, PRESS_STATE_HOT) ? EDGE_DEEP : EDGE);
-    fill((box){b.x + 1, b.y + 1, b.w - 2, 1}, rgb(0xddd8d2));
+    fill((box){b.x + 1, b.y + 1, b.w - 2, 1}, like(PARCHMENT, 0xddd8d2));
     if (has(p, PRESS_STATE_CHECKED)) {
-        tick(b.x + 3, b.y + 3, 7, 2, 3, rgb(0x2e2a26));
+        tick(b.x + 3, b.y + 3, 7, 2, 3, like(PARCHMENT, 0x2e2a26));
     }
     label(p, r.x + 13 + 6, r);
 }
 
 static void radio(const press_part *p, box r) {
     box b = {r.x, r.y + (r.h - 13) / 2, 13, 13};
-    round_box(b, 6.5f, has(p, PRESS_STATE_HELD) ? rgb(0xddd6cd) : rgb(0xf2efec), WHITE, has(p, PRESS_STATE_HOT) ? EDGE_DEEP : EDGE);
+    round_box(b, 6.5f, has(p, PRESS_STATE_HELD) ? like(PARCHMENT, 0xddd6cd) : like(PARCHMENT, 0xf2efec), WHITE, has(p, PRESS_STATE_HOT) ? EDGE_DEEP : EDGE);
     if (has(p, PRESS_STATE_CHECKED))
-        round_fill((box){b.x + 4, b.y + 4, 5, 5}, 2.5f, rgb(0x4a433c), rgb(0x2e2a26));
+        round_fill((box){b.x + 4, b.y + 4, 5, 5}, 2.5f, like(PARCHMENT, 0x4a433c), like(PARCHMENT, 0x2e2a26));
     label(p, r.x + 13 + 6, r);
 }
 
@@ -99,12 +106,12 @@ static void scroll_bar(const press_part *p, box r) {
     int vertical = has(p, PRESS_STATE_VERTICAL), live = has(p, PRESS_STATE_ENABLED);
     int thick = vertical ? r.w : r.h, length = vertical ? r.h : r.w;
     if (length < 2 * thick) return;
-    fill(r, rgb(0xd9d2c8));
-    outline(r, rgb(0xb5ab9e));
+    fill(r, like(PARCHMENT, 0xd9d2c8));
+    outline(r, like(PARCHMENT, 0xb5ab9e));
     for (int second = 0; second < 2; second++) {
         box b = vertical ? (box){r.x, second ? r.y + r.h - thick : r.y, thick, thick} : (box){second ? r.x + r.w - thick : r.x, r.y, thick, thick};
         face(b, live && p->a == second + 1, live && p->d == second + 1);
-        arrow(b.x + b.w / 2, b.y + b.h / 2, 4, vertical ? second : 2 + second, live ? rgb(0x3a342e) : GREY);
+        arrow(b.x + b.w / 2, b.y + b.h / 2, 4, vertical ? second : 2 + second, live ? like(PARCHMENT, 0x3a342e) : GREY);
     }
     if (p->b >= 0) {
         box t = vertical ? (box){r.x, p->b, r.w, p->c} : (box){p->b, r.y, p->c, r.h};
@@ -112,10 +119,10 @@ static void scroll_bar(const press_part *p, box r) {
         if (p->c >= 18) {
             for (int i = -3; i <= 3; i += 3) {
                 if (vertical) {
-                    fill((box){t.x + 4, t.y + t.h / 2 + i, t.w - 8, 1}, rgb(0xa89d90));
+                    fill((box){t.x + 4, t.y + t.h / 2 + i, t.w - 8, 1}, like(PARCHMENT, 0xa89d90));
                     fill((box){t.x + 4, t.y + t.h / 2 + i + 1, t.w - 8, 1}, WHITE);
                 } else {
-                    fill((box){t.x + t.w / 2 + i, t.y + 4, 1, t.h - 8}, rgb(0xa89d90));
+                    fill((box){t.x + t.w / 2 + i, t.y + 4, 1, t.h - 8}, like(PARCHMENT, 0xa89d90));
                     fill((box){t.x + t.w / 2 + i + 1, t.y + 4, 1, t.h - 8}, WHITE);
                 }
             }
@@ -133,7 +140,7 @@ static void slider(const press_part *p, box r) {
         groove = (box){r.x + 2, r.y + r.h / 2 - 2, r.w - 4, 5};
         knob = (box){p->a, r.y + 1, p->b, r.h - 2};
     }
-    round_box(groove, 2, rgb(0xcfc7bc), rgb(0xe6e0d8), EDGE);
+    round_box(groove, 2, like(PARCHMENT, 0xcfc7bc), like(PARCHMENT, 0xe6e0d8), EDGE);
     /* the part of the way gone is orange */
     if (vertical) fill((box){groove.x + 1, knob.y, groove.w - 2, groove.y + groove.h - 1 - knob.y}, ORANGE);
     else fill((box){groove.x + 1, groove.y + 1, knob.x - groove.x, groove.h - 2}, ORANGE);
@@ -143,7 +150,7 @@ static void slider(const press_part *p, box r) {
 
 static void progress(const press_part *p, box r) {
     box in = inset(r, 1);
-    round_box(r, 2.5f, rgb(0xddd6cc), rgb(0xf3f0ec), EDGE);
+    round_box(r, 2.5f, like(PARCHMENT, 0xddd6cc), like(PARCHMENT, 0xf3f0ec), EDGE);
     box done = in;
     if (has(p, PRESS_STATE_BUSY)) {
         /* a piece that goes to and fro */
@@ -163,7 +170,7 @@ static void tab(const press_part *p, box r) {
     int front = has(p, PRESS_STATE_FRONT);
     int top = r.y + (front ? 0 : 3), foot = r.y + r.h - 1;
     box shape = {r.x, top, r.w, foot - top + 4};
-    round_box(shape, 3, front ? rgb(0xf8f6f3) : rgb(0xe2dcd3), front ? PARCHMENT : rgb(0xd6cfc5), EDGE);
+    round_box(shape, 3, front ? like(PARCHMENT, 0xf8f6f3) : like(PARCHMENT, 0xe2dcd3), front ? PARCHMENT : like(PARCHMENT, 0xd6cfc5), EDGE);
     if (front) fill((box){r.x + 1, foot, r.w - 2, 4}, PARCHMENT);
     words(p->text, r.x + (r.w - text_width(p->text)) / 2, r.y + (r.h - line_height()) / 2 + (front ? 0 : 2), BLACK);
     if (front && has(p, PRESS_STATE_FOCUSED))
@@ -175,9 +182,9 @@ static void popup(const press_part *p, box r) {
     face(r, held, has(p, PRESS_STATE_HOT));
     words(p->text, r.x + 8, r.y + (r.h - line_height()) / 2, BLACK);
     /* a line, and an arrow down beyond it */
-    fill((box){r.x + r.w - 20, r.y + 4, 1, r.h - 8}, rgb(0xb5ab9e));
+    fill((box){r.x + r.w - 20, r.y + 4, 1, r.h - 8}, like(PARCHMENT, 0xb5ab9e));
     fill((box){r.x + r.w - 19, r.y + 4, 1, r.h - 8}, WHITE);
-    arrow(r.x + r.w - 10, r.y + r.h / 2, 4, 1, rgb(0x3a342e));
+    arrow(r.x + r.w - 10, r.y + r.h / 2, 4, 1, like(PARCHMENT, 0x3a342e));
     if (has(p, PRESS_STATE_FOCUSED)) dotted(inset(r, 3));
 }
 
@@ -187,7 +194,7 @@ static void popup(const press_part *p, box r) {
  * the window, and the title grey. */
 static void frame(const press_part *p, box r) {
     int active = has(p, PRESS_STATE_ENABLED), line = line_height();
-    uint32_t top = active ? rgb(0xeed0a4) : rgb(0xf3f0ec), foot = active ? rgb(0xc98f58) : rgb(0xdcd5cc), edge = active ? BROWN : rgb(0x8f8579);
+    uint32_t top = active ? like(ORANGE, 0xeed0a4) : like(PARCHMENT, 0xf3f0ec), foot = active ? like(ORANGE, 0xc98f58) : like(PARCHMENT, 0xdcd5cc), edge = active ? BROWN : like(PARCHMENT, 0x8f8579);
     round_fill((box){r.x, r.y, r.w, p->a + 8}, 6, edge, edge);
     fill((box){r.x, r.y + p->a, r.w, r.h - p->a}, edge);
     box shape = {r.x + 1, r.y + 1, r.w - 2, p->a + 8};
@@ -205,19 +212,19 @@ static void frame(const press_part *p, box r) {
     fill((box){r.x + 1, r.y + r.h - p->b, r.w - 2, p->b - 1}, foot);
     int tx = r.x + (r.w - text_width(p->text)) / 2, ty = r.y + (p->a - line) / 2;
     if (active) words(p->text, tx, ty + 1, with_alpha(WHITE, 0.5f));
-    words(p->text, tx, ty, active ? rgb(0x4a2f17) : GREY);
+    words(p->text, tx, ty, active ? like(BROWN, 0x4a2f17) : GREY);
 }
 
 /* The buttons at the right of the title bar: small, of the bar's own
  * colour, with a sign in dark brown; the one that closes is deeper. */
 static void frame_button(const press_part *p, box r) {
     int active = has(p, PRESS_STATE_ENABLED), held = has(p, PRESS_STATE_HELD), hot = has(p, PRESS_STATE_HOT);
-    uint32_t top = !active ? rgb(0xf6f3ef) : p->a == PRESS_FRAME_CLOSE ? rgb(0xf0b070) : rgb(0xf6dfbd);
-    uint32_t foot = !active ? rgb(0xddd6cd) : p->a == PRESS_FRAME_CLOSE ? rgb(0xc8702a) : rgb(0xd29a62);
+    uint32_t top = !active ? like(PARCHMENT, 0xf6f3ef) : p->a == PRESS_FRAME_CLOSE ? like(ORANGE, 0xf0b070) : like(ORANGE, 0xf6dfbd);
+    uint32_t foot = !active ? like(PARCHMENT, 0xddd6cd) : p->a == PRESS_FRAME_CLOSE ? like(ORANGE, 0xc8702a) : like(ORANGE, 0xd29a62);
     if (hot) top = mix(top, WHITE, 0.5f);
     if (held) round_box(r, 3, foot, top, active ? BROWN : GREY);
     else round_box(r, 3, top, foot, active ? BROWN : GREY);
-    uint32_t ink = active ? rgb(0x3c2410) : GREY;
+    uint32_t ink = active ? like(PARCHMENT, 0x3c2410) : GREY;
     int cx = r.x + r.w / 2, cy = r.y + r.h / 2;
     switch (p->a) {
     case PRESS_FRAME_CLOSE:
@@ -246,7 +253,7 @@ static int32_t draw(const press_part *p, const press_surface *surface) {
     case PRESS_PART_WELL:
         fill(r, WHITE);
         outline(r, has(p, PRESS_STATE_FOCUSED) ? ORANGE_DEEP : EDGE);
-        fill((box){r.x + 1, r.y + 1, r.w - 2, 1}, rgb(0xdcd6cf));
+        fill((box){r.x + 1, r.y + 1, r.w - 2, 1}, like(PARCHMENT, 0xdcd6cf));
         break;
     case PRESS_PART_SELECT: recolour(r, ORANGE, WHITE); break;
     case PRESS_PART_DIM: dim_in(r); break;
@@ -264,13 +271,13 @@ static int32_t draw(const press_part *p, const press_surface *surface) {
         break;
     case PRESS_PART_POPUP: popup(p, r); break;
     case PRESS_PART_MENU_BAR:
-        gradient(r, rgb(0xf6f3f0), rgb(0xe6e0d9));
-        fill((box){r.x, r.y + r.h - 1, r.w, 1}, rgb(0xb5ab9e));
+        gradient(r, like(PARCHMENT, 0xf6f3f0), like(PARCHMENT, 0xe6e0d9));
+        fill((box){r.x, r.y + r.h - 1, r.w, 1}, like(PARCHMENT, 0xb5ab9e));
         break;
     case PRESS_PART_MENU_TITLE: {
         int lit = has(p, PRESS_STATE_HELD) && has(p, PRESS_STATE_ENABLED);
         if (lit) {
-            gradient((box){r.x, r.y + 1, r.w, r.h - 2}, rgb(0xee9a45), ORANGE);
+            gradient((box){r.x, r.y + 1, r.w, r.h - 2}, like(ORANGE, 0xee9a45), ORANGE);
             outline((box){r.x, r.y + 1, r.w, r.h - 2}, ORANGE_DEEP);
         }
         words(p->text, r.x + 9, r.y + (r.h - line_height()) / 2, lit ? WHITE : has(p, PRESS_STATE_ENABLED) ? BLACK : GREY);
@@ -278,13 +285,13 @@ static int32_t draw(const press_part *p, const press_surface *surface) {
     }
     case PRESS_PART_MENU_FRAME: {
         box f = {r.x, r.y, r.w - p->a, r.h - p->a};
-        outline(f, rgb(0x6f6457));
+        outline(f, like(PARCHMENT, 0x6f6457));
         fill((box){f.x + f.w, f.y + p->a, p->a, f.h}, with_alpha(BLACK, 0.25f));
         fill((box){f.x + p->a, f.y + f.h, f.w - p->a, p->a}, with_alpha(BLACK, 0.25f));
         break;
     }
     case PRESS_PART_MENU_SEPARATOR:
-        fill((box){r.x + 2, r.y + r.h / 2 - 1, r.w - 4, 1}, rgb(0xc4bbb0));
+        fill((box){r.x + 2, r.y + r.h / 2 - 1, r.w - 4, 1}, like(PARCHMENT, 0xc4bbb0));
         fill((box){r.x + 2, r.y + r.h / 2, r.w - 4, 1}, WHITE);
         break;
     case PRESS_PART_VIEW_FRAME:
@@ -296,8 +303,8 @@ static int32_t draw(const press_part *p, const press_surface *surface) {
         fill((box){r.x, r.y + r.h - 1, r.w, 1}, EDGE);
         break;
     case PRESS_PART_HEADER_CELL:
-        if (has(p, PRESS_STATE_HOT)) gradient((box){r.x, r.y, r.w, r.h - 1}, WHITE, rgb(0xece6de));
-        fill((box){r.x + r.w - 2, r.y + 2, 1, r.h - 5}, rgb(0xb5ab9e));
+        if (has(p, PRESS_STATE_HOT)) gradient((box){r.x, r.y, r.w, r.h - 1}, WHITE, like(PARCHMENT, 0xece6de));
+        fill((box){r.x + r.w - 2, r.y + 2, 1, r.h - 5}, like(PARCHMENT, 0xb5ab9e));
         fill((box){r.x + r.w - 1, r.y + 2, 1, r.h - 5}, WHITE);
         break;
     case PRESS_PART_FRAME: frame(p, r); break;
@@ -347,7 +354,7 @@ static void palette(press_palette *p) {
     p->text = BLACK;
     p->paper = WHITE;
     p->ink = BLACK;
-    p->menu = rgb(0xf7f4f1);
+    p->menu = like(PARCHMENT, 0xf7f4f1);
     p->menu_text = BLACK;
     p->tip = 0xfffff5b5u; /* a word of help is on yellow */
     p->tip_text = 0xff000000u;
@@ -370,7 +377,24 @@ static int32_t typeface(uint32_t face_, press_type *out) {
     return 1;
 }
 
-static const press_style style = {PRESS_STYLE_ABI, "twothousandfour", metrics, palette, draw, PRESS_WANTS_HOVER | PRESS_WANTS_FINE, typeface};
+/* What a theme may change, by these names. */
+static const press_colour colours[] = {
+    {"parchment", &PARCHMENT},
+    {"edge", &EDGE_SAID},
+    {"edge_deep", &EDGE_DEEP_SAID},
+    {"face_top", &FACE_TOP_SAID},
+    {"face_foot", &FACE_FOOT_SAID},
+    {"orange", &ORANGE},
+    {"orange_light", &ORANGE_LIGHT_SAID},
+    {"orange_deep", &ORANGE_DEEP_SAID},
+    {"brown", &BROWN},
+    {"grey", &GREY_SAID},
+    {"white", &WHITE},
+    {"black", &BLACK},
+    {NULL, NULL},
+};
+
+static const press_style style = {PRESS_STYLE_ABI, "twothousandfour", metrics, palette, draw, PRESS_WANTS_HOVER | PRESS_WANTS_FINE, typeface, colours};
 
 const press_style *press_style_entry(void) {
     return &style;

@@ -1,0 +1,6 @@
+# Two Thousand and Five in graphite, for those who found the blue too much.
+name = "Two Thousand and Five, Graphite"
+style = "twothousandfive"
+
+[colours]
+blue = "#74808f"

@@ -1,0 +1,8 @@
+# Ninety-Nine with a green highlight and accent: that desktop let its user
+# choose both.
+name = "Ninety-Nine, Sage"
+style = "ninetynine"
+
+[colours]
+tint = "#cce6cc"    # what is selected among the user's things
+royal = "#336633"   # what is chosen in a menu, and work done

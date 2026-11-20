@@ -115,3 +115,66 @@ fn windows_wear_styles_from_libraries_of_their_own() {
     }
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// A theme is a style in other colours, with no compiler: a file of text
+/// beside the library, chosen by its own name. As above, the window is
+/// drawn in a process of its own.
+#[test]
+fn a_theme_wears_a_style_in_other_colours() {
+    if let Ok(dir) = std::env::var("PRESS_THEME_UNDER_TEST") {
+        let dir = std::path::PathBuf::from(dir);
+        unsafe {
+            assert_eq!(press_app_init(), OK);
+            let (_, data) = dialog(&dir, "mint");
+            // the window is of the theme's colour, and none of it of the style's own
+            let of = |colour: [u8; 3]| data.chunks(3).filter(|p| *p == colour).count();
+            assert!(of([0xaa, 0xdd, 0xcc]) > 200 * 160 / 8, "much of the window is the theme's colour, not {} pixels of it", of([0xaa, 0xdd, 0xcc]));
+            assert_eq!(of([0xc0, 0xc0, 0xc0]), 0);
+            assert_eq!(press_app_shutdown(), OK);
+        }
+        return;
+    }
+    let dir = std::env::temp_dir().join(format!("press-theme-test-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    if build("ninetyfive", &dir).is_none() {
+        eprintln!("no C compiler: the theme is not tried");
+        return;
+    }
+    std::fs::write(dir.join("mint.toml"), "name = \"Mint\"\nstyle = \"ninetyfive\"\n[colours]\nface = \"#aaddcc\"\nno_such = \"#000000\"\n").unwrap();
+    let again = std::process::Command::new(std::env::current_exe().unwrap())
+        .args(["--exact", "a_theme_wears_a_style_in_other_colours", "--nocapture"])
+        .env("PRESS_STYLE", "mint")
+        .env("PRESS_STYLE_PATH", &dir)
+        .env("PRESS_THEME_UNDER_TEST", &dir)
+        .env("PRESS_BACKEND", "headless")
+        .output()
+        .unwrap();
+    assert!(again.status.success(), "a window does not wear the theme: {}", String::from_utf8_lossy(&again.stderr));
+    // what the theme asked for that the style has not is said, with what it has
+    let said = String::from_utf8_lossy(&again.stderr);
+    assert!(said.contains("no colour named no_such") && said.contains("face, hilite"), "{said}");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// The themes that come with the library are read without a doubt, and
+/// each names only colours its style has.
+#[test]
+fn the_themes_that_come_with_it_are_sound() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let mut tried = 0;
+    for entry in std::fs::read_dir(root.join("themes")).unwrap() {
+        let path = entry.unwrap().path();
+        let theme = press::theme::Theme::parse(&std::fs::read_to_string(&path).unwrap()).unwrap_or_else(|why| panic!("{}: {why}", path.display()));
+        assert!(theme.doubts.is_empty(), "{}: {:?}", path.display(), theme.doubts);
+        assert!(theme.name.is_some(), "{}", path.display());
+        assert!(path.file_stem().unwrap().to_string_lossy().starts_with(&format!("{}-", theme.style)), "{} is named for its style", path.display());
+        // (Two Thousand is Ninety-Five's source, told other colours)
+        let source = if theme.style == "twothousand" { "ninetyfive".to_string() } else { theme.style.clone() };
+        let source = std::fs::read_to_string(root.join(format!("styles/{source}/{source}.c"))).unwrap();
+        for (name, _) in &theme.colours {
+            assert!(source.contains(&format!("{{\"{name}\", &")), "{}: {} has no colour named {name}", path.display(), theme.style);
+        }
+        tried += 1;
+    }
+    assert!(tried >= 6);
+}

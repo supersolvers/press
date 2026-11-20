@@ -41,6 +41,13 @@ static inline uint32_t rgb(uint32_t hex) {
     return 0xff000000u | hex;
 }
 
+/* One of the style's own colours, kept where a theme can change it: say
+ * COLOUR(NAME, 0xRRGGBB); and draw in NAME, then list it by a name in the
+ * style's press_colour. NAME_WAS is what it was made as. */
+#define COLOUR(NAME, hex) \
+    enum { NAME##_WAS = (hex) }; \
+    static uint32_t NAME = 0xff000000u | (hex)
+
 static inline int chan(uint32_t c, int shift) {
     return (int)((c >> shift) & 0xff);
 }
@@ -54,6 +61,78 @@ static inline uint32_t mix(uint32_t from, uint32_t to, float t) {
         out |= (uint32_t)(chan(from, shift) + (chan(to, shift) - chan(from, shift)) * t + 0.5f) << shift;
     return out;
 }
+
+/* A colour as how light it is, how strong and which, each from 0 to 1. */
+typedef struct {
+    float hue, strength, light;
+} shade;
+
+static inline shade shade_of(uint32_t c) {
+    float r = chan(c, 16) / 255.0f, g = chan(c, 8) / 255.0f, b = chan(c, 0) / 255.0f;
+    float most = r > g ? (r > b ? r : b) : (g > b ? g : b), least = r < g ? (r < b ? r : b) : (g < b ? g : b);
+    shade out = {0, 0, (most + least) / 2};
+    float span = most - least;
+    if (span <= 0) return out;
+    out.strength = span / (1 - fabsf(2 * out.light - 1));
+    if (most == r) out.hue = fmodf((g - b) / span + 6, 6) / 6;
+    else if (most == g) out.hue = ((b - r) / span + 2) / 6;
+    else out.hue = ((r - g) / span + 4) / 6;
+    return out;
+}
+
+static inline uint32_t of_shade(shade s) {
+    float span = (1 - fabsf(2 * s.light - 1)) * s.strength, low = s.light - span / 2;
+    float h = s.hue * 6, x = span * (1 - fabsf(fmodf(h, 2) - 1));
+    float r = 0, g = 0, b = 0;
+    switch ((int)h % 6) {
+    case 0: r = span; g = x; break;
+    case 1: r = x; g = span; break;
+    case 2: g = span; b = x; break;
+    case 3: g = x; b = span; break;
+    case 4: r = x; b = span; break;
+    default: r = span; b = x; break;
+    }
+    return 0xff000000u | (uint32_t)((r + low) * 255 + 0.5f) << 16 | (uint32_t)((g + low) * 255 + 0.5f) << 8 | (uint32_t)((b + low) * 255 + 0.5f);
+}
+
+/* A colour that goes with one of the style's own: c is what it is while
+ * that one is as it was made, and when a theme has changed that one, c is
+ * changed as it was: turned as far round, made as much stronger or weaker,
+ * and as much lighter or darker. So the shades of a gradient follow the
+ * one colour a theme names. */
+static inline uint32_t moved(uint32_t now, uint32_t was, uint32_t c) {
+    if (now == was) return c;
+    shade a = shade_of(was), b = shade_of(now), s = shade_of(c);
+    if (a.strength < 0.02f) {
+        /* it was a grey, with no colour to turn: take the new one's */
+        s.hue = b.hue;
+        s.strength = b.strength;
+    } else {
+        s.hue = fmodf(s.hue + b.hue - a.hue + 1, 1);
+        s.strength *= b.strength / a.strength;
+        if (s.strength > 1) s.strength = 1;
+    }
+    /* darker keeps black black, and lighter keeps white white */
+    if (b.light < a.light) s.light *= a.light > 0 ? b.light / a.light : 1;
+    else if (a.light < 1) s.light = 1 - (1 - s.light) * (1 - b.light) / (1 - a.light);
+    return (c & 0xff000000u) | (of_shade(s) & 0x00ffffffu);
+}
+
+/* Such a colour written where it is used: like(BLUE, 0x9fb9f2) is that
+ * pale blue for as long as BLUE is what it was made as. */
+#define like(NAME, hex) moved(NAME, 0xff000000u | NAME##_WAS, 0xff000000u | (hex))
+
+/* And one with a name of its own, which a theme may say outright; while
+ * it does not, the colour goes with another:
+ *
+ *     FOLLOWER(SKY, 0xc3d5fd);
+ *     #define SKY follows(SKY, BLUE)
+ *
+ * It is listed in the style's press_colour as &SKY_SAID. */
+#define FOLLOWER(NAME, hex) \
+    enum { NAME##_WAS = (hex) }; \
+    static uint32_t NAME##_SAID = 0xff000000u | (hex)
+#define follows(NAME, BASE) (NAME##_SAID != (0xff000000u | NAME##_WAS) ? NAME##_SAID : moved(BASE, 0xff000000u | BASE##_WAS, NAME##_SAID))
 
 static inline uint32_t with_alpha(uint32_t c, float a) {
     return (c & 0x00ffffffu) | ((uint32_t)(a * 255.0f + 0.5f) << 24);

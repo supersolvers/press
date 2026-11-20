@@ -13,10 +13,11 @@
  */
 #include "smooth.h"
 
-#define LIGHT rgb(0xaaaaaa)
-#define DARK rgb(0x555555)
-#define WHITE rgb(0xffffff)
-#define BLACK rgb(0x000000)
+COLOUR(LIGHT, 0xaaaaaa);
+FOLLOWER(DARK, 0x555555);
+#define DARK follows(DARK, LIGHT)
+COLOUR(WHITE, 0xffffff);
+COLOUR(BLACK, 0x000000);
 
 static void edge(box r, uint32_t top_left, uint32_t bottom_right) {
     if (r.w <= 1 || r.h <= 1) return;
@@ -372,7 +373,16 @@ static void palette(press_palette *p) {
     p->list_ink = BLACK;
 }
 
-static const press_style style = {PRESS_STYLE_ABI, "eightynine", metrics, palette, draw, 0, NULL};
+/* What a theme may change, by these names. */
+static const press_colour colours[] = {
+    {"light", &LIGHT},
+    {"dark", &DARK_SAID},
+    {"white", &WHITE},
+    {"black", &BLACK},
+    {NULL, NULL},
+};
+
+static const press_style style = {PRESS_STYLE_ABI, "eightynine", metrics, palette, draw, 0, NULL, colours};
 
 const press_style *press_style_entry(void) {
     return &style;

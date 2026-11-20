@@ -20,6 +20,12 @@
  * in its environment; every program does when the first line of
  * ~/.config/press/style is NAME.
  *
+ * A style that keeps its colours where the engine can reach them (see
+ * press_colour) can be worn in other colours without being built again:
+ * a theme, a few lines of text in a file, names the style and says which
+ * of its colours, sizes and typefaces are to be otherwise. README.md has
+ * the form of that file.
+ *
  * This file is written by hand, and is the whole of the interface.
  */
 #ifndef PRESS_STYLE_H
@@ -32,7 +38,7 @@ extern "C" {
 #endif
 
 /* The version of this interface, for press_style.abi. */
-#define PRESS_STYLE_ABI 9
+#define PRESS_STYLE_ABI 10
 
 /* Sizes, in pixels. */
 typedef struct press_metrics {
@@ -287,6 +293,16 @@ typedef struct press_surface {
     int32_t stride;
 } press_surface;
 
+/* From version 10: one of a style's own colours, as 0xAARRGGBB, that a
+ * theme may change. The name is what a theme calls it by: small letters,
+ * digits and underscores. The value is where the style keeps it, and reads
+ * it from each time it draws; the engine writes there what a theme says,
+ * before the style is asked for anything, and at no other time. */
+typedef struct press_colour {
+    const char *name;
+    uint32_t *value;
+} press_colour;
+
 /* A style. Any of the three functions may be NULL. */
 typedef struct press_style {
     uint32_t abi;             /* PRESS_STYLE_ABI */
@@ -302,6 +318,9 @@ typedef struct press_style {
     /* Fill in the typeface to use in place of a family and return 1, or
      * return 0 to keep the family, in its own pixels. */
     int32_t (*typeface)(uint32_t face, press_type *out);
+    /* from version 10: the colours a theme may change, the last followed
+     * by one with no name; or NULL, for a style that is as it is */
+    const press_colour *colours;
 } press_style;
 
 /* The one function a style library exports. What it returns must stay

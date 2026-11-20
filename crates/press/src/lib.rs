@@ -18,3 +18,4 @@ mod api;
 mod backend;
 pub mod style;
 mod support;
+pub mod theme;

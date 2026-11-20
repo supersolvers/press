@@ -15,14 +15,16 @@
  */
 #include "smooth.h"
 
-#define WHITE rgb(0xffffff)
-#define PALE rgb(0xdddddd)  /* what a window is made of */
-#define GREY rgb(0xbbbbbb)  /* a title bar that has not the keyboard */
-#define MID rgb(0x999999)   /* the bed something slides in; words out of use */
-#define BLACK rgb(0x000000)
-#define CREAM rgb(0xeeeebb) /* the title bar that has it */
-#define RED rgb(0xdd0000)   /* where typing goes, and what is switched on */
-#define GREEN rgb(0x00cc00)
+COLOUR(WHITE, 0xffffff);
+COLOUR(PALE, 0xdddddd); /* what a window is made of */
+FOLLOWER(GREY, 0xbbbbbb); /* a title bar that has not the keyboard */
+#define GREY follows(GREY, PALE)
+FOLLOWER(MID, 0x999999); /* the bed something slides in; words out of use */
+#define MID follows(MID, PALE)
+COLOUR(BLACK, 0x000000);
+COLOUR(CREAM, 0xeeeebb); /* the title bar that has it */
+COLOUR(RED, 0xdd0000);  /* where typing goes, and what is switched on */
+COLOUR(GREEN, 0x00cc00);
 
 /* A box of line on a ground. */
 static void boxed(box r, uint32_t ground) {
@@ -415,7 +417,20 @@ static int32_t typeface(uint32_t face, press_type *out) {
     return 1;
 }
 
-static const press_style style = {PRESS_STYLE_ABI, "ninetyone", metrics, palette, draw, 0, typeface};
+/* What a theme may change, by these names. */
+static const press_colour colours[] = {
+    {"white", &WHITE},
+    {"pale", &PALE},
+    {"grey", &GREY_SAID},
+    {"mid", &MID_SAID},
+    {"black", &BLACK},
+    {"cream", &CREAM},
+    {"red", &RED},
+    {"green", &GREEN},
+    {NULL, NULL},
+};
+
+static const press_style style = {PRESS_STYLE_ABI, "ninetyone", metrics, palette, draw, 0, typeface, colours};
 
 const press_style *press_style_entry(void) {
     return &style;

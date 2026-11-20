@@ -14,12 +14,12 @@
 #include <string.h>
 
 #define STYLE_NAME "twothousand"
-#define FACE 0xffd4d0c8u   /* what everything is made of: grey with some sand in it */
-#define HILITE 0xffffffffu
-#define LIGHT 0xffd4d0c8u  /* the inner light edge is the face itself */
-#define SHADOW 0xff808080u
-#define DARK 0xff404040u   /* the outer shade is not quite black */
-#define NAVY 0xff0a246au   /* what is selected */
+#define STYLE_FACE 0xffd4d0c8u   /* what everything is made of: grey with some sand in it */
+#define STYLE_HILITE 0xffffffffu
+#define STYLE_LIGHT 0xffd4d0c8u  /* the inner light edge is the face itself */
+#define STYLE_SHADOW 0xff808080u
+#define STYLE_DARK 0xff404040u   /* the outer shade is not quite black */
+#define STYLE_NAVY 0xff0a246au   /* what is selected */
 #define STYLE_SMOOTH_TYPE 1
 /* The title bar's blue runs out to a pale one at the right, and its grey to silver. */
 #define STYLE_TITLE_FADE 0xffa6caf0u

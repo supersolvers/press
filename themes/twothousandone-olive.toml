@@ -1,0 +1,8 @@
+# Two Thousand and One in olive green: one of the other colours that
+# desktop could be had in. Everything that was blue goes with the one
+# colour named here; the sand, the orange glow and the red close box stay.
+name = "Two Thousand and One, Olive"
+style = "twothousandone"
+
+[colours]
+blue = "#8a9a5b"

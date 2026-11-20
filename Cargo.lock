@@ -796,6 +796,7 @@ dependencies = [
  "press-core",
  "press-idl",
  "smithay-client-toolkit",
+ "toml",
  "wayland-client",
  "wayland-protocols",
  "wayland-protocols-plasma",

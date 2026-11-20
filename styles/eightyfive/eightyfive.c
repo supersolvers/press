@@ -13,10 +13,10 @@
  */
 #include "smooth.h"
 
-#define BLUE rgb(0x0055aa)
-#define WHITE rgb(0xffffff)
-#define BLACK rgb(0x000022)
-#define ORANGE rgb(0xff8800)
+COLOUR(BLUE, 0x0055aa);
+COLOUR(WHITE, 0xffffff);
+COLOUR(BLACK, 0x000022);
+COLOUR(ORANGE, 0xff8800);
 
 /* Every colour to its opposite, as that machine did to show a thing chosen. */
 static void opposite(box r) {
@@ -300,7 +300,16 @@ static int32_t typeface(uint32_t face, press_type *out) {
     return 1;
 }
 
-static const press_style style = {PRESS_STYLE_ABI, "eightyfive", metrics, palette, draw, 0, typeface};
+/* What a theme may change, by these names. */
+static const press_colour colours[] = {
+    {"blue", &BLUE},
+    {"white", &WHITE},
+    {"black", &BLACK},
+    {"orange", &ORANGE},
+    {NULL, NULL},
+};
+
+static const press_style style = {PRESS_STYLE_ABI, "eightyfive", metrics, palette, draw, 0, typeface, colours};
 
 const press_style *press_style_entry(void) {
     return &style;

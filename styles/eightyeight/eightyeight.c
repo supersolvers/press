@@ -16,12 +16,14 @@
 
 #include <string.h>
 
-#define GROUND rgb(0xcccccc)  /* what windows are made of */
-#define LIT rgb(0xffffff)
-#define PRESSED rgb(0xb0b0b0)
-#define SHADE rgb(0x7f7f7f)
-#define WHITE rgb(0xffffff)
-#define BLACK rgb(0x000000)
+COLOUR(GROUND, 0xcccccc); /* what windows are made of */
+COLOUR(LIT, 0xffffff);
+FOLLOWER(PRESSED, 0xb0b0b0);
+#define PRESSED follows(PRESSED, GROUND)
+FOLLOWER(SHADE, 0x7f7f7f);
+#define SHADE follows(SHADE, GROUND)
+COLOUR(WHITE, 0xffffff);
+COLOUR(BLACK, 0x000000);
 
 /* A lozenge standing out of the window: light along its top, shade along
  * its foot. Pressed, it is the other way about and darker. */
@@ -220,7 +222,7 @@ static int32_t draw(const press_part *p, const press_surface *surface) {
     case PRESS_PART_CHECKBOX: checkbox(p, r); break;
     case PRESS_PART_RADIO: radio(p, r); break;
     case PRESS_PART_WELL: well(p, r); break;
-    case PRESS_PART_SELECT: recolour(r, rgb(0x555555), WHITE); break;
+    case PRESS_PART_SELECT: recolour(r, like(GROUND, 0x555555), WHITE); break;
     case PRESS_PART_DIM: dim_in(r); break;
     case PRESS_PART_FOCUS: outline(r, BLACK); break;
     case PRESS_PART_SLIDER: slider(p, r); break;
@@ -355,7 +357,18 @@ static int32_t typeface(uint32_t face, press_type *out) {
     return 1;
 }
 
-static const press_style style = {PRESS_STYLE_ABI, "eightyeight", metrics, palette, draw, 0, typeface};
+/* What a theme may change, by these names. */
+static const press_colour colours[] = {
+    {"ground", &GROUND},
+    {"lit", &LIT},
+    {"pressed", &PRESSED_SAID},
+    {"shade", &SHADE_SAID},
+    {"white", &WHITE},
+    {"black", &BLACK},
+    {NULL, NULL},
+};
+
+static const press_style style = {PRESS_STYLE_ABI, "eightyeight", metrics, palette, draw, 0, typeface, colours};
 
 const press_style *press_style_entry(void) {
     return &style;

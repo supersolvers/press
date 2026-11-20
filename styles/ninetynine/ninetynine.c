@@ -13,16 +13,20 @@
  */
 #include "smooth.h"
 
-#define PLATE rgb(0xdddddd)    /* what windows and buttons are made of */
-#define LIT rgb(0xffffff)      /* an edge the light falls on */
-#define SHADE rgb(0xaaaaaa)    /* an edge in shade */
-#define DEEP rgb(0x777777)
-#define PRESSED rgb(0x666666)
-#define TINT rgb(0xccccff)     /* what is selected among the user's things */
-#define TINT_DEEP rgb(0x9999cc)
-#define ROYAL rgb(0x333399)    /* what is chosen in a menu */
-#define WHITE rgb(0xffffff)
-#define BLACK rgb(0x000000)
+COLOUR(PLATE, 0xdddddd);   /* what windows and buttons are made of */
+COLOUR(LIT, 0xffffff);     /* an edge the light falls on */
+FOLLOWER(SHADE, 0xaaaaaa);  /* an edge in shade */
+#define SHADE follows(SHADE, PLATE)
+FOLLOWER(DEEP, 0x777777);
+#define DEEP follows(DEEP, PLATE)
+FOLLOWER(PRESSED, 0x666666);
+#define PRESSED follows(PRESSED, PLATE)
+COLOUR(TINT, 0xccccff);    /* what is selected among the user's things */
+FOLLOWER(TINT_DEEP, 0x9999cc);
+#define TINT_DEEP follows(TINT_DEEP, TINT)
+COLOUR(ROYAL, 0x333399);   /* what is chosen in a menu */
+COLOUR(WHITE, 0xffffff);
+COLOUR(BLACK, 0x000000);
 
 /* A lit edge along the top and left of a box, and a shaded one along its
  * bottom and right. */
@@ -71,11 +75,11 @@ static void button(const press_part *p, box r) {
     int held = has(p, PRESS_STATE_HELD);
     if (has(p, PRESS_STATE_DEFAULT)) {
         /* a heavy rim round the one Return presses */
-        plate(r, rgb(0xbbbbbb), PLATE, DEEP);
+        plate(r, like(PLATE, 0xbbbbbb), PLATE, DEEP);
         face = inset(r, 3);
     }
     if (held)
-        plate(face, PRESSED, rgb(0x444444), rgb(0x888888));
+        plate(face, PRESSED, like(PLATE, 0x444444), like(PLATE, 0x888888));
     else
         plate(face, PLATE, LIT, SHADE);
     words(p->text, face.x + (face.w - text_width(p->text)) / 2, face.y + (face.h - line_height()) / 2, held ? WHITE : BLACK);
@@ -93,8 +97,8 @@ static void label(const press_part *p, int x, box r) {
 static void checkbox(const press_part *p, box r) {
     box b = {r.x, r.y + (r.h - 12) / 2, 12, 12};
     int held = has(p, PRESS_STATE_HELD);
-    fill(b, held ? rgb(0x999999) : PLATE);
-    lit_edge(inset(b, 1), held ? DEEP : LIT, held ? rgb(0xbbbbbb) : SHADE);
+    fill(b, held ? like(PLATE, 0x999999) : PLATE);
+    lit_edge(inset(b, 1), held ? DEEP : LIT, held ? like(PLATE, 0xbbbbbb) : SHADE);
     outline(b, BLACK);
     if (has(p, PRESS_STATE_CHECKED)) {
         /* a tick made with a broad pen, which runs up out of the box */
@@ -128,8 +132,8 @@ static void radio(const press_part *p, box r) {
             switch (shape[y][x]) {
             case 'k': px(r.x + x, top + y, BLACK); break;
             case 'w': px(r.x + x, top + y, held ? DEEP : LIT); break;
-            case 's': px(r.x + x, top + y, held ? rgb(0xbbbbbb) : SHADE); break;
-            case 'f': px(r.x + x, top + y, held ? rgb(0x999999) : PLATE); break;
+            case 's': px(r.x + x, top + y, held ? like(PLATE, 0xbbbbbb) : SHADE); break;
+            case 'f': px(r.x + x, top + y, held ? like(PLATE, 0x999999) : PLATE); break;
             default: break;
             }
         }
@@ -161,7 +165,7 @@ static void select_in(const press_part *p, box r) {
 static void dim_in(box r) {
     for (int y = r.y; y < r.y + r.h; y++)
         for (int x = r.x; x < r.x + r.w; x++)
-            if (at(x, y) == BLACK) px(x, y, rgb(0x888888));
+            if (at(x, y) == BLACK) px(x, y, like(PLATE, 0x888888));
 }
 
 static void slider(const press_part *p, box r) {
@@ -176,7 +180,7 @@ static void slider(const press_part *p, box r) {
     }
     /* a channel cut into the window, and a plate that rides in it */
     lit_edge(groove, DEEP, LIT);
-    fill(inset(groove, 1), rgb(0x999999));
+    fill(inset(groove, 1), like(PLATE, 0x999999));
     outline(inset(groove, 1), BLACK);
     plate(knob, has(p, PRESS_STATE_HELD) ? TINT_DEEP : TINT, LIT, TINT_DEEP);
     for (int i = -2; i <= 2; i += 2) {
@@ -203,8 +207,8 @@ static void progress(const press_part *p, box r) {
     int done = (int)((long long)in.w * p->a / (p->b > 0 ? p->b : 1));
     if (done <= 0) return;
     /* a bar of the tint, round like a rod: light along its top, deep at its foot */
-    gradient((box){in.x, in.y, done, in.h / 2}, TINT, rgb(0x6666cc));
-    gradient((box){in.x, in.y + in.h / 2, done, in.h - in.h / 2}, rgb(0x6666cc), ROYAL);
+    gradient((box){in.x, in.y, done, in.h / 2}, TINT, like(ROYAL, 0x6666cc));
+    gradient((box){in.x, in.y + in.h / 2, done, in.h - in.h / 2}, like(ROYAL, 0x6666cc), ROYAL);
     if (done < in.w) fill((box){in.x + done, in.y, 1, in.h}, BLACK);
 }
 
@@ -222,7 +226,7 @@ static void scroll_bar(const press_part *p, box r) {
         box b = vertical ? (box){r.x, second ? r.y + r.h - thick : r.y, thick, thick} : (box){second ? r.x + r.w - thick : r.x, r.y, thick, thick};
         int held = live && p->a == second + 1;
         fill(b, held ? PRESSED : PLATE);
-        lit_edge(inset(b, 1), held ? rgb(0x444444) : LIT, held ? rgb(0x888888) : live ? SHADE : PLATE);
+        lit_edge(inset(b, 1), held ? like(PLATE, 0x444444) : LIT, held ? like(PLATE, 0x888888) : live ? SHADE : PLATE);
         outline(b, BLACK);
         arrow(b.x + b.w / 2, b.y + b.h / 2, 4, vertical ? second : 2 + second, !live ? SHADE : held ? WHITE : BLACK);
     }
@@ -250,13 +254,13 @@ static void scroll_bar(const press_part *p, box r) {
 static void tab(const press_part *p, box r) {
     int front = has(p, PRESS_STATE_FRONT);
     int top = r.y + (front ? 0 : 2), foot = r.y + r.h - 1, right = r.x + r.w - 1;
-    uint32_t face = front ? PLATE : rgb(0xbbbbbb);
+    uint32_t face = front ? PLATE : like(PLATE, 0xbbbbbb);
     /* a tab is a plate with no bottom */
     fill((box){r.x + 2, top + 1, r.w - 4, foot - top}, face);
     fill((box){r.x + 1, top + 2, r.w - 2, foot - top - 1}, face);
     fill((box){r.x + 2, top + 1, r.w - 5, 1}, front ? LIT : PLATE);
     fill((box){r.x + 1, top + 2, 1, foot - top - 2}, front ? LIT : PLATE);
-    fill((box){right - 1, top + 2, 1, foot - top - 2}, front ? SHADE : rgb(0x999999));
+    fill((box){right - 1, top + 2, 1, foot - top - 2}, front ? SHADE : like(PLATE, 0x999999));
     fill((box){r.x + 2, top, r.w - 4, 1}, BLACK);
     fill((box){r.x, top + 2, 1, foot - top - 1}, BLACK);
     fill((box){right, top + 2, 1, foot - top - 1}, BLACK);
@@ -275,12 +279,12 @@ static void tab(const press_part *p, box r) {
 
 static void popup(const press_part *p, box r) {
     int cap = r.h, held = has(p, PRESS_STATE_HELD);
-    plate(r, held ? PRESSED : PLATE, held ? rgb(0x444444) : LIT, held ? rgb(0x888888) : SHADE);
+    plate(r, held ? PRESSED : PLATE, held ? like(PLATE, 0x444444) : LIT, held ? like(PLATE, 0x888888) : SHADE);
     /* the end that opens it is set off by a line, with an arrow each way */
     box end = {r.x + r.w - cap, r.y + 1, cap - 1, r.h - 2};
     fill((box){end.x, end.y, 1, end.h}, BLACK);
     if (!held) {
-        fill((box){end.x + 1, end.y + 1, end.w - 2, end.h - 2}, rgb(0xcccccc));
+        fill((box){end.x + 1, end.y + 1, end.w - 2, end.h - 2}, like(PLATE, 0xcccccc));
         fill((box){end.x + 1, end.y, 1, end.h - 1}, LIT);
         fill((box){end.x + 1, end.y, end.w - 2, 1}, LIT);
     }
@@ -298,7 +302,7 @@ static void frame(const press_part *p, box r) {
     int active = has(p, PRESS_STATE_ENABLED), line = line_height();
     box inner = {r.x + p->b - 1, r.y + p->a - 1, r.w - 2 * p->b + 2, r.h - p->a - p->b + 2};
     int rolled = has(p, PRESS_STATE_HELD);
-    fill(r, active ? rgb(0xcccccc) : PLATE);
+    fill(r, active ? like(PLATE, 0xcccccc) : PLATE);
     if (active) lit_edge(inset(r, 1), LIT, DEEP);
     outline(r, BLACK);
     /* the content sits in a black line of its own; rolled up, there is none to */
@@ -312,9 +316,9 @@ static void frame(const press_part *p, box r) {
             fill((box){r.x + 6, y, r.w - 12, 1}, LIT);
             fill((box){r.x + 6, y + 1, r.w - 12, 1}, DEEP);
         }
-        fill((box){tx - 6, r.y + 3, wide + 12, p->a - 6}, rgb(0xcccccc));
+        fill((box){tx - 6, r.y + 3, wide + 12, p->a - 6}, like(PLATE, 0xcccccc));
     }
-    words(p->text, tx, ty, active ? BLACK : rgb(0x888888));
+    words(p->text, tx, ty, active ? BLACK : like(PLATE, 0x888888));
 }
 
 /* The boxes in the title bar: close at the left; at the right, zoom and
@@ -323,7 +327,7 @@ static void frame_button(const press_part *p, box r) {
     if (!has(p, PRESS_STATE_ENABLED)) return;
     int held = has(p, PRESS_STATE_HELD);
     /* a gap in the ridges for it to sit in */
-    fill((box){r.x - 2, r.y - 1, r.w + 4, r.h + 2}, rgb(0xcccccc));
+    fill((box){r.x - 2, r.y - 1, r.w + 4, r.h + 2}, like(PLATE, 0xcccccc));
     lit_edge(r, DEEP, LIT);
     fill(inset(r, 1), held ? PRESSED : PLATE);
     outline(inset(r, 1), BLACK);
@@ -381,7 +385,7 @@ static int32_t draw(const press_part *p, const press_surface *surface) {
     case PRESS_PART_MENU_TITLE: {
         int lit = has(p, PRESS_STATE_HELD) && has(p, PRESS_STATE_ENABLED);
         if (lit) fill(r, ROYAL);
-        words(p->text, r.x + 9, r.y + (r.h - line_height()) / 2, lit ? WHITE : has(p, PRESS_STATE_ENABLED) ? BLACK : rgb(0x888888));
+        words(p->text, r.x + 9, r.y + (r.h - line_height()) / 2, lit ? WHITE : has(p, PRESS_STATE_ENABLED) ? BLACK : like(PLATE, 0x888888));
         break;
     }
     case PRESS_PART_MENU_FRAME: {
@@ -455,7 +459,22 @@ static void palette(press_palette *p) {
 
 /* No typeface is asked for: the engine's own families are in whole pixels,
  * as that desktop's were, and its heavy one is the face of the interface. */
-static const press_style style = {PRESS_STYLE_ABI, "ninetynine", metrics, palette, draw, 0, NULL};
+/* What a theme may change, by these names. */
+static const press_colour colours[] = {
+    {"plate", &PLATE},
+    {"lit", &LIT},
+    {"shade", &SHADE_SAID},
+    {"deep", &DEEP_SAID},
+    {"pressed", &PRESSED_SAID},
+    {"tint", &TINT},
+    {"tint_deep", &TINT_DEEP_SAID},
+    {"royal", &ROYAL},
+    {"white", &WHITE},
+    {"black", &BLACK},
+    {NULL, NULL},
+};
+
+static const press_style style = {PRESS_STYLE_ABI, "ninetynine", metrics, palette, draw, 0, NULL, colours};
 
 const press_style *press_style_entry(void) {
     return &style;

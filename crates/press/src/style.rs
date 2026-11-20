@@ -8,16 +8,21 @@
 //! a name (`ninetyfive` is looked for as `libpress_style_ninetyfive.so`) or
 //! the path of a library. With neither, or if the library cannot be had,
 //! the interface is black and white.
+//!
+//! Either may also be a theme, a file of text that names a style and says
+//! what of it is to be otherwise: see [`crate::theme`]. `sage` is looked
+//! for as a library first and then as `sage.toml`.
 
+use crate::theme::Theme;
 use press_core::{Metrics, Painter, Palette, Part, Style};
 use std::ffi::{c_char, c_void, CStr, CString};
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 /// The version of the interface below. A library made for an earlier
 /// version is still worn, as it was written; one made for any other but
 /// these is not used.
-pub const ABI: u32 = 9;
+pub const ABI: u32 = 10;
 
 /// A part to draw, as a style library is handed it. See
 /// [`press_core::PartKind`] for what the numbers mean for each kind.
@@ -77,7 +82,23 @@ pub struct RawStyle {
     /// would use one of its own families (numbered as [`FACES`] has them),
     /// and say 1; or say 0 to keep the family.
     pub typeface: Option<unsafe extern "C" fn(face: u32, out: *mut RawType) -> i32>,
+    // From here on, only in a style made for the tenth version or later.
+    /// The colours of its own that a theme may change, the last followed
+    /// by one with no name; or null.
+    pub colours: *const RawColour,
 }
+
+/// One of a style library's own colours, where the library keeps it.
+#[repr(C)]
+pub struct RawColour {
+    pub name: *const c_char,
+    pub value: *mut u32,
+}
+
+/// What each library's colours were when it was first loaded, by where its
+/// list of them is: a library is loaded once however often it is asked
+/// for, so a theme's colours would otherwise outlast the theme.
+static AS_MADE: Mutex<Vec<(usize, Vec<u32>)>> = Mutex::new(Vec::new());
 
 /// A typeface asked for by a style library.
 #[repr(C)]
@@ -128,11 +149,21 @@ unsafe extern "C" fn draw_text(ctx: *mut c_void, text: *const c_char, x: i32, y:
 struct Foreign {
     name: String,
     raw: &'static RawStyle,
+    /// What is to be otherwise than the library has it.
+    theme: Theme,
 }
 
 impl Foreign {
     /// Ask the library which typeface it would have for a numbered use.
     fn asked_type(&self, number: u32) -> Option<press_core::Type> {
+        if let Some(said) = self.theme.typeface(number) {
+            return Some(said);
+        }
+        // (a style said nothing of type before the second version, nor of
+        // a frame's title before the fifth)
+        if self.raw.abi < if number as usize >= FACES.len() { 5 } else { 2 } {
+            return None;
+        }
         let ask = self.raw.typeface?;
         let mut out = RawType { family: [0; 128], size: 0, bold: 0, crisp: 0 };
         if unsafe { ask(number, &mut out) } == 0 {
@@ -140,11 +171,8 @@ impl Foreign {
         }
         out.family[127] = 0;
         let family = unsafe { CStr::from_ptr(out.family.as_ptr()) }.to_string_lossy().trim().to_string();
-        // a family's name goes to fontconfig as it is: nothing in it may be
-        // taken for the rest of a pattern (the engine's own are named press:...)
         let own = family.starts_with("press:");
-        let plain = family.chars().all(|c| c.is_alphanumeric() || matches!(c, ' ' | ',' | '-' | '_' | '.')) || own;
-        (!family.is_empty() && plain && (own || out.size > 0)).then(|| press_core::Type { family, size: out.size, bold: out.bold != 0, crisp: self.raw.abi >= 5 && out.crisp != 0 })
+        (crate::theme::family_is_plain(&family) && (own || out.size > 0)).then(|| press_core::Type { family, size: out.size, bold: out.bold != 0, crisp: self.raw.abi >= 5 && out.crisp != 0 })
     }
 }
 
@@ -163,7 +191,8 @@ impl Style for Foreign {
         if let Some(f) = self.raw.metrics {
             unsafe { f(&mut m) };
         }
-        // whatever it says, nothing is smaller than a pixel or larger than a window
+        self.theme.resize(&mut m);
+        // whatever either says, nothing is smaller than a pixel or larger than a window
         let size = |v: i32| v.clamp(1, 512);
         let room = |v: i32| v.clamp(0, 512);
         Metrics {
@@ -216,6 +245,7 @@ impl Style for Foreign {
         if let Some(f) = self.raw.palette {
             unsafe { f(&mut p) };
         }
+        self.theme.repaint(&mut p);
         let said = self.raw.abi >= 5;
         Palette {
             list: if said && p.list != 0 { p.list } else { p.paper },
@@ -238,16 +268,13 @@ impl Style for Foreign {
     }
 
     fn typeface(&self, face: press_core::Face) -> Option<press_core::Type> {
-        if self.raw.abi < 2 {
-            return None;
-        }
         let number = FACES.iter().position(|f| *f == face)? as u32;
         self.asked_type(number)
     }
 
     fn frame_typeface(&self) -> Option<press_core::Type> {
         // the title of a window's own frame is numbered after the families
-        if self.raw.abi < 5 { None } else { self.asked_type(FACES.len() as u32) }
+        self.asked_type(FACES.len() as u32)
     }
 
     fn draw(&self, part: &Part, painter: &mut Painter) -> bool {
@@ -287,8 +314,43 @@ impl Style for Foreign {
     }
 }
 
-/// Load a style from a library.
-fn load(path: &Path) -> Result<Arc<dyn Style>, String> {
+/// Put a library's own colours as it made them, and then as a theme would
+/// have them. Says what the theme asked for that the library has not.
+unsafe fn colour(raw: &RawStyle, theme: Option<&Theme>) -> Vec<String> {
+    let mut own: Vec<(String, *mut u32)> = Vec::new();
+    if raw.abi >= 10 && !raw.colours.is_null() {
+        // (a list with no end to it is not followed for ever)
+        for i in 0..256 {
+            let entry = &*raw.colours.add(i);
+            if entry.name.is_null() || entry.value.is_null() {
+                break;
+            }
+            own.push((words(entry.name).into_owned(), entry.value));
+        }
+        let mut as_made = AS_MADE.lock().unwrap_or_else(|e| e.into_inner());
+        let key = raw.colours as usize;
+        if !as_made.iter().any(|(k, _)| *k == key) {
+            as_made.push((key, own.iter().map(|(_, at)| **at).collect()));
+        }
+        let (_, made) = as_made.iter().find(|(k, _)| *k == key).expect("just put there");
+        for ((_, at), was) in own.iter().zip(made) {
+            **at = *was;
+        }
+    }
+    let mut doubts = Vec::new();
+    for (name, value) in theme.map(|t| t.colours.as_slice()).unwrap_or_default() {
+        match own.iter().find(|(n, _)| n == name) {
+            Some((_, at)) => **at = *value,
+            None if own.is_empty() => doubts.push(format!("the style has no colours a theme can change, so not {name}")),
+            None => doubts.push(format!("the style has no colour named {name}; it has: {}", own.iter().map(|(n, _)| n.as_str()).collect::<Vec<_>>().join(", "))),
+        }
+    }
+    doubts
+}
+
+/// Load a style from a library, to be worn as a theme would have it if
+/// there is one: `called` is then the name the theme was chosen by.
+fn load(path: &Path, theme: Option<(&str, Theme)>) -> Result<Arc<dyn Style>, String> {
     let c_path = CString::new(path.as_os_str().as_encoded_bytes()).map_err(|_| "its name has a NUL in it".to_string())?;
     unsafe {
         let lib = libc::dlopen(c_path.as_ptr(), libc::RTLD_NOW | libc::RTLD_LOCAL);
@@ -309,8 +371,19 @@ fn load(path: &Path) -> Result<Arc<dyn Style>, String> {
         if raw.abi == 0 || raw.abi > ABI {
             return Err(format!("it was made for version {} of the style interface, and this is version {ABI}", raw.abi));
         }
-        let name = if raw.name.is_null() { path.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default() } else { words(raw.name).into_owned() };
-        Ok(Arc::new(Foreign { name, raw }))
+        let mut name = if raw.name.is_null() { path.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default() } else { words(raw.name).into_owned() };
+        let doubts = colour(raw, theme.as_ref().map(|(_, t)| t));
+        let theme = match theme {
+            Some((called, theme)) => {
+                for doubt in theme.doubts.iter().chain(&doubts) {
+                    eprintln!("press: in the theme \"{called}\": {doubt}");
+                }
+                name = called.to_string();
+                theme
+            }
+            None => Theme::default(),
+        };
+        Ok(Arc::new(Foreign { name, raw, theme }))
     }
 }
 
@@ -353,19 +426,72 @@ fn chosen() -> Option<String> {
     text.lines().next().map(|l| l.trim().to_string())
 }
 
-/// A style by its name, or by the path of its library.
+/// Where a theme is looked for by name: with the styles, in a folder named
+/// themes beside them, and where the user's and the machine's own are kept.
+fn theme_folders() -> Vec<PathBuf> {
+    let mut out = Vec::new();
+    for dir in std::env::var_os("PRESS_STYLE_PATH").map(|v| std::env::split_paths(&v).collect::<Vec<_>>()).unwrap_or_default() {
+        out.push(dir.join("themes"));
+        out.push(dir);
+    }
+    let home = std::env::var_os("HOME").map(PathBuf::from);
+    if let Some(config) = std::env::var_os("XDG_CONFIG_HOME").map(PathBuf::from).or_else(|| home.as_ref().map(|h| h.join(".config"))) {
+        out.push(config.join("press/themes"));
+    }
+    if let Some(dir) = beside_me() {
+        out.push(dir.join("themes"));
+        out.push(dir.join("press/themes"));
+        // (installed, the library is in lib and the themes in share)
+        out.push(dir.join("../share/press/themes"));
+    }
+    if let Some(home) = home {
+        out.push(home.join(".local/share/press/themes"));
+    }
+    out.push("/usr/local/share/press/themes".into());
+    out.push("/usr/share/press/themes".into());
+    out
+}
+
+/// The library of a style by its name.
+fn library(named: &str) -> Option<PathBuf> {
+    let file = format!("libpress_style_{named}.so");
+    folders().into_iter().map(|d| d.join(&file)).find(|p| p.is_file())
+}
+
+/// A style worn as the theme in a file would have it.
+fn themed(file: &Path) -> Result<Arc<dyn Style>, String> {
+    let text = std::fs::read_to_string(file).map_err(|why| format!("{} cannot be read: {why}", file.display()))?;
+    let theme = Theme::parse(&text).map_err(|why| format!("{}: {why}", file.display()))?;
+    let called = file.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
+    // a theme is of a style from a library: it names one, or says where one
+    // is, from the folder the theme is in
+    let library = if theme.style.contains('/') {
+        file.parent().unwrap_or(Path::new(".")).join(&theme.style)
+    } else if theme.style == "eightyfour" {
+        return Err(format!("{}: black and white is as it is, and has no themes", file.display()));
+    } else {
+        library(&theme.style).ok_or_else(|| format!("{}: no library was found for its style, {}", file.display(), theme.style))?
+    };
+    load(&library, Some((&called, theme)))
+}
+
+/// A style by its name, or by the path of its library; or a theme, by the
+/// name or the path of its file.
 pub fn named(named: &str) -> Result<Arc<dyn Style>, String> {
     // black and white is in the engine
     if named == "eightyfour" {
         return Ok(Arc::new(press_core::EightyFour));
     }
     if named.contains('/') {
-        return load(Path::new(named));
+        return if named.ends_with(".toml") { themed(Path::new(named)) } else { load(Path::new(named), None) };
     }
-    let file = format!("libpress_style_{named}.so");
-    match folders().into_iter().map(|d| d.join(&file)).find(|p| p.is_file()) {
-        Some(path) => load(&path),
-        None => Err("no library of that name was found".into()),
+    if let Some(path) = library(named) {
+        return load(&path, None);
+    }
+    let file = format!("{named}.toml");
+    match theme_folders().into_iter().map(|d| d.join(&file)).find(|p| p.is_file()) {
+        Some(path) => themed(&path),
+        None => Err("no library of that name was found, and no theme".into()),
     }
 }
 

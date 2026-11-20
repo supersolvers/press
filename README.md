@@ -351,7 +351,7 @@ that fine too.
 Shortcuts are Control with a letter in every style; a style decides only
 how a menu writes them (`shortcut_form`).
 
-The interface is at its ninth version. A style made for an earlier one is
+The interface is at its tenth version. A style made for an earlier one is
 still worn as it was written, in the desktop's frame.
 
 A Rust program that embeds the engine can dress it directly:
@@ -374,6 +374,103 @@ A Rust program that embeds the engine can dress it directly:
 - What a program draws itself on a `Canvas` or a `Picture` is its own:
   black on white unless the program asks for colours, whatever the
   style, though its words are in the style's type.
+
+### Themes
+
+A style can be worn in other colours, sizes and type without building
+anything: a theme is a file of a few lines that names a style and says
+what of it is to be otherwise.
+
+```toml
+name = "Ninety-Nine, Sage"   # what to call it, for people
+style = "ninetynine"         # the style it is a way of wearing
+
+[colours]                    # the style's own, by the names in the table below
+tint = "#cce6cc"
+royal = "#336633"
+
+[palette]                    # what the engine draws words and small marks in
+ink = "#223322"
+
+[sizes]                      # any of the sizes in press_metrics
+row_height = 18
+
+[type]                       # interface, small, small_bold, reading, fixed, title, frame
+interface = { family = "DejaVu Sans", size = 12 }
+fixed = { family = "press:pica" }
+```
+
+Only `style` must be there. A colour is `"#rrggbb"`, or `"#rgb"` for
+short. A typeface is a family as fontconfig knows it and a size in
+pixels, `bold` and `crisp` if wanted, or one of the engine's own
+(`press:pica` and the rest), whose size is its own.
+
+A theme is chosen as a style is, by its file's name: `sage.toml` is what
+`PRESS_STYLE=sage` wears, what `sage` on the first line of
+`~/.config/press/style` gives every program, and what
+`press_app_set_style` and Press's `Style(name: "sage")` ask for.
+`PRESS_STYLE` may also be the path of the file. A library of that name
+is looked for first, and then the file, in
+
+    a folder named in PRESS_STYLE_PATH, or themes/ in it
+    ~/.config/press/themes
+    themes/ beside libpress.so
+    ~/.local/share/press/themes
+    /usr/local/share/press/themes, /usr/share/press/themes
+
+The style a theme names is a library found as ever, or the path of one
+from the folder the theme is in. What a theme says that is not
+understood (a colour its style has not, a size there is none of) is
+passed over, and said on standard error with the names there are.
+Black and white has no themes.
+
+![Six themes](docs/themes.png)
+
+These six come with the library, in `themes/`, and `make install` puts
+them where they are found: `ninetyfive-desert`, `ninetynine-sage`,
+`twothousandfive-graphite`, `twothousandone-olive`,
+`twothousandone-silver` and `twothousandfour-slate`. Most are one or two
+lines of colour.
+
+They can be so short because a style's shades go with its few named
+colours. Where a style draws a gradient or a bevel from a colour that
+has no name, that colour follows one that has: turn the blue of 2001 to
+olive and its title bar, its scroll bars, the edges of its buttons and
+what is selected turn with it, each as much darker or paler than the
+olive as it was than the blue. Some named colours follow another in the
+same way until a theme says what they are themselves; they are in
+brackets after the one they go with.
+
+| Style | Its colours |
+| --- | --- |
+| `eightyfive` | `blue`, `white`, `black`, `orange` |
+| `eightyeight` | `ground` (and with it `pressed`, `shade`), `lit`, `white`, `black` |
+| `eightynine` | `light` (and with it `dark`), `white`, `black` |
+| `ninety` | `grey` (and with it `shade`), `navy`, `white`, `black` |
+| `ninetyone` | `white`, `pale` (and with it `grey`, `mid`), `black`, `cream`, `red`, `green` |
+| `ninetythree` | `ground` (and with it `lit`, `shade`, `trough`), `paper`, `rose` (and with it `rose_lit`, `rose_shade`), `black`, `white` |
+| `ninetyfive` | `face`, `hilite`, `light`, `shadow`, `dark`, `navy`, `white`, `black` |
+| `twothousand` | `face`, `hilite`, `light`, `shadow`, `dark`, `navy`, `white`, `black`, `title_fade`, `title_fade_idle` |
+| `ninetyeight` | `panel` (and with it `soft`, `shade`, `line`), `lit`, `yellow` (and with it `yellow_lit`, `yellow_shade`), `key`, `blue`, `white`, `black` |
+| `ninetynine` | `plate` (and with it `shade`, `deep`, `pressed`), `lit`, `tint` (and with it `tint_deep`), `royal`, `white`, `black` |
+| `twothousandone` | `sand` (and with it `grey`), `glow` (and with it `glow_deep`), `blue` (and with it `edge`, `field_edge`, `box_edge`, `sky`, `sky_light`, `sky_edge`, `sky_ink`), `green` (and with it `green_light`), `white`, `black` |
+| `twothousandfour` | `parchment` (and with it `edge`, `edge_deep`, `face_top`, `face_foot`, `grey`), `orange` (and with it `orange_light`, `orange_deep`), `brown`, `white`, `black` |
+| `twothousandfive` | `window` (and with it `stripe`, `edge`, `grey`), `blue` (and with it `halo`), `white`, `black` |
+
+`twothousand` has `title_fade` and `title_fade_idle` besides, which its
+title bars run out to. In the styles of 1995 and 2000 every colour is
+set by itself, as a scheme of those desktops set them.
+
+A style of your own takes themes by keeping its colours where the engine
+can reach them and listing them by name (`press_colour` in
+`include/press_style.h`); `COLOUR`, `FOLLOWER` and `like` in
+`styles/common/smooth.h` are how the styles here do it.
+
+What themes do not do: a dark theme is not to be had by naming one
+colour, since what follows a colour made darker is made darker too, the
+marks drawn on it among them; and a part cannot be given another shape.
+A look that differs in more than colours, sizes and type is still a
+style, in C.
 
 ## The ABI
 

@@ -12,22 +12,32 @@
 
 #include <string.h>
 
-#define SAND rgb(0xece9d8)      /* what windows are made of */
-#define EDGE rgb(0x003c74)      /* round a button */
-#define FIELD_EDGE rgb(0x7f9db9)
-#define BOX_EDGE rgb(0x1c5180)  /* round a checkbox */
-#define GLOW rgb(0xf8b330)      /* under the pointer */
-#define GLOW_DEEP rgb(0xe59700)
-#define BLUE rgb(0x316ac5)      /* what is selected */
-#define SKY rgb(0xc3d5fd)       /* scroll bars and the like */
-#define SKY_LIGHT rgb(0xe3ecff)
-#define SKY_EDGE rgb(0x98b1e4)
-#define SKY_INK rgb(0x4d6185)
-#define GREEN rgb(0x21a121)
-#define GREEN_LIGHT rgb(0x7fe07f)
-#define GREY rgb(0xaca899)      /* out of use, and thin lines */
-#define WHITE rgb(0xffffff)
-#define BLACK rgb(0x000000)
+COLOUR(SAND, 0xece9d8);     /* what windows are made of */
+FOLLOWER(EDGE, 0x003c74);    /* round a button */
+#define EDGE follows(EDGE, BLUE)
+FOLLOWER(FIELD_EDGE, 0x7f9db9);
+#define FIELD_EDGE follows(FIELD_EDGE, BLUE)
+FOLLOWER(BOX_EDGE, 0x1c5180); /* round a checkbox */
+#define BOX_EDGE follows(BOX_EDGE, BLUE)
+COLOUR(GLOW, 0xf8b330);     /* under the pointer */
+FOLLOWER(GLOW_DEEP, 0xe59700);
+#define GLOW_DEEP follows(GLOW_DEEP, GLOW)
+COLOUR(BLUE, 0x316ac5);     /* what is selected */
+FOLLOWER(SKY, 0xc3d5fd);     /* scroll bars and the like */
+#define SKY follows(SKY, BLUE)
+FOLLOWER(SKY_LIGHT, 0xe3ecff);
+#define SKY_LIGHT follows(SKY_LIGHT, BLUE)
+FOLLOWER(SKY_EDGE, 0x98b1e4);
+#define SKY_EDGE follows(SKY_EDGE, BLUE)
+FOLLOWER(SKY_INK, 0x4d6185);
+#define SKY_INK follows(SKY_INK, BLUE)
+COLOUR(GREEN, 0x21a121);
+FOLLOWER(GREEN_LIGHT, 0x7fe07f);
+#define GREEN_LIGHT follows(GREEN_LIGHT, GREEN)
+FOLLOWER(GREY, 0xaca899);    /* out of use, and thin lines */
+#define GREY follows(GREY, SAND)
+COLOUR(WHITE, 0xffffff);
+COLOUR(BLACK, 0x000000);
 
 static void dotted(box r) {
     for (int x = r.x; x < r.x + r.w; x++) {
@@ -51,17 +61,17 @@ static void label(const press_part *p, int x, box r) {
 static void button(const press_part *p, box r) {
     int held = has(p, PRESS_STATE_HELD);
     if (held)
-        round_box(r, 3, rgb(0xe2e1d9), rgb(0xf0efe9), EDGE);
+        round_box(r, 3, like(SAND, 0xe2e1d9), like(SAND, 0xf0efe9), EDGE);
     else
-        round_box(r, 3, WHITE, rgb(0xd9d4c7), EDGE);
+        round_box(r, 3, WHITE, like(SAND, 0xd9d4c7), EDGE);
     /* a glow just inside the edge: gold under the pointer, blue on the
      * button Return presses or the keyboard is on */
     if (!held && has(p, PRESS_STATE_HOT)) {
         round_line(inset(r, 1), 2, 2, GLOW);
         fill_over((box){r.x + 3, r.y + r.h - 3, r.w - 6, 2}, with_alpha(GLOW_DEEP, 0.7f));
     } else if (!held && (has(p, PRESS_STATE_DEFAULT) || has(p, PRESS_STATE_FOCUSED))) {
-        round_line(inset(r, 1), 2, 2, rgb(0x9dbdf4));
-        fill_over((box){r.x + 3, r.y + r.h - 3, r.w - 6, 2}, with_alpha(rgb(0x6f93d8), 0.8f));
+        round_line(inset(r, 1), 2, 2, like(BLUE, 0x9dbdf4));
+        fill_over((box){r.x + 3, r.y + r.h - 3, r.w - 6, 2}, with_alpha(like(BLUE, 0x6f93d8), 0.8f));
     }
     int line = line_height(), wide = text_width(p->text);
     words(p->text, r.x + (r.w - wide) / 2 + held, r.y + (r.h - line) / 2 + held, BLACK);
@@ -71,7 +81,7 @@ static void button(const press_part *p, box r) {
 
 static void checkbox(const press_part *p, box r) {
     box b = {r.x, r.y + (r.h - 13) / 2, 13, 13};
-    gradient(b, has(p, PRESS_STATE_HELD) ? rgb(0xb0b0a7) : rgb(0xdcdcd7), WHITE);
+    gradient(b, has(p, PRESS_STATE_HELD) ? like(SAND, 0xb0b0a7) : like(SAND, 0xdcdcd7), WHITE);
     outline(b, BOX_EDGE);
     if (has(p, PRESS_STATE_HOT))
         round_line(inset(b, 1), 0, 2, GLOW);
@@ -84,7 +94,7 @@ static void checkbox(const press_part *p, box r) {
 
 static void radio(const press_part *p, box r) {
     box b = {r.x, r.y + (r.h - 13) / 2, 13, 13};
-    round_box(b, 6.5f, has(p, PRESS_STATE_HELD) ? rgb(0xb0b0a7) : rgb(0xdcdcd7), WHITE, BOX_EDGE);
+    round_box(b, 6.5f, has(p, PRESS_STATE_HELD) ? like(SAND, 0xb0b0a7) : like(SAND, 0xdcdcd7), WHITE, BOX_EDGE);
     if (has(p, PRESS_STATE_HOT))
         round_line(inset(b, 1), 5.5f, 2, GLOW);
     if (has(p, PRESS_STATE_CHECKED))
@@ -105,13 +115,13 @@ static void dim_in(box r) {
 static void sky_box(box r, int held, int live) {
     if (live && held == 2) {
         /* under the pointer: lighter */
-        round_box(r, 2, WHITE, rgb(0xd6e3ff), SKY_EDGE);
+        round_box(r, 2, WHITE, like(BLUE, 0xd6e3ff), SKY_EDGE);
         return;
     }
     if (!live)
-        round_box(r, 2, rgb(0xf6f5f0), rgb(0xe6e4dc), rgb(0xd0cec4));
+        round_box(r, 2, like(SAND, 0xf6f5f0), like(SAND, 0xe6e4dc), like(SAND, 0xd0cec4));
     else if (held)
-        round_box(r, 2, rgb(0x9fb9f2), rgb(0xb7cdfb), SKY_EDGE);
+        round_box(r, 2, like(BLUE, 0x9fb9f2), like(BLUE, 0xb7cdfb), SKY_EDGE);
     else
         round_box(r, 2, SKY_LIGHT, SKY, SKY_EDGE);
     if (live && !held)
@@ -122,9 +132,9 @@ static void scroll_bar(const press_part *p, box r) {
     int vertical = has(p, PRESS_STATE_VERTICAL), live = has(p, PRESS_STATE_ENABLED);
     int thick = vertical ? r.w : r.h, length = vertical ? r.h : r.w;
     if (length < 2 * thick) return;
-    fill(r, rgb(0xf6f5f1));
-    if (vertical) fill((box){r.x, r.y, 1, r.h}, rgb(0xe8e6df));
-    else fill((box){r.x, r.y, r.w, 1}, rgb(0xe8e6df));
+    fill(r, like(SAND, 0xf6f5f1));
+    if (vertical) fill((box){r.x, r.y, 1, r.h}, like(SAND, 0xe8e6df));
+    else fill((box){r.x, r.y, r.w, 1}, like(SAND, 0xe8e6df));
     for (int second = 0; second < 2; second++) {
         box b = vertical ? (box){r.x, second ? r.y + r.h - thick : r.y, thick, thick} : (box){second ? r.x + r.w - thick : r.x, r.y, thick, thick};
         int held = live && p->a == second + 1;
@@ -138,7 +148,7 @@ static void scroll_bar(const press_part *p, box r) {
         if (p->c >= 16) {
             for (int i = -3; i <= 3; i += 2) {
                 box ridge = vertical ? (box){t.x + 5, t.y + t.h / 2 + i, t.w - 10, 1} : (box){t.x + t.w / 2 + i, t.y + 5, 1, t.h - 10};
-                fill(ridge, rgb(0x8cb0f8));
+                fill(ridge, like(BLUE, 0x8cb0f8));
                 if (vertical) fill((box){ridge.x + 1, ridge.y + 1, ridge.w, 1}, with_alpha(WHITE, 1));
                 else fill((box){ridge.x + 1, ridge.y + 1, 1, ridge.h}, with_alpha(WHITE, 1));
             }
@@ -156,10 +166,10 @@ static void slider(const press_part *p, box r) {
         groove = (box){r.x + p->b / 2, r.y + r.h / 2 - 2, r.w - p->b + 1, 4};
         knob = (box){p->a, r.y + 2, p->b, r.h - 4};
     }
-    round_box(groove, 1.5f, rgb(0xe7eaea), WHITE, rgb(0x9d9c99));
-    round_box(knob, 2.5f, WHITE, rgb(0xd5d5c9), rgb(0x778892));
+    round_box(groove, 1.5f, like(SAND, 0xe7eaea), WHITE, like(SAND, 0x9d9c99));
+    round_box(knob, 2.5f, WHITE, like(SAND, 0xd5d5c9), like(BLUE, 0x778892));
     /* a line of colour at each end of the knob: gold under the pointer */
-    uint32_t tip = has(p, PRESS_STATE_HOT) || has(p, PRESS_STATE_HELD) ? GLOW : rgb(0x3cb43c);
+    uint32_t tip = has(p, PRESS_STATE_HOT) || has(p, PRESS_STATE_HELD) ? GLOW : like(GREEN, 0x3cb43c);
     if (vertical) {
         fill_over((box){knob.x + 1, knob.y + 1, 2, knob.h - 2}, tip);
         fill_over((box){knob.x + knob.w - 3, knob.y + 1, 2, knob.h - 2}, tip);
@@ -174,7 +184,7 @@ static void slider(const press_part *p, box r) {
 static void progress(const press_part *p, box r) {
     box in = inset(r, 3);
     int block = 6, step = block + 2;
-    round_box(r, 3, rgb(0xf2f2f2), WHITE, rgb(0x686868));
+    round_box(r, 3, like(SAND, 0xf2f2f2), WHITE, like(SAND, 0x686868));
     int from = 0, to;
     if (has(p, PRESS_STATE_BUSY)) {
         /* a few blocks that travel along and come round again */
@@ -187,8 +197,8 @@ static void progress(const press_part *p, box r) {
     for (int x = from; x < to && x < in.w; x += step) {
         int w = x + block > in.w ? in.w - x : block;
         box b = {in.x + x, in.y, w, in.h};
-        gradient((box){b.x, b.y, b.w, b.h / 2}, rgb(0xc4f2c0), rgb(0x2ed13a));
-        gradient((box){b.x, b.y + b.h / 2, b.w, b.h - b.h / 2}, rgb(0x2ed13a), rgb(0x9ce89a));
+        gradient((box){b.x, b.y, b.w, b.h / 2}, like(GREEN, 0xc4f2c0), like(GREEN, 0x2ed13a));
+        gradient((box){b.x, b.y + b.h / 2, b.w, b.h - b.h / 2}, like(GREEN, 0x2ed13a), like(GREEN, 0x9ce89a));
     }
 }
 
@@ -197,18 +207,18 @@ static void tab(const press_part *p, box r) {
     int top = r.y + (front ? 0 : 2), foot = r.y + r.h - 1;
     box shape = {r.x, top, r.w, foot - top + 4};
     if (front) {
-        round_box(shape, 3, WHITE, rgb(0xfcfcfe), rgb(0x919b9c));
+        round_box(shape, 3, WHITE, like(SAND, 0xfcfcfe), like(SAND, 0x919b9c));
         /* a gold line along the top of the chosen tab */
-        fill((box){r.x + 2, top, r.w - 4, 1}, rgb(0xe68b2c));
-        fill((box){r.x + 1, top + 1, r.w - 2, 1}, rgb(0xffc73c));
+        fill((box){r.x + 2, top, r.w - 4, 1}, like(GLOW, 0xe68b2c));
+        fill((box){r.x + 1, top + 1, r.w - 2, 1}, like(GLOW, 0xffc73c));
         /* and nothing between it and the pane */
-        fill((box){r.x + 1, foot, r.w - 2, 4}, rgb(0xfcfcfe));
+        fill((box){r.x + 1, foot, r.w - 2, 4}, like(SAND, 0xfcfcfe));
     } else {
-        round_box(shape, 3, WHITE, rgb(0xeae8dc), rgb(0x919b9c));
+        round_box(shape, 3, WHITE, like(SAND, 0xeae8dc), like(SAND, 0x919b9c));
         if (has(p, PRESS_STATE_HOT)) {
             /* under the pointer, a tab behind takes the gold line of the one in front */
-            fill((box){r.x + 2, top, r.w - 4, 1}, rgb(0xe68b2c));
-            fill((box){r.x + 1, top + 1, r.w - 2, 1}, rgb(0xffc73c));
+            fill((box){r.x + 2, top, r.w - 4, 1}, like(GLOW, 0xe68b2c));
+            fill((box){r.x + 1, top + 1, r.w - 2, 1}, like(GLOW, 0xffc73c));
         }
     }
     words(p->text, r.x + (r.w - text_width(p->text)) / 2, r.y + (r.h - line) / 2 + (front ? 0 : 1), BLACK);
@@ -222,11 +232,11 @@ static void popup(const press_part *p, box r) {
     fill(r, WHITE);
     outline(r, FIELD_EDGE);
     if (has(p, PRESS_STATE_FOCUSED))
-        fill((box){r.x + 2, r.y + 2, drop.x - r.x - 3, r.h - 4}, rgb(0xdde6f7));
+        fill((box){r.x + 2, r.y + 2, drop.x - r.x - 3, r.h - 4}, like(BLUE, 0xdde6f7));
     words(p->text, r.x + 5, r.y + (r.h - line) / 2, BLACK);
     sky_box(drop, held, 1);
     if (has(p, PRESS_STATE_HOT) && !held)
-        round_line(drop, 2, 1, rgb(0x6a8fd8));
+        round_line(drop, 2, 1, like(BLUE, 0x6a8fd8));
     arrow(drop.x + drop.w / 2, drop.y + drop.h / 2, 4, 1, SKY_INK);
 }
 
@@ -235,7 +245,7 @@ static void popup(const press_part *p, box r) {
  * Behind others it is paler. */
 static void frame(const press_part *p, box r) {
     int active = has(p, PRESS_STATE_ENABLED), line = line_height();
-    uint32_t deep = active ? rgb(0x0a3fcf) : rgb(0x7a8fd0), mid = active ? rgb(0x0f62e8) : rgb(0x8ba3e0), high = active ? rgb(0x4d9bff) : rgb(0xa9bdf0);
+    uint32_t deep = active ? like(BLUE, 0x0a3fcf) : like(BLUE, 0x7a8fd0), mid = active ? like(BLUE, 0x0f62e8) : like(BLUE, 0x8ba3e0), high = active ? like(BLUE, 0x4d9bff) : like(BLUE, 0xa9bdf0);
     /* the whole shape, rounded at the top only */
     round_fill((box){r.x, r.y, r.w, p->a + 8}, 7, deep, deep);
     fill((box){r.x, r.y + p->a, r.w, r.h - p->a}, deep);
@@ -253,8 +263,8 @@ static void frame(const press_part *p, box r) {
     fill((box){r.x + r.w - 2, r.y + p->a, 1, r.h - p->a - 1}, mid);
     fill((box){r.x + 1, r.y + r.h - 2, r.w - 2, 1}, mid);
     int ty = r.y + (p->a - line) / 2 + 1;
-    words(p->text, r.x + 9, ty + 1, with_alpha(rgb(0x0a1883), active ? 0.9f : 0.3f));
-    words(p->text, r.x + 8, ty, active ? WHITE : rgb(0xd8e4f8));
+    words(p->text, r.x + 9, ty + 1, with_alpha(like(BLUE, 0x0a1883), active ? 0.9f : 0.3f));
+    words(p->text, r.x + 8, ty, active ? WHITE : like(BLUE, 0xd8e4f8));
 }
 
 /* The buttons at the right of the title bar: squares of blue gel with a
@@ -266,12 +276,12 @@ static void frame_button(const press_part *p, box r) {
         top = held ? rgb(0xa8301c) : hot ? rgb(0xf28a72) : rgb(0xe8674b);
         bottom = held ? rgb(0xc8432a) : rgb(0xc03418);
     } else {
-        top = held ? rgb(0x1c3fb0) : hot ? rgb(0x7fb2ff) : rgb(0x4d8cf5);
-        bottom = held ? rgb(0x2f5fd8) : rgb(0x1c50c8);
+        top = held ? like(BLUE, 0x1c3fb0) : hot ? like(BLUE, 0x7fb2ff) : like(BLUE, 0x4d8cf5);
+        bottom = held ? like(BLUE, 0x2f5fd8) : like(BLUE, 0x1c50c8);
     }
     if (!active) {
-        top = mix(top, rgb(0xb8c4e8), 0.55f);
-        bottom = mix(bottom, rgb(0xb8c4e8), 0.55f);
+        top = mix(top, like(BLUE, 0xb8c4e8), 0.55f);
+        bottom = mix(bottom, like(BLUE, 0xb8c4e8), 0.55f);
     }
     round_box(r, 3, top, bottom, WHITE);
     int cx = r.x + r.w / 2, cy = r.y + r.h / 2;
@@ -316,8 +326,8 @@ static int32_t draw(const press_part *p, const press_surface *surface) {
     case PRESS_PART_SCROLL_CORNER: fill(r, SAND); break;
     case PRESS_PART_TAB: tab(p, r); break;
     case PRESS_PART_TAB_PANE:
-        fill(r, rgb(0xfcfcfe));
-        outline(r, rgb(0x919b9c));
+        fill(r, like(SAND, 0xfcfcfe));
+        outline(r, like(SAND, 0x919b9c));
         break;
     case PRESS_PART_POPUP: popup(p, r); break;
     case PRESS_PART_MENU_BAR: fill(r, SAND); break;
@@ -339,28 +349,28 @@ static int32_t draw(const press_part *p, const press_surface *surface) {
         outline(r, FIELD_EDGE);
         break;
     case PRESS_PART_HEADER:
-        fill(r, rgb(0xebeadb));
-        fill((box){r.x, r.y + r.h - 3, r.w, 1}, rgb(0xe2decd));
-        fill((box){r.x, r.y + r.h - 2, r.w, 1}, rgb(0xd6d2c2));
-        fill((box){r.x, r.y + r.h - 1, r.w, 1}, rgb(0xcbc7b8));
+        fill(r, like(SAND, 0xebeadb));
+        fill((box){r.x, r.y + r.h - 3, r.w, 1}, like(SAND, 0xe2decd));
+        fill((box){r.x, r.y + r.h - 2, r.w, 1}, like(SAND, 0xd6d2c2));
+        fill((box){r.x, r.y + r.h - 1, r.w, 1}, like(SAND, 0xcbc7b8));
         break;
     case PRESS_PART_HEADER_CELL:
         if (has(p, PRESS_STATE_HOT)) {
             /* under the pointer a heading lightens, with gold along its foot */
-            fill((box){r.x, r.y, r.w, r.h - 3}, rgb(0xfaf9f4));
-            fill((box){r.x, r.y + r.h - 3, r.w, 1}, rgb(0xf9a900));
-            fill((box){r.x, r.y + r.h - 2, r.w, 1}, rgb(0xf8b330));
-            fill((box){r.x, r.y + r.h - 1, r.w, 1}, rgb(0xe59700));
+            fill((box){r.x, r.y, r.w, r.h - 3}, like(SAND, 0xfaf9f4));
+            fill((box){r.x, r.y + r.h - 3, r.w, 1}, like(GLOW, 0xf9a900));
+            fill((box){r.x, r.y + r.h - 2, r.w, 1}, like(GLOW, 0xf8b330));
+            fill((box){r.x, r.y + r.h - 1, r.w, 1}, like(GLOW, 0xe59700));
             break;
         }
-        fill((box){r.x + r.w - 2, r.y + 3, 1, r.h - 7}, rgb(0xc7c5b2));
+        fill((box){r.x + r.w - 2, r.y + 3, 1, r.h - 7}, like(SAND, 0xc7c5b2));
         fill((box){r.x + r.w - 1, r.y + 3, 1, r.h - 7}, WHITE);
         break;
     case PRESS_PART_TREE_FOLD: {
         /* a little box with a minus in it, or a plus when there is more to show */
         box b = {p->a - 4, p->b - 4, 9, 9};
-        gradient(b, WHITE, rgb(0xc3bab0));
-        outline(b, rgb(0x7898b5));
+        gradient(b, WHITE, like(SAND, 0xc3bab0));
+        outline(b, like(BLUE, 0x7898b5));
         fill((box){b.x + 2, b.y + 4, 5, 1}, BLACK);
         if (!has(p, PRESS_STATE_CHECKED)) fill((box){b.x + 4, b.y + 2, 1, 5}, BLACK);
         break;
@@ -368,29 +378,29 @@ static int32_t draw(const press_part *p, const press_surface *surface) {
     case PRESS_PART_GROUP_BOX: {
         /* a thin rounded line, its title in blue across the top of it */
         int top = p->text[0] ? line_height() / 2 : 0;
-        round_line((box){r.x, r.y + top, r.w, r.h - top}, 4, 1, rgb(0xd0d0bf));
+        round_line((box){r.x, r.y + top, r.w, r.h - top}, 4, 1, like(SAND, 0xd0d0bf));
         if (p->text[0]) {
             fill((box){r.x + 7, r.y, text_width(p->text) + 6, line_height()}, (uint32_t)p->c);
-            words(p->text, r.x + 10, r.y, rgb(0x0046d5));
+            words(p->text, r.x + 10, r.y, like(BLUE, 0x0046d5));
         }
         break;
     }
     case PRESS_PART_STATUS_BAR:
         /* a soft shade along the top, and a grip of dots in the corner */
-        fill((box){r.x, r.y, r.w, 1}, rgb(0xc5c2b2));
-        fill((box){r.x, r.y + 1, r.w, 1}, rgb(0xe3e0d0));
+        fill((box){r.x, r.y, r.w, 1}, like(SAND, 0xc5c2b2));
+        fill((box){r.x, r.y + 1, r.w, 1}, like(SAND, 0xe3e0d0));
         for (int i = 0; i < 3; i++) {
             for (int j = 0; j <= i; j++) {
                 box dot = {r.x + r.w - 5 - 4 * j, r.y + r.h - 13 + 4 * i, 2, 2};
                 fill((box){dot.x + 1, dot.y + 1, 2, 2}, WHITE);
-                fill(dot, rgb(0xb8b4a2));
+                fill(dot, like(SAND, 0xb8b4a2));
             }
         }
         break;
     case PRESS_PART_STATUS_PANEL:
         /* cells are told apart by a line between them, cut into the bar */
         if (p->a > 0) {
-            fill((box){r.x - 2, r.y + 1, 1, r.h - 3}, rgb(0xc5c2b2));
+            fill((box){r.x - 2, r.y + 1, 1, r.h - 3}, like(SAND, 0xc5c2b2));
             fill((box){r.x - 1, r.y + 1, 1, r.h - 3}, WHITE);
         }
         break;
@@ -438,7 +448,7 @@ static void metrics(press_metrics *m) {
 }
 
 static void palette(press_palette *p) {
-    p->pane = rgb(0xfcfcfe); /* the pages of a tab view are nearly white */
+    p->pane = like(SAND, 0xfcfcfe); /* the pages of a tab view are nearly white */
     p->window = SAND;
     p->text = BLACK;
     p->paper = WHITE;
@@ -469,7 +479,28 @@ static int32_t typeface(uint32_t face, press_type *out) {
     return 1;
 }
 
-static const press_style style = {PRESS_STYLE_ABI, "twothousandone", metrics, palette, draw, PRESS_WANTS_HOVER | PRESS_WANTS_FINE, typeface};
+/* What a theme may change, by these names. */
+static const press_colour colours[] = {
+    {"sand", &SAND},
+    {"edge", &EDGE_SAID},
+    {"field_edge", &FIELD_EDGE_SAID},
+    {"box_edge", &BOX_EDGE_SAID},
+    {"glow", &GLOW},
+    {"glow_deep", &GLOW_DEEP_SAID},
+    {"blue", &BLUE},
+    {"sky", &SKY_SAID},
+    {"sky_light", &SKY_LIGHT_SAID},
+    {"sky_edge", &SKY_EDGE_SAID},
+    {"sky_ink", &SKY_INK_SAID},
+    {"green", &GREEN},
+    {"green_light", &GREEN_LIGHT_SAID},
+    {"grey", &GREY_SAID},
+    {"white", &WHITE},
+    {"black", &BLACK},
+    {NULL, NULL},
+};
+
+static const press_style style = {PRESS_STYLE_ABI, "twothousandone", metrics, palette, draw, PRESS_WANTS_HOVER | PRESS_WANTS_FINE, typeface, colours};
 
 const press_style *press_style_entry(void) {
     return &style;
