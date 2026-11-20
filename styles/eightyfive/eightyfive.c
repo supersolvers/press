@@ -151,7 +151,7 @@ static void frame(const press_part *p, box r) {
 static void frame_button(const press_part *p, box r) {
     /* cleared of the ruling, then: a dot in a box to close; two sheets,
      * one before the other, for the buttons that bring a window to the
-     * front (here, zoom it) and send it to the back (here, put it away) */
+     * front (here, zoom it) and send it to the back */
     fill((box){r.x - 2, r.y - 1, r.w + 4, r.h + 2}, WHITE);
     outline(r, BLUE);
     if (p->a == PRESS_FRAME_CLOSE) {
@@ -274,7 +274,7 @@ static void metrics(press_metrics *m) {
     m->frame_button_inset = 4;
     m->frame_button_rise = 0;
     m->frame_left = 0x1;
-    m->frame_right = 0x32;
+    m->frame_right = 0x36;
     m->menu_in_window = 0;
 }
 

@@ -187,6 +187,7 @@ its headers and the styles under `PREFIX` (`/usr/local`).
 | `styles/common/smooth.h` | What the two smooth styles draw with: blending, gradients, rounded shapes, shadows. Not part of the style interface |
 | `fonts/` | The fonts' sources: the scripts that draw them, hand-drawn pixels, the build, and what they borrow (see `fonts/README.md`) |
 | `crates/press-fontgen` | Takes the pixels out of the built font files and writes them in the form the engine bundles |
+| `crates/press-protocols` | Wayland protocols of press's own (`protocols/`), read into both sides: for a program and for a desktop |
 | `assets/fonts` | The bundled fonts, as written by `press-fontgen`, and their licence |
 | `examples/` | The same dialog in C, Python and Swift (twice: with `PressCore` and with `Press`), a tour of Press, the furniture of a whole program in C and with Press (tools), a host event loop in each, and in C a worker thread, a notes window, scroll bars, a window of other controls, a file browser and a pair of lists to drag between |
 
@@ -217,7 +218,8 @@ asks the style in use for these things:
   stand at the left or in the middle, how thick the edge of a menu is,
   what two clicks on a title bar do (zoom the window, roll it up into its
   title, put it away), and which buttons a title bar has: to close, to
-  put away, to zoom, to roll up, and one for a menu of the window's own;
+  put away, to zoom, to roll up, to put the window behind the others, and
+  one for a menu of the window's own;
 - what it **wants** of the engine: to be told when the pointer is over a
   button, a tab, a table's heading, a title in the menu bar or a part of
   a scroll bar; to have a default button drawn again twenty times a
@@ -351,7 +353,7 @@ that fine too.
 Shortcuts are Control with a letter in every style; a style decides only
 how a menu writes them (`shortcut_form`).
 
-The interface is at its tenth version. A style made for an earlier one is
+The interface is at its eleventh version. A style made for an earlier one is
 still worn as it was written, in the desktop's frame.
 
 A Rust program that embeds the engine can dress it directly:
@@ -471,6 +473,19 @@ colour, since what follows a colour made darker is made darker too, the
 marks drawn on it among them; and a part cannot be given another shape.
 A look that differs in more than colours, sizes and type is still a
 style, in C.
+
+### Behind the others
+
+The desktops of 1985 and 1991 gave a window a box that put it behind
+every other, and the styles of those years have it (`PRESS_FRAME_BACK`).
+The window protocol has a way to put a window away and none to put it
+behind, so this is asked by a small protocol of press's own,
+`press_depth_v1` (`protocols/press-depth-v1.xml`). A
+compositor can send the window to the back and give focus to the window
+now in front. On a
+desktop that does not offer it the box puts the window away instead.
+`crates/press-protocols` holds both sides of the protocol, for a desktop
+that would offer it too.
 
 ## The ABI
 

@@ -1,0 +1,16 @@
+[package]
+name = "press-protocols"
+description = "Wayland protocols of press's own, for programs (client) and for a desktop (server)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[features]
+client = ["dep:wayland-client"]
+server = ["dep:wayland-server"]
+
+[dependencies]
+wayland-backend = "0.3"
+wayland-scanner = "0.31"
+wayland-client = { version = "0.31", optional = true }
+wayland-server = { version = "0.31", optional = true }

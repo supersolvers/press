@@ -22,6 +22,8 @@ pub const ZOOM: u8 = 3;
 pub const ROLL: u8 = 4;
 /// Show the window's own menu; two clicks on it close the window.
 pub const MENU: u8 = 5;
+/// Put the window behind every other, where the desktop will.
+pub const BACK: u8 = 6;
 
 /// What a pointer event on a framed window comes to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -36,6 +38,8 @@ pub enum FrameAct {
     Resize { left: bool, right: bool, top: bool, bottom: bool },
     Close,
     Minimize,
+    /// Put it behind every other window. A display that cannot puts it away.
+    Back,
     /// Make it as large as it can be, or as it was before.
     Zoom,
 }
@@ -112,6 +116,7 @@ impl Ui {
             ROLL => self.roll(window),
             CLOSE => self.frame_asked = Some((window, FrameAct::Close)),
             MINIMIZE => self.frame_asked = Some((window, FrameAct::Minimize)),
+            BACK => self.frame_asked = Some((window, FrameAct::Back)),
             ZOOM => self.frame_asked = Some((window, FrameAct::Zoom)),
             _ => {}
         }
@@ -160,7 +165,7 @@ impl Ui {
     /// those a window that cannot change size has no use for left out.
     fn frame_listed(&self, window: Handle, list: i32) -> Vec<u8> {
         let resizable = matches!(self.nodes.get(window).map(|n| &n.kind), Some(Kind::Window { resizable: true, .. }));
-        (0..4).map(|place| ((list >> (4 * place)) & 0xf) as u8).filter(|which| (CLOSE..=MENU).contains(which) && (*which != ZOOM || resizable)).collect()
+        (0..4).map(|place| ((list >> (4 * place)) & 0xf) as u8).filter(|which| (CLOSE..=BACK).contains(which) && (*which != ZOOM || resizable)).collect()
     }
 
     /// How wide a window's title bar is: all of the window, or for a style
@@ -330,6 +335,7 @@ impl Ui {
                     return match held.1 {
                         CLOSE => FrameAct::Close,
                         MINIMIZE => FrameAct::Minimize,
+                        BACK => FrameAct::Back,
                         ROLL => {
                             self.roll(window);
                             FrameAct::Nothing

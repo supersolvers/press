@@ -267,7 +267,7 @@ static void frame_button(const press_part *p, box r) {
     int cx = r.x + r.w / 2, cy = r.y + r.h / 2;
     switch (p->a) {
     case PRESS_FRAME_CLOSE: sign(cross, 9, cx - 4, cy - 4, BLACK); break;
-    case PRESS_FRAME_MINIMIZE:
+    case PRESS_FRAME_BACK:
         /* behind the others: one square behind another */
         outline((box){cx - 5, cy - 5, 8, 8}, BLACK);
         boxed((box){cx - 2, cy - 2, 8, 8}, GREY);
@@ -388,7 +388,7 @@ static void metrics(press_metrics *m) {
     m->frame_button_gap = 1;
     m->frame_button_inset = 1;
     m->frame_button_rise = 0;
-    m->frame_left = 0x12;  /* behind the others, then close */
+    m->frame_left = 0x16;  /* behind the others, then close */
     m->frame_right = 0x3;  /* as large as it can be */
     m->menu_in_window = 0;
     m->ok_leads = 0; /* Cancel, then OK */

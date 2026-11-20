@@ -38,7 +38,7 @@ extern "C" {
 #endif
 
 /* The version of this interface, for press_style.abi. */
-#define PRESS_STYLE_ABI 10
+#define PRESS_STYLE_ABI 11
 
 /* Sizes, in pixels. */
 typedef struct press_metrics {
@@ -74,7 +74,7 @@ typedef struct press_metrics {
     int32_t frame_button_rise;  /* how far below the middle of the title bar they sit */
     int32_t frame_left;       /* the buttons at the left of the title bar and at the right: */
     int32_t frame_right;      /* four bits each, the one nearest the side of the frame lowest.
-                                 PRESS_FRAME_CLOSE, _MINIMIZE, _ZOOM: 0x231 at the right is
+                                 PRESS_FRAME_CLOSE, _MINIMIZE, _ZOOM and the rest: 0x231 at the right is
                                  minimize, zoom, close as read from the left */
     int32_t menu_in_window;   /* not 0: the menu bar stays in the window on every desktop */
     /* from version 4 */
@@ -100,7 +100,9 @@ enum {
     PRESS_FRAME_MINIMIZE = 2,
     PRESS_FRAME_ZOOM = 3,
     PRESS_FRAME_ROLL = 4,     /* roll the window up into its title bar, or let it down */
-    PRESS_FRAME_MENU = 5      /* show the window's own menu; two clicks on it close the window */
+    PRESS_FRAME_MENU = 5,     /* show the window's own menu; two clicks on it close the window */
+    PRESS_FRAME_BACK = 6      /* from version 11: put the window behind every other. A desktop
+                                 that has no way to puts it away instead */
 };
 
 /* Colours, as 0xAARRGGBB. The engine draws words and small marks itself,

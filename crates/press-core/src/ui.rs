@@ -3369,7 +3369,7 @@ mod style_tests {
             "mannered"
         }
         fn metrics(&self) -> Metrics {
-            Metrics { shortcut_form: 1, frame_foot: 9, frame_double: 1, scroll_arrows: 1, tab_align: 1, menu_border: 3, frame_left: 0x5, frame_right: 0x4, ..Framed.metrics() }
+            Metrics { shortcut_form: 1, frame_foot: 9, frame_double: 1, scroll_arrows: 1, tab_align: 1, menu_border: 3, frame_left: 0x5, frame_right: 0x64, ..Framed.metrics() }
         }
         fn palette(&self) -> Palette {
             Palette { list: 0xffaaaaaa, pane: 0xffeeeeee, ..EightyFour::PALETTE }
@@ -3417,6 +3417,16 @@ mod style_tests {
         let drawn: Vec<PartKind> = style.0.lock().unwrap().iter().map(|p| p.0).collect();
         // the tick beside the item is the style's to draw now
         assert!(drawn.contains(&PartKind::MenuCheck) && drawn.contains(&PartKind::MenuFrame));
+    }
+
+    #[test]
+    fn a_title_bar_may_have_a_button_that_puts_the_window_behind() {
+        let (mut ui, _) = mannered();
+        let (window, _) = dialog(&mut ui);
+        let (_, back) = *ui.frame_buttons(window).iter().find(|b| b.0 == frame::BACK).expect("the style asked for one");
+        assert_eq!(ui.frame_pointer(window, back.x + 2, back.y + 2, PointerKind::Press), FrameAct::Nothing);
+        // it is for the display to do: the engine has one window's word only
+        assert_eq!(ui.frame_pointer(window, back.x + 2, back.y + 2, PointerKind::Release), FrameAct::Back);
     }
 
     #[test]

@@ -11,6 +11,7 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 press-core = { path = "../press-core" }
+press-protocols = { path = "../press-protocols", features = ["client"] }
 accesskit = "0.25"
 accesskit_unix = "0.24"
 libc = "0.2"

@@ -22,7 +22,7 @@ use std::sync::{Arc, Mutex};
 /// The version of the interface below. A library made for an earlier
 /// version is still worn, as it was written; one made for any other but
 /// these is not used.
-pub const ABI: u32 = 10;
+pub const ABI: u32 = 11;
 
 /// A part to draw, as a style library is handed it. See
 /// [`press_core::PartKind`] for what the numbers mean for each kind.

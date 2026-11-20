@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<protocol name="press_depth_v1">
+  <copyright>
+    SPDX-License-Identifier: GPL-3.0-or-later
+  </copyright>
+
+  <interface name="press_depth_v1" version="1">
+    <description summary="put a window behind the others">
+      Some desktops gave every window a box that sent it behind all the
+      others, where it stayed in view wherever nothing covered it. The
+      window protocol has a way to put a window away and none to put it
+      behind, so a desktop that will do it offers this.
+
+      A program that draws its own title bar asks when the user presses
+      such a box. A desktop is free to do nothing.
+    </description>
+
+    <request name="destroy" type="destructor">
+      <description summary="have done with this"/>
+    </request>
+
+    <request name="send_to_back">
+      <description summary="put a window behind every other">
+        Put the window whose surface this is behind every other window,
+        and give the keyboard to the one then in front. The serial is that
+        of the press of a button or a key that asked for it, to show that
+        the user did.
+      </description>
+      <arg name="surface" type="object" interface="wl_surface" summary="the window's surface"/>
+      <arg name="serial" type="uint" summary="of what the user did"/>
+    </request>
+  </interface>
+</protocol>

@@ -69,6 +69,7 @@ use wayland_protocols::wp::fractional_scale::v1::client::wp_fractional_scale_man
 use wayland_protocols::wp::fractional_scale::v1::client::wp_fractional_scale_v1::{self, WpFractionalScaleV1};
 use wayland_protocols::wp::viewporter::client::{wp_viewport::WpViewport, wp_viewporter::WpViewporter};
 use wayland_protocols::xdg::toplevel_tag::v1::client::xdg_toplevel_tag_manager_v1::XdgToplevelTagManagerV1;
+use press_protocols::depth::client::press_depth_v1::PressDepthV1;
 use wayland_protocols_plasma::appmenu::client::{org_kde_kwin_appmenu::OrgKdeKwinAppmenu, org_kde_kwin_appmenu_manager::OrgKdeKwinAppmenuManager};
 use crate::support::{deliver, listening, with, Handle};
 use press_core::{Canvas, Cursor, Key, Mods, PointerKind, Rect};
@@ -451,6 +452,8 @@ struct State {
     /// The desktop's own menu bar, if it has one: how to tell it about a
     /// window's menus, and the bus they are served on.
     appmenu_manager: Option<OrgKdeKwinAppmenuManager>,
+    /// The desktop's way of putting a window behind the others, if it has one.
+    depth: Option<PressDepthV1>,
     /// For telling the desktop the names windows are to be known by.
     tag_manager: Option<XdgToplevelTagManagerV1>,
     /// For scales that are not whole numbers: how the compositor says what
@@ -627,6 +630,7 @@ pub fn start(wake: Arc<OwnedFd>) -> Result<Session, Status> {
         wake,
         menu_bus: appmenu_manager.as_ref().and_then(|_| appmenu::Bus::connect()),
         appmenu_manager,
+        depth: globals.bind(&qh, 1..=1, ()).ok(),
         tag_manager: globals.bind(&qh, 1..=1, ()).ok(),
         // PRESS_FRACTIONAL=0 leaves a scale that is not a whole number to the
         // compositor, as before: the picture is the size asked for, and soft
@@ -1556,6 +1560,11 @@ impl State {
             }
             (FrameAct::Close, _) => self.pending.push(Pending::Close { window }),
             (FrameAct::Minimize, _) => s.window.set_minimized(),
+            // behind the others where the desktop will; put away where it will not
+            (FrameAct::Back, _) => match &self.depth {
+                Some(depth) => depth.send_to_back(s.window.wl_surface(), self.serial),
+                None => s.window.set_minimized(),
+            },
             (FrameAct::Zoom, _) => {
                 if s.zoomed { s.window.unset_maximized() } else { s.window.set_maximized() }
             }
@@ -1603,6 +1612,10 @@ impl SeatHandler for State {
 
 impl Dispatch<XdgToplevelTagManagerV1, ()> for State {
     fn event(_: &mut Self, _: &XdgToplevelTagManagerV1, _: <XdgToplevelTagManagerV1 as Proxy>::Event, _: &(), _: &Connection, _: &QueueHandle<Self>) {}
+}
+
+impl Dispatch<PressDepthV1, ()> for State {
+    fn event(_: &mut Self, _: &PressDepthV1, _: <PressDepthV1 as Proxy>::Event, _: &(), _: &Connection, _: &QueueHandle<Self>) {}
 }
 
 impl Dispatch<OrgKdeKwinAppmenuManager, ()> for State {
