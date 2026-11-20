@@ -18,8 +18,8 @@ any of them without being built again.
 | ![The same program, in the manner of 1985](docs/press-eightyfive.png) | ![The same program, in the manner of 1989](docs/press-eightynine.png) |
 | **Eighty-Eight** | **Ninety-Three** |
 | ![The same program, in the manner of 1988](docs/press-eightyeight.png) | ![The same program, in the manner of 1993](docs/press-ninetythree.png) |
-| **Ninety-Eight** | |
-| ![The same program, in the manner of 1998](docs/press-ninetyeight.png) | |
+| **Ninety-Eight** | **Ninety-One** |
+| ![The same program, in the manner of 1998](docs/press-ninetyeight.png) | ![The same program, in the manner of 1991](docs/press-ninetyone.png) |
 | **Ninety** | **Two Thousand and Four** |
 | ![The same program, in the manner of 1990](docs/press-ninety.png) | ![The same program, in the manner of 2004](docs/press-twothousandfour.png) |
 | **Ninety-Nine** | **Two Thousand** |
@@ -174,6 +174,7 @@ its headers and the styles under `PREFIX` (`/usr/local`).
 | `styles/ninetyfive` | A style in the manner of the middle 1990s, in C, as a library of its own: grey, bevelled, in the engine's own pixel type |
 | `styles/eightyfive` | A style in the manner of the home computer workbench of 1985: four colours and no shading |
 | `styles/eightyeight` | A style in the manner of the open workstation look of 1988: lozenges, a lift on a cable, brackets at a window's corners |
+| `styles/ninetyone` | A style in the manner of the desktop of 1991 that came in a computer's ROM: flat pale grey, thin black lines, a cream title bar |
 | `styles/ninetythree` | A style in the manner of the common desktop of 1993: heavy bevels in slate blue, a frame in rose |
 | `styles/ninetyeight` | A style in the manner of the media desktop of 1998: the title a yellow tab on the window's corner |
 | `styles/eightynine` | A style in the manner of the workstation of 1989: four greys, slabs and hollows, black title bars |
@@ -233,8 +234,8 @@ asks the style in use for these things:
 Whatever a style does not draw is drawn in black and white, so a style can
 be written a part at a time and is never left with holes in it.
 
-Thirteen come with PRESS, each named for its year. `eightyfour`, black and white
-in the manner of the first Macintosh, is built into the engine. The other twelve
+Fourteen come with PRESS, each named for its year. `eightyfour`, black and white
+in the manner of the first Macintosh, is built into the engine. The other thirteen
 are libraries of their own, and are there as much to show how a style is
 written as to be worn:
 
@@ -243,6 +244,7 @@ written as to be worn:
 | `ninetyfive` | Grey and bevelled, in the manner of the middle 1990s. Whole pixels and the engine's own type: what a style can be with nothing smooth in it |
 | `eightyfive` | In the manner of the home computer workbench of 1985: blue, white, black and orange, and nothing else. No shading and no round corners; what is chosen or held turns to its opposite colour, blue to orange and white to black. Words are white on blue; menus are the other way about |
 | `eightyeight` | In the manner of the open workstation look of 1988, which went its own way in nearly everything: buttons are lozenges, a button that opens a menu carries a small triangle, one choice among several is a row of boxes with the chosen one in a heavy line, a line to type on is a line and no box, a scroll bar is a lift on a cable, and a window has brackets at its corners to take hold of |
+| `ninetyone` | In the manner of the desktop of 1991 that came in the ROM of a British computer: flat pale grey with every box a thin black line, and what is chosen or held turned inside out, white for black. The title bar of the window that has the keyboard is cream and the others' grey, with a box that sends the window behind the rest and one that closes it at its left; a star in a check box; a red caret; a pale blue pointer; and one face with every letter the same width |
 | `ninetythree` | In the manner of the common desktop of the workstations of 1993: slate blue, everything two pixels out of the ground or two pixels into it, a check box that is pressed in when on, a diamond for a choice among several, a black line right round what has the keyboard, and the frame of the window in front in rose |
 | `ninetyeight` | In the manner of the media desktop of 1998: quiet grey, thin dark lines, blue under the label of what has the keyboard, and a window whose title is not a bar but a yellow tab, as wide as the title needs, on its top left corner |
 | `eightynine` | In the manner of the workstation of 1989: black, two greys and white. Everything is a slab of light grey standing out of the page or a hollow pressed into it; title bars are black; the button Return presses carries the sign of that key |
@@ -264,6 +266,7 @@ written as to be worn:
 | ![The same in Eighty-Nine](docs/eightynine.png) | ![The same in Ninety](docs/ninety.png) |
 | ![The same in Eighty-Eight](docs/eightyeight.png) | ![The same in Ninety-Three](docs/ninetythree.png) |
 | ![The same in Ninety-Eight](docs/ninetyeight.png) | ![Menus in Ninety-Eight](docs/ninetyeight-menus.png) |
+| ![The same in Ninety-One](docs/ninetyone.png) | ![Menus in Ninety-One](docs/ninetyone-menus.png) |
 
 They are drawn here from nothing, in the manner of what they recall: no
 picture, colour table or font of Apple's or Microsoft's is in them. For
@@ -273,7 +276,7 @@ not (DejaVu Sans, on most).
 
 **Choosing one.** A program chooses for itself: in Press, `static var
 style: Style` on its `App` (`.eightyFour`, `.eightyFive`, `.eightyEight`,
-`.eightyNine`, `.ninety`, `.ninetyThree`, `.ninetyFive`, `.ninetyEight`, `.ninetyNine`, `.twoThousand`, `.twoThousandOne`,
+`.eightyNine`, `.ninety`, `.ninetyOne`, `.ninetyThree`, `.ninetyFive`, `.ninetyEight`, `.ninetyNine`, `.twoThousand`, `.twoThousandOne`,
 `.twoThousandFour`, `.twoThousandFive`, or `.named("...")` for
 any other); in C, `press_app_set_style` after `press_app_init`, and
 `App.set_style` in Python. A program that does not choose wears what the
@@ -284,7 +287,7 @@ environment dresses it so whatever it or the desktop says. Each of these
 is a name or the path of a library. A style that cannot be loaded is said
 so once on standard error, and the program looks as it did.
 
-**Windows with frames of their own.** A style may have a frame: the twelve
+**Windows with frames of their own.** A style may have a frame: the thirteen
 that come as libraries all do. A program wearing one draws its windows
 whole, title bar, edges, buttons and all, and asks the desktop to draw
 nothing round them. Dragging the title bar moves the window, dragging an
@@ -302,7 +305,7 @@ A style also says whether its menus stay in the window. Those in the
 manner of desktops that kept them there do (Eighty-Eight, Eighty-Nine,
 Ninety, Ninety-Three, Ninety-Five, Ninety-Eight, Two Thousand, Two Thousand and One, Two Thousand and Four);
 those in the manner of desktops with one menu bar across the top of the
-screen (Eighty-Five, Ninety-Nine, Two Thousand and Five, and black and
+screen (Eighty-Five, Ninety-One, Ninety-Nine, Two Thousand and Five, and black and
 white) hand their menus to a desktop that has such a bar, and
 keep them in the window where there is none.
 
@@ -314,7 +317,7 @@ colour with alpha, and the engine's own hand for words, and may put
 anything there. `styles/ninetyfive/ninetyfive.c` is one in four hundred
 lines of C; the two smooth ones share their drawing, `styles/common/smooth.h`,
 which another style is free to take or leave. `make styles` builds all
-twelve. A style is looked for in the folders named in `PRESS_STYLE_PATH`, in
+thirteen. A style is looked for in the folders named in `PRESS_STYLE_PATH`, in
 `styles/` beside `libpress.so` and beside it, in
 `~/.local/lib/press/styles`, and in `/usr/local/lib/press/styles` and
 `/usr/lib/press/styles`.

@@ -61,7 +61,8 @@ unsafe fn dialog(dir: &std::path::Path, name: &str) -> (png::ColorType, Vec<u8>)
 /// test runs itself again for each, with the style named in the environment.
 #[test]
 fn windows_wear_styles_from_libraries_of_their_own() {
-    let styles: [(&str, [u8; 3]); 12] = [
+    let styles: [(&str, [u8; 3]); 13] = [
+        ("ninetyone", [0xdd, 0xdd, 0xdd]),
         ("eightyeight", [0xcc, 0xcc, 0xcc]),
         ("ninetythree", [0xae, 0xb2, 0xc3]),
         ("ninetyeight", [0xd8, 0xd8, 0xd8]),

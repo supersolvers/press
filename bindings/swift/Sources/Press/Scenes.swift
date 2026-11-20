@@ -383,6 +383,9 @@ public struct Style: Hashable, Sendable {
     public static let eightyNine = Style(name: "eightynine")
     /// Grey buttons on white windows, in the manner of the office desktops of 1990.
     public static let ninety = Style(name: "ninety")
+    /// Flat pale grey in thin black lines, with a cream title bar, in the
+    /// manner of the desktop of 1991 that came in a computer's ROM.
+    public static let ninetyOne = Style(name: "ninetyone")
     /// Heavy bevels in slate blue and a frame in rose, in the manner of the
     /// common desktop of the workstations of 1993.
     public static let ninetyThree = Style(name: "ninetythree")
