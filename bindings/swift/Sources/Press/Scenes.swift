@@ -39,6 +39,7 @@ struct WindowSpec {
     var many: Bool
     var size: (Int, Int)?
     var resizable = true
+    var tag: String?
     var commands: [CommandSpec] = []
 }
 
@@ -164,6 +165,14 @@ extension Scene {
     public func windowResizability(_ resizability: WindowResizability) -> some Scene {
         _ModifiedScene(content: self) { $0.resizable = resizability.resizable }
     }
+
+    /// Say what kind of window it is, for the desktop: a tag starting
+    /// `dialog:` marks a box, which a desktop may frame and place as one
+    /// (with only a close button, in the middle of the screen), and which
+    /// has no menu bar. Not in SwiftUI.
+    public func windowTag(_ tag: String) -> some Scene {
+        _ModifiedScene(content: self) { $0.tag = tag }
+    }
 }
 
 // MARK: - Opening and closing from a view
@@ -225,6 +234,7 @@ final class WindowNode: Node {
         try host.stack.setAlign(.fill)
         try window.setContent(host.stack)
         try window.setResizable(spec.resizable)
+        if let tag = spec.tag { try window.setTag(tag) }
         super.init(EmptyView(), EnvironmentValues())
         try window.onCloseRequested(onMain { [weak self] in self?.close() })
         try window.onFullScreenChanged(onMain { [weak self] (on: Bool) in self?.fullScreenChanged(on) })
@@ -266,6 +276,8 @@ final class WindowNode: Node {
     override func collect(_ out: inout [Item]) {}
 
     private func updateMenus() {
+        // a box has no menus of its own
+        if spec.tag?.hasPrefix("dialog:") == true { return }
         let commands = (parent as? AppHost)?.commands ?? spec.commands
         let specs = observing(self) {
             menuBar(

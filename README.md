@@ -1192,7 +1192,7 @@ for different things. `examples/swift` has this dialog with its menus as
 
 | | |
 | --- | --- |
-| Programs | `App`, `Scene`, `WindowGroup`, `Window`, `.commands`, `.defaultSize`, `.windowResizability` |
+| Programs | `App`, `Scene`, `WindowGroup`, `Window`, `.commands`, `.defaultSize`, `.windowResizability`; and not in SwiftUI, `.windowTag(_:)` to tell the desktop what kind of window it is (`dialog:...` for a box) |
 | State | `@State`, `@Binding`, `@Bindable`, `@Environment` (by key path or by an observable type), `@Observable` objects, `EnvironmentKey` |
 | Structure | `ViewBuilder` with `if`, `if`/`else` and `if let`; `ForEach`, `Group`, `AnyView`, `EmptyView`, `ViewModifier` |
 | Layout | `VStack`, `HStack`, `Spacer`, `Form`, `Section`, `LabeledContent`, `ScrollView`, `TabView`, `.padding`, `.frame`, `.fixedSize` |
@@ -1225,7 +1225,8 @@ one.
 Edit menu whose Cut, Copy, Paste and Select All work on whichever text
 field has the keyboard, as a SwiftUI program has on a Macintosh.
 `CommandMenu` adds menus after them, and `CommandGroup` puts commands
-before, after or in place of the standard ones.
+before, after or in place of the standard ones. A window tagged as a box
+(`.windowTag("dialog:...")`) has none: a box has no menus.
 
 **Where it parts from SwiftUI**, because press is what it is:
 
