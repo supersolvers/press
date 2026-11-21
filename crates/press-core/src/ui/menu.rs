@@ -111,8 +111,55 @@ pub struct MenuEntry {
     pub is_menu: bool,
 }
 
+/// Keys with names that a menu item may have as its shortcut, chosen
+/// without Control: each is kept as a character of its own, out of the
+/// way of any typed one, as some desktops number their function keys.
+const NAMED: [(&str, char); 15] = [
+    ("F1", '\u{F701}'),
+    ("F2", '\u{F702}'),
+    ("F3", '\u{F703}'),
+    ("F4", '\u{F704}'),
+    ("F5", '\u{F705}'),
+    ("F6", '\u{F706}'),
+    ("F7", '\u{F707}'),
+    ("F8", '\u{F708}'),
+    ("F9", '\u{F709}'),
+    ("F11", '\u{F70B}'),
+    ("F12", '\u{F70C}'),
+    ("Insert", '\u{F727}'),
+    ("Delete", '\u{F728}'),
+    ("Backspace", '\u{F729}'),
+    ("Del", '\u{F728}'),
+];
+
+/// The name of a key a shortcut stands for, if it is one of the named
+/// keys rather than a character typed with Control.
+pub fn named_shortcut(c: char) -> Option<&'static str> {
+    NAMED.iter().find(|(_, k)| *k == c).map(|(name, _)| *name)
+}
+
+/// The character a named key is kept as, by its name, in any case.
+fn shortcut_named(name: &str) -> Option<char> {
+    NAMED.iter().find(|(n, _)| n.eq_ignore_ascii_case(name)).map(|(_, c)| *c)
+}
+
+/// The character a key pressed is kept as, if it has a name.
+fn shortcut_of_key(key: Key) -> Option<char> {
+    match key {
+        Key::F(n) => NAMED.iter().find(|(name, _)| *name == format!("F{n}")).map(|(_, c)| *c),
+        Key::Insert => shortcut_named("Insert"),
+        Key::Delete => shortcut_named("Delete"),
+        Key::Backspace => shortcut_named("Backspace"),
+        _ => None,
+    }
+}
+
 /// How a shortcut is written beside its item, as the style would have it.
 fn shortcut_text(key: char, form: i32) -> String {
+    if let Some(name) = named_shortcut(key) {
+        // as that look wrote it: Del, where it wrote Ctrl+X
+        return if name == "Delete" && form == 1 { "Del".into() } else { name.into() };
+    }
     match form {
         1 => format!("Ctrl+{}", key.to_uppercase()),
         2 => format!("^{}", key.to_uppercase()),
@@ -263,13 +310,14 @@ impl Ui {
     }
 
     /// Set the key that, with the command key, chooses the item: one
-    /// character, or nothing to clear it.
+    /// character, or nothing to clear it. Or a key by its name (F1 to F12
+    /// but F10, Insert, Delete, Backspace), which chooses it alone.
     pub fn menu_item_set_shortcut(&mut self, h: Handle, value: &str) -> Result<()> {
         let mut chars = value.chars();
         let key = match (chars.next(), chars.next()) {
             (None, _) => None,
-            (Some(c), None) if !c.is_control() && !c.is_whitespace() => c.to_lowercase().next(),
-            _ => return Err(Error::InvalidArgument),
+            (Some(c), None) if !c.is_control() && !c.is_whitespace() && named_shortcut(c).is_none() => c.to_lowercase().next(),
+            _ => Some(shortcut_named(value).ok_or(Error::InvalidArgument)?),
         };
         match &mut self.node_mut(h)?.kind {
             Kind::MenuItem { shortcut, .. } => {
@@ -970,22 +1018,30 @@ impl Ui {
                 self.step_hot(0, true);
                 done
             }
-            Key::Char(c) if mods.ctrl && !mods.alt && !(typing && "acxv".contains(c)) => {
-                let item = enabled.iter().flat_map(|m| self.items_deep(*m)).find(|i| {
-                    self.choosable(*i)
-                        && matches!(self.nodes.get(*i).map(|n| &n.kind), Some(Kind::MenuItem { shortcut: Some(k), submenu: None, .. }) if *k == c)
-                })?;
-                // the title of the menu it is under flashes to show where the command lives
-                let mut top = item;
-                while let Some(parent) = self.nodes.get(top).and_then(|n| n.parent).filter(|p| !matches!(self.nodes.get(*p).map(|n| &n.kind), Some(Kind::MenuBar { .. }))) {
-                    top = parent;
-                }
-                self.title_flash = Some((top, self.now + TITLE_FLASH_MS));
-                self.dirty = true;
-                Some(vec![Emitted { target: item, event: "MenuItem.activated", args: vec![] }])
+            // a named key alone; Delete and Backspace are a text field's own while it has the keyboard
+            named if !mods.ctrl && !mods.alt && shortcut_of_key(named).is_some() && !(typing && matches!(named, Key::Delete | Key::Backspace)) => {
+                let c = shortcut_of_key(named)?;
+                self.choose_by_shortcut(&enabled, c)
             }
+            Key::Char(c) if mods.ctrl && !mods.alt && !(typing && "acxv".contains(c)) => self.choose_by_shortcut(&enabled, c),
             _ => None,
         }
+    }
+
+    /// Choose the item of these menus whose shortcut this is, if there is one.
+    fn choose_by_shortcut(&mut self, enabled: &[Handle], c: char) -> Option<Vec<Emitted>> {
+        let item = enabled.iter().flat_map(|m| self.items_deep(*m)).find(|i| {
+            self.choosable(*i)
+                && matches!(self.nodes.get(*i).map(|n| &n.kind), Some(Kind::MenuItem { shortcut: Some(k), submenu: None, .. }) if *k == c)
+        })?;
+        // the title of the menu it is under flashes to show where the command lives
+        let mut top = item;
+        while let Some(parent) = self.nodes.get(top).and_then(|n| n.parent).filter(|p| !matches!(self.nodes.get(*p).map(|n| &n.kind), Some(Kind::MenuBar { .. }))) {
+            top = parent;
+        }
+        self.title_flash = Some((top, self.now + TITLE_FLASH_MS));
+        self.dirty = true;
+        Some(vec![Emitted { target: item, event: "MenuItem.activated", args: vec![] }])
     }
 
     /// Typed text while a menu is down: a space does what Return does.
@@ -1195,6 +1251,29 @@ mod tests {
         f.ui.focus(button).unwrap();
         assert_eq!(f.ui.key(f.win, Key::Char('c'), CTRL).unwrap()[0].target, f.copy);
         assert_eq!(f.ui.menu_item_set_shortcut(f.copy, "ab"), Err(Error::InvalidArgument));
+    }
+
+    #[test]
+    fn a_shortcut_may_be_a_named_key_alone() {
+        let mut f = fixture();
+        f.ui.menu_item_set_shortcut(f.paste, "F2").unwrap();
+        f.ui.menu_item_set_shortcut(f.quit, "delete").unwrap();
+        assert_eq!(f.ui.menu_item_set_shortcut(f.copy, "F99"), Err(Error::InvalidArgument));
+        // written as the look writes them
+        assert_eq!(shortcut_text(shortcut_named("Delete").unwrap(), 1), "Del");
+        assert_eq!(shortcut_text(shortcut_named("f2").unwrap(), 0), "F2");
+        assert_eq!(named_shortcut('q'), None);
+        // F2 chooses its item with no Control, even in a text field
+        assert_eq!(f.ui.key(f.win, Key::F(2), NONE).unwrap()[0].target, f.paste);
+        // but Delete is the text field's own while it has the keyboard
+        assert!(f.ui.key(f.win, Key::Delete, NONE).unwrap().iter().all(|e| e.target != f.quit));
+        let button = f.ui.button_new("B");
+        f.ui.destroy(f.field).unwrap();
+        f.ui.window_set_content(f.win, button).unwrap();
+        f.ui.focus(button).unwrap();
+        assert_eq!(f.ui.key(f.win, Key::Delete, NONE).unwrap()[0].target, f.quit);
+        // and a key no item has goes on as it would
+        assert!(f.ui.key(f.win, Key::F(7), NONE).unwrap().is_empty());
     }
 
     #[test]

@@ -71,7 +71,12 @@ impl Model {
                 props.insert("toggle-state".into(), owned(1i32));
             }
             if let Some(key) = e.shortcut {
-                props.insert("shortcut".into(), owned(vec![vec!["Control".to_string(), key.to_string()]]));
+                // a named key is chosen alone, by its name; anything else with Control
+                let keys = match press_core::ui::named_shortcut(key) {
+                    Some(name) => vec![if name == "Backspace" { "BackSpace".to_string() } else { name.to_string() }],
+                    None => vec!["Control".to_string(), key.to_string()],
+                };
+                props.insert("shortcut".into(), owned(vec![keys]));
             }
         }
         props

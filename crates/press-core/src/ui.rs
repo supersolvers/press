@@ -22,6 +22,7 @@ use crate::text::Editor;
 
 mod access;
 mod controls;
+mod divider;
 mod dnd;
 mod extra;
 pub(crate) use extra::plain_dress;
@@ -43,7 +44,7 @@ use menu::MenuOpen;
 #[cfg(test)]
 use menu::BAR_HEIGHT;
 pub use list::Icon;
-pub use menu::{MenuEntry, PopupInfo};
+pub use menu::{named_shortcut, MenuEntry, PopupInfo};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Error {
@@ -169,6 +170,13 @@ pub struct WindowInfo {
 }
 
 enum Kind {
+    /// The bar between two panes of a stack, dragged to share the room out
+    /// (see divider.rs): which way the panes lie, and how long the one
+    /// before it has been made.
+    Divider {
+        orientation: Orientation,
+        position: Option<i32>,
+    },
     Window {
         title: String,
         /// A name, not for people to read, by which the desktop can know
@@ -311,6 +319,7 @@ impl Kind {
     fn class(&self) -> &'static str {
         match self {
             Kind::Window { .. } => "Window",
+            Kind::Divider { .. } => "Divider",
             Kind::Stack { .. } => "Stack",
             Kind::Label { .. } => "Label",
             Kind::Button { .. } => "Button",
@@ -487,6 +496,8 @@ pub struct Ui {
     stripes: i32,
     /// A slider whose knob is being dragged, and where on the knob it was taken.
     slider_drag: Option<(Handle, i32)>,
+    /// A divider being dragged, and where on it it was taken.
+    divider_drag: Option<(Handle, i32)>,
     /// A picture the pointer went down in, which hears where it goes until it is let go.
     picture_drag: Option<Handle>,
     /// A picture that hears the right button, which went down in it.
@@ -800,6 +811,7 @@ impl Ui {
             self.bar_press = None;
         }
         self.slider_drag = self.slider_drag.filter(|(s, _)| !gone.contains(s));
+        self.divider_drag = self.divider_drag.filter(|(d, _)| !gone.contains(d));
         self.picture_drag = self.picture_drag.filter(|p| !gone.contains(p));
         self.picture_right = self.picture_right.filter(|p| !gone.contains(p));
         self.picture_middle = self.picture_middle.filter(|p| !gone.contains(p));
@@ -1044,6 +1056,8 @@ impl Ui {
             Kind::TextField { multiline, .. } => *multiline || !vertical,
             Kind::Progress { .. } => !vertical,
             Kind::Slider { orientation, .. } | Kind::ScrollBar { orientation, .. } => (*orientation == Orientation::Vertical) == vertical,
+            // a divider reaches right across the stack it divides
+            Kind::Divider { orientation, .. } => (*orientation == Orientation::Vertical) != vertical,
             Kind::Stack { children, .. } => children.iter().any(|c| self.grows(*c, vertical)),
             _ => false,
         }
@@ -1581,6 +1595,8 @@ impl Ui {
         match &node.kind {
             Kind::Window { width, height, .. } => (*width, *height),
             Kind::MenuBar { .. } | Kind::Menu { .. } | Kind::MenuItem { .. } => (0, 0),
+            Kind::Divider { orientation: Orientation::Vertical, .. } => (0, divider::THICK),
+            Kind::Divider { .. } => (divider::THICK, 0),
             Kind::ScrollView { width, height, .. } => (*width, *height),
             Kind::Popup { .. } => self.measure_popup(h),
             Kind::Progress { .. } => self.measure_progress(h),
@@ -1653,18 +1669,27 @@ impl Ui {
                 let room = if vertical { inner.w } else { inner.h };
                 // room left over along the stack is shared out among the
                 // children that grow, any odd pixels going to the first of them
-                let sizes: Vec<(i32, i32)> = children.iter().map(|c| self.measure(*c)).collect();
+                // a pane before a divider that has been dragged is as long as it was left
+                let fixed = self.fixed_by_dividers(&children);
+                let sizes: Vec<(i32, i32)> = children.iter().zip(&fixed).map(|(c, f)| {
+                    let (w, hh) = self.measure(*c);
+                    match f {
+                        Some(f) if vertical => (w, *f),
+                        Some(f) => (*f, hh),
+                        None => (w, hh),
+                    }
+                }).collect();
                 let needed: i32 = sizes.iter().map(|(w, hh)| if vertical { *hh } else { *w }).sum::<i32>() + spacing * (children.len() as i32 - 1).max(0);
-                let growers = children.iter().filter(|c| self.grows(**c, vertical)).count() as i32;
+                let growers = children.iter().zip(&fixed).filter(|(c, f)| f.is_none() && self.grows(**c, vertical)).count() as i32;
                 let spare = ((if vertical { inner.h } else { inner.w }) - needed).max(0);
                 // a row of a dialog's buttons stands at the far end of its room
                 if growers == 0 && self.is_button_row(h) {
                     pos += spare;
                 }
                 let mut shared = 0;
-                for (c, (w, hh)) in children.into_iter().zip(sizes) {
+                for ((c, (w, hh)), fixed) in children.into_iter().zip(sizes).zip(fixed) {
                     let (mut along, across) = if vertical { (hh, w) } else { (w, hh) };
-                    if growers > 0 && self.grows(c, vertical) {
+                    if growers > 0 && fixed.is_none() && self.grows(c, vertical) {
                         along += spare / growers + i32::from(shared < spare % growers);
                         shared += 1;
                     }
@@ -1728,7 +1753,8 @@ impl Ui {
         let ants = self.ants_step() as i32;
         let line = self.font.line_height();
         match &node.kind {
-            Kind::Window { .. } | Kind::MenuBar { .. } | Kind::Menu { .. } | Kind::MenuItem { .. } => {}
+            // a divider is the window's own ground showing between the panes
+            Kind::Window { .. } | Kind::MenuBar { .. } | Kind::Menu { .. } | Kind::MenuItem { .. } | Kind::Divider { .. } => {}
             Kind::Stack { .. } => {
                 if let Some(pattern) = self.backdrops.get(&h).copied() {
                     Self::lay_pattern(canvas, rect, &pattern, self.look.pal.window, self.look.pal.text);
@@ -1814,6 +1840,7 @@ impl Ui {
             | Kind::Popup { .. }
             | Kind::Radio { .. }
             | Kind::Slider { .. }
+            | Kind::Divider { .. }
             | Kind::List { .. }
             | Kind::Picture { .. }
                 if node.rect.contains(x, y) =>
@@ -1881,6 +1908,9 @@ impl Ui {
             }
             self.hover_piece = piece;
             self.dirty |= tool || self.look.wants & crate::style::wants::HOVER != 0;
+        }
+        if let Some(out) = self.divider_pointer(over, x, y, kind) {
+            return Ok(out);
         }
         if let Some(out) = self.stepper_pointer(over, x, y, kind) {
             return Ok(out);
@@ -2545,6 +2575,11 @@ impl Ui {
         }
         if let Some((held, _)) = self.pressed {
             return if is_field(self, held) { Cursor::Text } else { Cursor::Arrow };
+        }
+        // over a divider, or dragging one, arrows the way it goes
+        let dividing = self.divider_drag.map(|(d, _)| d).or_else(|| self.hit(window, x, y).filter(|h| self.divider_way(*h).is_some()));
+        if let Some(way) = dividing.and_then(|d| self.divider_way(d)) {
+            return if way == Orientation::Vertical { Cursor::ResizeRow } else { Cursor::ResizeColumn };
         }
         match self.hit(window, x, y) {
             Some(h) if self.over_column_edge(h, x, y) => Cursor::ResizeColumn,

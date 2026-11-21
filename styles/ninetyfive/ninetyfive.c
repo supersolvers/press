@@ -16,6 +16,7 @@
 #include "press_style.h"
 
 #include <stddef.h>
+#include <string.h>
 
 #ifndef STYLE_NAME
 #define STYLE_NAME "ninetyfive"
@@ -548,7 +549,17 @@ static void palette(press_palette *p) {
 }
 
 #ifndef STYLE_TYPEFACE
-#define STYLE_TYPEFACE NULL
+/* The period wrote in a light, plain face, and its title bars in the bold
+   of it: the engine's own Agate, in its pixels, not the heavy face. */
+static int32_t typeface(uint32_t face, press_type *out) {
+    switch (face) {
+    case PRESS_FACE_INTERFACE: strcpy(out->family, "press:agate"); break;
+    case PRESS_FACE_FRAME: strcpy(out->family, "press:agate-bold"); break;
+    default: return 0;
+    }
+    return 1;
+}
+#define STYLE_TYPEFACE typeface
 #endif
 #ifndef STYLE_WANTS
 #define STYLE_WANTS 0

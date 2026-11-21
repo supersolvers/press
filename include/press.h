@@ -168,6 +168,7 @@ typedef press_handle_t press_text_field_t;
 typedef press_handle_t press_text_area_t;
 typedef press_handle_t press_radio_button_t;
 typedef press_handle_t press_slider_t;
+typedef press_handle_t press_divider_t;
 typedef press_handle_t press_list_box_t;
 typedef press_handle_t press_table_t;
 typedef press_handle_t press_icon_view_t;
@@ -567,6 +568,22 @@ typedef void (*press_slider_changed_fn)(press_slider_t self, int32_t value, void
 /** Connect a handler (replacing any earlier one); pass NULL to disconnect. */
 PRESS_API press_status_t press_slider_on_changed(press_slider_t self, press_slider_changed_fn callback, void *userdata, press_destroy_fn destroy);
 
+/* ---- Divider (a Widget): The bar between two panes of a Stack, dragged to give one more room and the other less, as between a file manager's folders and what is in the one open. Add it to a stack between two of its children. Until it is dragged the stack lays them out as it always does; then the child before it is as long as it was left, and the children after it share what remains. The pointer shows arrows over it. */
+
+/** Create a divider for a stack laid out this way: horizontal for panes side by side, vertical for panes one over the other. */
+PRESS_API press_status_t press_divider_new(press_orientation_t orientation, press_divider_t *out);
+
+/** How long the pane before the divider is, in pixels along the stack. Reading it before it has been set or dragged gives the length the pane was last laid out at. Setting a negative length gives the pane back to the stack to lay out as it would. */
+PRESS_API press_status_t press_divider_set_position(press_divider_t self, int32_t value);
+
+/** How long the pane before the divider is, in pixels along the stack. Reading it before it has been set or dragged gives the length the pane was last laid out at. Setting a negative length gives the pane back to the stack to lay out as it would. */
+PRESS_API press_status_t press_divider_get_position(press_divider_t self, int32_t *out);
+
+/** The user let go of the divider, having dragged it; position is where it was left. */
+typedef void (*press_divider_moved_fn)(press_divider_t self, int32_t position, void *userdata);
+/** Connect a handler (replacing any earlier one); pass NULL to disconnect. */
+PRESS_API press_status_t press_divider_on_moved(press_divider_t self, press_divider_moved_fn callback, void *userdata, press_destroy_fn destroy);
+
 /* ---- ListBox (a Widget): Rows of text, one of which may be selected. It scrolls when there are more rows than fit. The arrow keys move the selection, and typing a letter jumps to the next row that starts with it. */
 
 /** Create an empty list box, five rows high. */
@@ -616,6 +633,9 @@ PRESS_API press_status_t press_list_box_edit(press_list_box_t self, int32_t inde
 
 /** Give an item a picture in colour, in place of its icon: the bytes of a PNG file, up to 16 pixels each way, with see-through parts if it has them. No bytes take the picture away. */
 PRESS_API press_status_t press_list_box_set_image(press_list_box_t self, int32_t index, const uint8_t *png, size_t png_len);
+
+/** Give an item a large picture in colour, for an icon view: the bytes of a PNG file, up to 32 pixels each way, with see-through parts if it has them. An icon view shows it in place of the item's small picture drawn double size; picked out, every other pixel of it takes the colour the style selects in. No bytes take the picture away. */
+PRESS_API press_status_t press_list_box_set_large_image(press_list_box_t self, int32_t index, const uint8_t *png, size_t png_len);
 
 /** The index of the selected row, counting from 0; -1 when none is. Setting it scrolls the row into view and does not raise changed. */
 PRESS_API press_status_t press_list_box_set_selected(press_list_box_t self, int32_t value);
@@ -723,6 +743,14 @@ PRESS_API press_status_t press_tree_view_parent_of(press_tree_view_t self, int32
 
 /** Unfold or fold an item to show or hide what hangs from it. */
 PRESS_API press_status_t press_tree_view_set_expanded(press_tree_view_t self, int32_t index, bool expanded);
+
+/** Have an item show a fold mark even while nothing hangs from it, so that what does can be added when the user unfolds it: a folder whose folders are read only when it is opened. */
+PRESS_API press_status_t press_tree_view_set_foldable(press_tree_view_t self, int32_t index, bool foldable);
+
+/** The user unfolded or folded an item, by its mark or from the keyboard. Items added under it now show at once. */
+typedef void (*press_tree_view_expanded_fn)(press_tree_view_t self, int32_t index, bool expanded, void *userdata);
+/** Connect a handler (replacing any earlier one); pass NULL to disconnect. */
+PRESS_API press_status_t press_tree_view_on_expanded(press_tree_view_t self, press_tree_view_expanded_fn callback, void *userdata, press_destroy_fn destroy);
 
 /* ---- ProgressBar (a Widget): Shows how far along some work is. It fills from the left as value goes from 0 to max. */
 
@@ -1009,7 +1037,7 @@ PRESS_API press_status_t press_menu_item_set_checked(press_menu_item_t self, boo
 /** Show a check mark beside the item. Choosing the item does not change it. */
 PRESS_API press_status_t press_menu_item_get_checked(press_menu_item_t self, bool *out);
 
-/** One character that, typed with Control, chooses the item; empty for none. In a text field, Control with A, C, X or V edits the text instead. */
+/** One character that, typed with Control, chooses the item; empty for none. In a text field, Control with A, C, X or V edits the text instead. Or the name of a key that chooses the item alone: F1 to F12 but F10, Insert, Delete or Backspace (Delete and Backspace edit a text field that has the keyboard instead). */
 PRESS_API press_status_t press_menu_item_set_shortcut(press_menu_item_t self, const char *value, size_t value_len);
 
 /** The user chose the item, from the menu or with its shortcut. */

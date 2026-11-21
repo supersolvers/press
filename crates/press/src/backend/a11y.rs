@@ -179,7 +179,7 @@ fn convert(tree: &AccessTree, zoom: i32) -> TreeUpdate {
                 node.set_toggled(Toggled::from(checked));
             }
             if let Some(key) = n.shortcut {
-                node.set_keyboard_shortcut(format!("Ctrl+{}", key.to_uppercase()));
+                node.set_keyboard_shortcut(press_core::ui::named_shortcut(key).map_or_else(|| format!("Ctrl+{}", key.to_uppercase()), str::to_string));
             }
             if !n.enabled {
                 node.set_disabled();

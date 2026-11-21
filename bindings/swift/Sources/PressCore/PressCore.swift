@@ -1089,6 +1089,49 @@ public class Slider: Widget {
     }
 }
 
+/// The bar between two panes of a Stack, dragged to give one more room and the other less, as between a file manager's folders and what is in the one open. Add it to a stack between two of its children. Until it is dragged the stack lays them out as it always does; then the child before it is as long as it was left, and the children after it share what remains. The pointer shows arrows over it.
+public class Divider: Widget {
+    public override init(handle: UInt64) {
+        super.init(handle: handle)
+    }
+
+    /// Create a divider for a stack laid out this way: horizontal for panes side by side, vertical for panes one over the other.
+    public init(_ orientation: Orientation) throws {
+        var out = UInt64(0)
+        try _check(press_divider_new(orientation.rawValue, &out))
+        super.init(handle: out)
+    }
+
+    /// How long the pane before the divider is, in pixels along the stack. Reading it before it has been set or dragged gives the length the pane was last laid out at. Setting a negative length gives the pane back to the stack to lay out as it would.
+    public func setPosition(_ value: Int) throws {
+        try _check(press_divider_set_position(handle, Int32(clamping: value)))
+    }
+
+    /// How long the pane before the divider is, in pixels along the stack. Reading it before it has been set or dragged gives the length the pane was last laid out at. Setting a negative length gives the pane back to the stack to lay out as it would.
+    public var position: Int {
+        get throws {
+            var out = Int32(0)
+            try _check(press_divider_get_position(handle, &out))
+            return Int(out)
+        }
+    }
+
+    /// The user let go of the divider, having dragged it; position is where it was left. The handler receives (position). A new handler takes the place of the last; pass nil to disconnect.
+    public func onMoved(_ handler: ((Int) -> Void)?) throws {
+        guard let handler else {
+            return try _check(press_divider_on_moved(handle, nil, nil, nil))
+        }
+        let box = Unmanaged.passRetained(_Box<(Int) -> Void>(handler))
+        let status = press_divider_on_moved(handle, { _, position, userdata in
+            _unbox(userdata, as: ((Int) -> Void).self)(Int(position))
+        }, box.toOpaque(), _release)
+        if status != 0 {
+            box.release()
+        }
+        try _check(status)
+    }
+}
+
 /// Rows of text, one of which may be selected. It scrolls when there are more rows than fit. The arrow keys move the selection, and typing a letter jumps to the next row that starts with it.
 public class ListBox: Widget {
     public override init(handle: UInt64) {
@@ -1179,6 +1222,11 @@ public class ListBox: Widget {
     /// Give an item a picture in colour, in place of its icon: the bytes of a PNG file, up to 16 pixels each way, with see-through parts if it has them. No bytes take the picture away.
     public func setImage(_ index: Int, png: [UInt8]) throws {
         try _check(press_list_box_set_image(handle, Int32(clamping: index), png, png.count))
+    }
+
+    /// Give an item a large picture in colour, for an icon view: the bytes of a PNG file, up to 32 pixels each way, with see-through parts if it has them. An icon view shows it in place of the item's small picture drawn double size; picked out, every other pixel of it takes the colour the style selects in. No bytes take the picture away.
+    public func setLargeImage(_ index: Int, png: [UInt8]) throws {
+        try _check(press_list_box_set_large_image(handle, Int32(clamping: index), png, png.count))
     }
 
     /// The index of the selected row, counting from 0; -1 when none is. Setting it scrolls the row into view and does not raise changed.
@@ -1429,6 +1477,26 @@ public class TreeView: ListBox {
     /// Unfold or fold an item to show or hide what hangs from it.
     public func setExpanded(_ index: Int, expanded: Bool) throws {
         try _check(press_tree_view_set_expanded(handle, Int32(clamping: index), expanded))
+    }
+
+    /// Have an item show a fold mark even while nothing hangs from it, so that what does can be added when the user unfolds it: a folder whose folders are read only when it is opened.
+    public func setFoldable(_ index: Int, foldable: Bool) throws {
+        try _check(press_tree_view_set_foldable(handle, Int32(clamping: index), foldable))
+    }
+
+    /// The user unfolded or folded an item, by its mark or from the keyboard. Items added under it now show at once. The handler receives (index, expanded). A new handler takes the place of the last; pass nil to disconnect.
+    public func onExpanded(_ handler: ((Int, Bool) -> Void)?) throws {
+        guard let handler else {
+            return try _check(press_tree_view_on_expanded(handle, nil, nil, nil))
+        }
+        let box = Unmanaged.passRetained(_Box<(Int, Bool) -> Void>(handler))
+        let status = press_tree_view_on_expanded(handle, { _, index, expanded, userdata in
+            _unbox(userdata, as: ((Int, Bool) -> Void).self)(Int(index), expanded)
+        }, box.toOpaque(), _release)
+        if status != 0 {
+            box.release()
+        }
+        try _check(status)
     }
 }
 
@@ -2101,7 +2169,7 @@ public class MenuItem: Widget {
         }
     }
 
-    /// One character that, typed with Control, chooses the item; empty for none. In a text field, Control with A, C, X or V edits the text instead.
+    /// One character that, typed with Control, chooses the item; empty for none. In a text field, Control with A, C, X or V edits the text instead. Or the name of a key that chooses the item alone: F1 to F12 but F10, Insert, Delete or Backspace (Delete and Backspace edit a text field that has the keyboard instead).
     public func setShortcut(_ value: String) throws {
         try _check(press_menu_item_set_shortcut(handle, value, value.utf8.count))
     }

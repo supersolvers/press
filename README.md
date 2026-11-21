@@ -243,7 +243,7 @@ written as to be worn:
 
 | | |
 | --- | --- |
-| `ninetyfive` | Grey and bevelled, in the manner of the middle 1990s. Whole pixels and the engine's own type: what a style can be with nothing smooth in it |
+| `ninetyfive` | Grey and bevelled, in the manner of the middle 1990s. Whole pixels and the engine's own type, the light Agate for the interface and its bold for title bars: what a style can be with nothing smooth in it |
 | `eightyfive` | In the manner of the home computer workbench of 1985: blue, white, black and orange, and nothing else. No shading and no round corners; what is chosen or held turns to its opposite colour, blue to orange and white to black. Words are white on blue; menus are the other way about |
 | `eightyeight` | In the manner of the open workstation look of 1988, which went its own way in nearly everything: buttons are lozenges, a button that opens a menu carries a small triangle, one choice among several is a row of boxes with the chosen one in a heavy line, a line to type on is a line and no box, a scroll bar is a lift on a cable, and a window has brackets at its corners to take hold of |
 | `ninetyone` | In the manner of the desktop of 1991 that came in the ROM of a British computer: flat pale grey with every box a thin black line, and what is chosen or held turned inside out, white for black. The title bar of the window that has the keyboard is cream and the others' grey, with a box that sends the window behind the rest and one that closes it at its left; a star in a check box; a red caret; a pale blue pointer; and one face with every letter the same width |
@@ -656,6 +656,12 @@ edge.
   shown beside the item with the command-key sign. The menu's title flashes
   when a shortcut chooses one of its items. While a text field has the
   keyboard, Control with A, C, X or V edits the text instead.
+- A shortcut may instead be a **key by its name**, pressed alone: F1 to
+  F12 (but F10, which is the menus' own), Insert, Delete or Backspace, as
+  a file manager has Delete, F2 to rename and F5 to look again. It is
+  written beside the item by its name ("Del" where the style writes
+  "Ctrl+X"). Delete and Backspace edit a text field that has the keyboard
+  instead.
 - A chosen item blinks before the menu goes away and `activated` is raised.
 - Items can be disabled or carry a check mark; menus can be disabled;
   `press_menu_add_separator` adds a dividing line.
@@ -735,6 +741,10 @@ order of the items is not changed by any of this.
   from one another. `press_tree_view_add_child` adds an item under another
   and returns its index. Click the triangle to unfold or fold; from the
   keyboard Right unfolds and then steps in, Left steps out and then folds.
+  Either way `expanded` says so. A tree read only as it is opened, as a
+  file manager's folders are, marks an item with nothing under it yet as
+  `foldable` (`press_tree_view_set_foldable`), and adds what hangs from it
+  when it is unfolded.
 - Both *are* list boxes: selection, scrolling, type-ahead, `changed` and
   `activated` all work as they do there, through the `press_list_box_*`
   functions.
@@ -743,6 +753,11 @@ order of the items is not changed by any of this.
   Right. Only the page showing takes part in layout, focus and
   accessibility, and the view is sized for its largest page so it does not
   jump as pages turn.
+- A **divider** (`press_divider_new`) goes in a stack between two panes,
+  such as a file manager's tree and what is in the folder chosen in it,
+  and is dragged to share the room between them. The pointer shows arrows
+  over it. Its `position` is how long the pane before it is, and `moved`
+  says where it was left.
 - A **progress bar** (`press_progress_bar_new`) fills from the left as
   `value` goes from 0 to `max`. Set `busy` for work of unknown length and
   it shows a barber's pole on the move.
@@ -814,7 +829,11 @@ What a whole program has round its dialogs.
   (`press_button_set_image`), and so may an item of a list in place of its
   icon (`press_list_box_set_image`): the bytes of a PNG file, see-through
   where the file is. A button with a picture and no label is the picture.
-  A picture in a list keeps its own colours when its row is chosen.
+  A picture in a list keeps its own colours when its row is chosen, and
+  has a little room between it and its words. An icon view shows the
+  item's picture drawn double, or a large one of its own up to 32 pixels
+  (`press_list_box_set_large_image`); picked out, every other pixel of it
+  takes the colour the style selects in.
 - Any widget may have a **word of help** (`press_widget_set_tooltip`),
   shown below the pointer when it has rested there a moment. It hangs
   over the window as a menu does, on a surface of its own, so it may reach

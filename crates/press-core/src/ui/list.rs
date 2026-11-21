@@ -99,6 +99,9 @@ pub(super) struct ItemMeta {
     parent: Option<usize>,
     /// In a tree: whether what hangs from it is showing.
     open: bool,
+    /// In a tree: whether it shows a fold mark before anything hangs from
+    /// it, for a program that adds what does only once it is unfolded.
+    foldable: bool,
     /// Whether it is one of the selected items.
     picked: bool,
     icon: Icon,
@@ -107,6 +110,9 @@ pub(super) struct ItemMeta {
     art: Option<std::rc::Rc<Vec<Vec<u8>>>>,
     /// A picture in colour, in place of either.
     image: Option<std::rc::Rc<Canvas>>,
+    /// A larger picture in colour, for an icon view, up to the size of the
+    /// stock pictures there.
+    large: Option<std::rc::Rc<Canvas>>,
     /// The file the item stands for, if it stands for one.
     file: Option<String>,
     /// What the item carries when dragged out of its list: each thing's
@@ -890,7 +896,7 @@ impl Ui {
                     (true, false) => arrival.parent.filter(|p| *p < k).map(|p| first + p),
                 };
                 // it keeps its picture; what was dragged arrives selected
-                meta.push(ItemMeta { parent: hangs_from, open: to_tree && arrival.open, picked: head || !to_tree, icon: arrival.icon, image: None, art: arrival.art, file: None, data: Vec::new(), at: None });
+                meta.push(ItemMeta { parent: hangs_from, open: to_tree && arrival.open, picked: head || !to_tree, icon: arrival.icon, image: None, large: None, foldable: false, art: arrival.art, file: None, data: Vec::new(), at: None });
                 if head || !to_tree {
                     order.insert(at + placed, index);
                     placed += 1;
@@ -1382,7 +1388,7 @@ impl Ui {
         let mut pending: Vec<(usize, i32)> = top.into_iter().rev().map(|i| (i, 0)).collect();
         while let Some((item, depth)) = pending.pop() {
             let open = meta[item].open;
-            out.push(Row { item, depth, fold: (!children[item].is_empty()).then_some(open) });
+            out.push(Row { item, depth, fold: (!children[item].is_empty() || meta[item].foldable).then_some(open) });
             if open {
                 pending.extend(children[item].iter().rev().map(|c| (*c, depth + 1)));
             }
@@ -1518,9 +1524,15 @@ impl Ui {
             x += MARK;
         }
         if meta.iter().any(ItemMeta::has_picture) {
-            x += ICON; // every row leaves room once any has an icon, so labels line up
+            x += ICON + Self::picture_gap(meta); // every row leaves room once any has an icon, so labels line up
         }
         x
+    }
+
+    /// The room between a row's picture and its words: a little, for
+    /// pictures in colour, which fill their square to its edge.
+    fn picture_gap(meta: &[ItemMeta]) -> i32 {
+        if meta.iter().any(|m| m.image.is_some()) { 3 } else { 0 }
     }
 
     /// The item at a point, and whether the point is on its fold mark.
@@ -1593,14 +1605,28 @@ impl Ui {
         }
     }
 
-    /// Fold or unfold an item of a tree because the user did.
-    fn list_fold(&mut self, h: Handle, item: usize, open: bool) {
+    /// Fold or unfold an item of a tree because the user did, and say so.
+    fn list_fold(&mut self, h: Handle, item: usize, open: bool) -> Vec<Emitted> {
         if let Some(Kind::List { meta, .. }) = self.nodes.get_mut(h).map(|n| &mut n.kind) {
             if let Some(m) = meta.get_mut(item) {
                 m.open = open;
             }
         }
         self.list_settle(h);
+        vec![Emitted { target: h, event: "TreeView.expanded", args: vec![Value::I32(item as i32), Value::Bool(open)] }]
+    }
+
+    /// Have an item of a tree show a fold mark even while nothing hangs
+    /// from it, so that what does can be added when it is unfolded.
+    pub fn tree_view_set_foldable(&mut self, h: Handle, index: i32, foldable: bool) -> Result<()> {
+        match &mut self.node_mut(h)?.kind {
+            Kind::List { mode: ListMode::Tree, meta, .. } => {
+                meta.get_mut(index.max(0) as usize).filter(|_| index >= 0).ok_or(Error::InvalidArgument)?.foldable = foldable;
+            }
+            _ => return Err(Error::WrongType),
+        }
+        self.dirty = true;
+        Ok(())
     }
 
     /// The text of the current item; a table's cells are run together.
@@ -1716,6 +1742,23 @@ impl Ui {
         }
     }
 
+    /// Give an item a large picture in colour, for an icon view to show in
+    /// place of its small one drawn double.
+    pub fn list_box_set_large_image(&mut self, h: Handle, index: i32, image: Option<Canvas>) -> Result<()> {
+        if image.as_ref().is_some_and(|i| i.width > crate::pictures::SIDE || i.height > crate::pictures::SIDE) {
+            return Err(Error::InvalidArgument);
+        }
+        match &mut self.node_mut(h)?.kind {
+            Kind::List { meta, .. } => {
+                let m = meta.get_mut(index.max(0) as usize).filter(|_| index >= 0).ok_or(Error::InvalidArgument)?;
+                m.large = image.map(std::rc::Rc::new);
+                self.dirty = true;
+                Ok(())
+            }
+            _ => Err(Error::WrongType),
+        }
+    }
+
     pub fn list_box_set_picture(&mut self, h: Handle, index: i32, art: &str) -> Result<()> {
         let rows: Vec<Vec<u8>> = art
             .lines()
@@ -1789,6 +1832,46 @@ impl Ui {
         }
     }
 
+    /// The large picture in colour for an item of an icon view: its own
+    /// large one, or its small one drawn double; none if it has neither.
+    fn colour_picture(meta: &ItemMeta) -> Option<Canvas> {
+        match (&meta.large, &meta.image) {
+            (Some(large), _) => Some((**large).clone()),
+            (None, Some(small)) => Some(small.scaled(2)),
+            _ => None,
+        }
+    }
+
+    /// An icon whose picture is in colour, with its name under it. Picked
+    /// out, its name is shown selected as the style shows selection, and
+    /// every other pixel of its picture takes the colour the style selects
+    /// in, so that the picture's own colours still show through.
+    fn coloured_icon(&mut self, names: &mut crate::font::Font, name: &str, art: &Canvas, picked: bool) -> Canvas {
+        use crate::pictures::SIDE;
+        let blank = Canvas::filled(SIDE, SIDE, crate::canvas::TRANSPARENT);
+        let mut c = crate::pictures::labelled(names, name, &blank, CELL.0, false);
+        let (left, top) = ((CELL.0 - art.width) / 2, (SIDE - art.height).max(0) / 2);
+        c.blit(art, left, top);
+        if picked {
+            // the colour the style selects in: what selecting makes of white
+            let mut probe = Canvas::filled(1, 1, WHITE);
+            self.part(&mut probe, Part::new(PartKind::Select, Rect::new(0, 0, 1, 1)));
+            let shade = probe.get(0, 0);
+            for y in 0..art.height {
+                for x in 0..art.width {
+                    if (x + y) % 2 == 0 && art.get(x, y) != crate::canvas::TRANSPARENT {
+                        c.set(left + x, top + y, shade);
+                    }
+                }
+            }
+            let shown = crate::pictures::fitted(names, name, CELL.0 - 8);
+            let w = names.width(&shown);
+            let strip = Rect::new((CELL.0 - w) / 2 - 3, SIDE + 2, w + 6, names.line_height() + 2);
+            self.part(&mut c, Part::new(PartKind::Select, strip));
+        }
+        c
+    }
+
     /// What a list is drawn on: its frame, or for a flush list plain
     /// paper under a double rule.
     fn paint_ground(&mut self, h: Handle, rect: Rect, live: bool, canvas: &mut Canvas) {
@@ -1820,8 +1903,10 @@ impl Ui {
                 continue; // scrolled out of sight
             }
             let name = items[row.item].split('\t').next().unwrap_or("");
-            let art = Self::big_picture(&meta[row.item]);
-            let drawn = crate::pictures::labelled(&mut names, name, &art, CELL.0, meta[row.item].picked);
+            let drawn = match Self::colour_picture(&meta[row.item]) {
+                Some(art) => self.coloured_icon(&mut names, name, &art, meta[row.item].picked),
+                None => crate::pictures::labelled(&mut names, name, &Self::big_picture(&meta[row.item]), CELL.0, meta[row.item].picked),
+            };
             clip.blit(&drawn, x, y);
             if editing == Some(row.item) {
                 self.paint_edit(h, &mut clip, y + crate::pictures::SIDE + 2, area.w);
@@ -1879,6 +1964,7 @@ impl Ui {
             }
         }
         let editing = self.list_edit.as_ref().filter(|e| e.list == h).map(|e| (e.item, e.column));
+        let gap = Self::picture_gap(&meta);
         for (at, row) in rows.iter().enumerate().skip(scroll as usize).take(fit as usize + 1) {
             let y = header + (at as i32 - scroll) * self.look.m.row_height;
             let text = &items[row.item];
@@ -1891,9 +1977,9 @@ impl Ui {
             if has_icons {
                 match (&meta[row.item].image, &meta[row.item].art) {
                     // a picture in colour, in the middle of the row's height
-                    (Some(image), _) => clip.blit(image, label_x - ICON, y + (self.look.m.row_height - image.height) / 2),
-                    (None, Some(art)) => Self::draw_art(&mut clip, art, label_x - ICON, y, self.look.m.row_height),
-                    (None, None) => Self::draw_icon(&mut clip, meta[row.item].icon, label_x - ICON, y, self.look.m.row_height, ink),
+                    (Some(image), _) => clip.blit(image, label_x - ICON - gap, y + (self.look.m.row_height - image.height) / 2),
+                    (None, Some(art)) => Self::draw_art(&mut clip, art, label_x - ICON - gap, y, self.look.m.row_height),
+                    (None, None) => Self::draw_icon(&mut clip, meta[row.item].icon, label_x - ICON - gap, y, self.look.m.row_height, ink),
                 }
             }
             if columns.is_empty() {
@@ -1916,7 +2002,7 @@ impl Ui {
                 self.part(&mut clip, Part::new(PartKind::Select, Rect::new(0, y, area.w, self.look.m.row_height)));
                 // a picture in colour keeps its colours, on whatever shows the row is chosen
                 if let Some(image) = &meta[row.item].image {
-                    clip.blit(image, label_x - ICON, y + (self.look.m.row_height - image.height) / 2);
+                    clip.blit(image, label_x - ICON - gap, y + (self.look.m.row_height - image.height) / 2);
                 }
             }
             if editing.is_some_and(|(item, _)| item == row.item) {
@@ -2191,8 +2277,7 @@ impl Ui {
         if on_mark {
             // the fold mark folds and unfolds, and does nothing else
             let open = self.tree_view_expanded(h, item as i32).unwrap_or(false);
-            self.list_fold(h, item, !open);
-            return Vec::new();
+            return self.list_fold(h, item, !open);
         }
         // a second click on the same row, soon after, opens it
         let (t, px, py, n) = self.clicks;
@@ -2351,15 +2436,9 @@ impl Ui {
             (Key::Up, Some(i)) => i.saturating_sub(1),
             (Key::Down | Key::Home, _) => 0,
             (Key::Up | Key::End, _) => last,
-            (Key::Right, Some(i)) if rows[i].fold == Some(false) => {
-                self.list_fold(h, rows[i].item, true);
-                return Some(Vec::new());
-            }
+            (Key::Right, Some(i)) if rows[i].fold == Some(false) => return Some(self.list_fold(h, rows[i].item, true)),
             (Key::Right, Some(i)) if rows[i].fold == Some(true) => i + 1, // into it
-            (Key::Left, Some(i)) if rows[i].fold == Some(true) => {
-                self.list_fold(h, rows[i].item, false);
-                return Some(Vec::new());
-            }
+            (Key::Left, Some(i)) if rows[i].fold == Some(true) => return Some(self.list_fold(h, rows[i].item, false)),
             // out to what it hangs from: the nearest row above that is less far in
             (Key::Left, Some(i)) if rows[i].depth > 0 => (0..i).rev().find(|j| rows[*j].depth < rows[i].depth).unwrap_or(i),
             _ => return None,
@@ -2501,15 +2580,16 @@ mod tests {
         let r = ui.nodes.get(t).unwrap().rect;
         // folded to begin with: only the top level shows
         assert_eq!(showing(&ui, t), [fruit as usize, veg as usize]);
-        // a click on the fold mark unfolds, and selects nothing
-        assert!(click(&mut ui, win, r.x + 2 + 2 + 5, r.y + 2 + 6).is_empty());
+        // a click on the fold mark unfolds, says so, and selects nothing
+        let unfolded = click(&mut ui, win, r.x + 2 + 2 + 5, r.y + 2 + 6);
+        assert_eq!(unfolded, vec![Emitted { target: t, event: "TreeView.expanded", args: vec![Value::I32(fruit), Value::Bool(true)] }]);
         assert_eq!(showing(&ui, t), [0, 1, 2, 5]);
         assert_eq!(ui.list_box_selected(t).unwrap(), -1);
         // a click on the row's text selects it, by its place in the whole tree
         ui.tick(5_000);
         assert_eq!(numbers(&click(&mut ui, win, r.x + 60, r.y + 2 + 2 * ROW_HEIGHT + 6), "ListBox.changed"), [citrus]);
         // Right unfolds, then steps in; Left steps out, then folds
-        ui.key(win, Key::Right, NONE).unwrap();
+        assert_eq!(ui.key(win, Key::Right, NONE).unwrap()[0].event, "TreeView.expanded");
         assert_eq!(showing(&ui, t), [0, 1, 2, 3, 4, 5]);
         assert_eq!(numbers(&ui.key(win, Key::Right, NONE).unwrap(), "ListBox.changed"), [lemon]);
         assert_eq!(numbers(&ui.key(win, Key::Left, NONE).unwrap(), "ListBox.changed"), [citrus]);
@@ -2522,6 +2602,15 @@ mod tests {
         assert_eq!(showing(&ui, t), [0, 1, 2, 3, 4, 5]);
         ui.tree_view_set_expanded(t, fruit, false).unwrap();
         assert_eq!((showing(&ui, t), ui.list_box_selected(t).unwrap()), (vec![0, 5], fruit));
+        // an item with nothing under it yet can still be unfolded, for its program to fill
+        let later = ui.tree_view_add_child(t, -1, "Later").unwrap();
+        ui.tree_view_set_foldable(t, later, true).unwrap();
+        ui.list_box_set_selected(t, later).unwrap();
+        let asked = ui.key(win, Key::Right, NONE).unwrap();
+        assert_eq!(asked, vec![Emitted { target: t, event: "TreeView.expanded", args: vec![Value::I32(later), Value::Bool(true)] }]);
+        let under = ui.tree_view_add_child(t, later, "Filled").unwrap();
+        assert!(showing(&ui, t).contains(&(under as usize)));
+        ui.tree_view_set_expanded(t, later, false).unwrap();
         // rules
         assert_eq!(ui.tree_view_add_child(t, 99, "x"), Err(Error::InvalidArgument));
         assert_eq!(ui.tree_view_set_expanded(t, -1, true), Err(Error::InvalidArgument));

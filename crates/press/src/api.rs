@@ -751,6 +751,24 @@ pub fn slider_set_length(this: Handle, value: i32) -> Result {
     with(|rt| Ok(rt.ui.slider_set_length(this, value)?))
 }
 
+// --------------------------------------------------------------- Divider
+
+pub fn divider_new(orientation: Orientation) -> Result<Handle> {
+    let orientation = match orientation {
+        Orientation::Vertical => press_core::Orientation::Vertical,
+        Orientation::Horizontal => press_core::Orientation::Horizontal,
+    };
+    with(|rt| Ok(rt.ui.divider_new(orientation)))
+}
+
+pub fn divider_set_position(this: Handle, value: i32) -> Result {
+    with(|rt| Ok(rt.ui.divider_set_position(this, value)?))
+}
+
+pub fn divider_get_position(this: Handle) -> Result<i32> {
+    with(|rt| Ok(rt.ui.divider_position(this)?))
+}
+
 // --------------------------------------------------------------- ListBox
 
 pub fn list_box_new() -> Result<Handle> {
@@ -809,6 +827,10 @@ pub fn tree_view_add_child(this: Handle, parent: i32, label: &str) -> Result<i32
 
 pub fn tree_view_set_expanded(this: Handle, index: i32, expanded: bool) -> Result {
     with(|rt| Ok(rt.ui.tree_view_set_expanded(this, index, expanded)?))
+}
+
+pub fn tree_view_set_foldable(this: Handle, index: i32, foldable: bool) -> Result {
+    with(|rt| Ok(rt.ui.tree_view_set_foldable(this, index, foldable)?))
 }
 
 // ------------------------------------------------- ProgressBar, TabView
@@ -1146,6 +1168,11 @@ pub fn button_set_image(this: Handle, png: &[u8]) -> Result {
 pub fn list_box_set_image(this: Handle, index: i32, png: &[u8]) -> Result {
     let image = image_from_png(png)?;
     with(|rt| Ok(rt.ui.list_box_set_image(this, index, image)?))
+}
+
+pub fn list_box_set_large_image(this: Handle, index: i32, png: &[u8]) -> Result {
+    let image = image_from_png(png)?;
+    with(|rt| Ok(rt.ui.list_box_set_large_image(this, index, image)?))
 }
 
 pub fn group_box_new(title: &str, orientation: Orientation) -> Result<Handle> {

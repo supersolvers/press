@@ -176,6 +176,12 @@ impl Ui {
                     out.role = AccessRole::Slider;
                     out.range = Some((*value, *max));
                 }
+                // a divider is told of as a slider is: where it stands in its stack
+                Kind::Divider { position, .. } => {
+                    out.role = AccessRole::Slider;
+                    out.label = "Divider".into();
+                    out.range = position.map(|p| (p, p.max(1)));
+                }
                 // a stepper is told of as a slider is: a number and how far it goes
                 Kind::Spin { value, max, .. } => {
                     out.role = AccessRole::Slider;

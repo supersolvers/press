@@ -843,6 +843,35 @@ class Slider(Widget):
         self._connect("changed", connector, cfunc, fn, lambda f: lambda _this, value, _userdata: f(value))
 
 
+class Divider(Widget):
+    """The bar between two panes of a Stack, dragged to give one more room and the other less, as between a file manager's folders and what is in the one open. Add it to a stack between two of its children. Until it is dragged the stack lays them out as it always does; then the child before it is as long as it was left, and the children after it share what remains. The pointer shows arrows over it."""
+    def __init__(self, orientation):
+        """Create a divider for a stack laid out this way: horizontal for panes side by side, vertical for panes one over the other."""
+        _lib.press_divider_new.argtypes = [ctypes.c_int32, ctypes.POINTER(ctypes.c_uint64)]
+        out = ctypes.c_uint64()
+        _check(_lib.press_divider_new(int(orientation), ctypes.byref(out)))
+        _Object.__init__(self, out.value)
+
+    def set_position(self, value):
+        """How long the pane before the divider is, in pixels along the stack. Reading it before it has been set or dragged gives the length the pane was last laid out at. Setting a negative length gives the pane back to the stack to lay out as it would."""
+        _lib.press_divider_set_position.argtypes = [ctypes.c_uint64, ctypes.c_int32]
+        _check(_lib.press_divider_set_position(self.handle, value))
+
+    def get_position(self):
+        """How long the pane before the divider is, in pixels along the stack. Reading it before it has been set or dragged gives the length the pane was last laid out at. Setting a negative length gives the pane back to the stack to lay out as it would."""
+        _lib.press_divider_get_position.argtypes = [ctypes.c_uint64, ctypes.POINTER(ctypes.c_int32)]
+        out = ctypes.c_int32()
+        _check(_lib.press_divider_get_position(self.handle, ctypes.byref(out)))
+        return out.value
+
+    def on_moved(self, fn):
+        """The user let go of the divider, having dragged it; position is where it was left. The handler receives (position); pass None to disconnect."""
+        cfunc = ctypes.CFUNCTYPE(None, ctypes.c_uint64, ctypes.c_int32, ctypes.c_void_p)
+        connector = _lib.press_divider_on_moved
+        connector.argtypes = [ctypes.c_uint64, cfunc, ctypes.c_void_p, _DESTROY]
+        self._connect("moved", connector, cfunc, fn, lambda f: lambda _this, position, _userdata: f(position))
+
+
 class ListBox(Widget):
     """Rows of text, one of which may be selected. It scrolls when there are more rows than fit. The arrow keys move the selection, and typing a letter jumps to the next row that starts with it."""
     def __init__(self):
@@ -930,6 +959,11 @@ class ListBox(Widget):
         """Give an item a picture in colour, in place of its icon: the bytes of a PNG file, up to 16 pixels each way, with see-through parts if it has them. No bytes take the picture away."""
         _lib.press_list_box_set_image.argtypes = [ctypes.c_uint64, ctypes.c_int32, ctypes.c_char_p, ctypes.c_size_t]
         _check(_lib.press_list_box_set_image(self.handle, index, *_b(png)))
+
+    def set_large_image(self, index, png):
+        """Give an item a large picture in colour, for an icon view: the bytes of a PNG file, up to 32 pixels each way, with see-through parts if it has them. An icon view shows it in place of the item's small picture drawn double size; picked out, every other pixel of it takes the colour the style selects in. No bytes take the picture away."""
+        _lib.press_list_box_set_large_image.argtypes = [ctypes.c_uint64, ctypes.c_int32, ctypes.c_char_p, ctypes.c_size_t]
+        _check(_lib.press_list_box_set_large_image(self.handle, index, *_b(png)))
 
     def set_selected(self, value):
         """The index of the selected row, counting from 0; -1 when none is. Setting it scrolls the row into view and does not raise changed."""
@@ -1110,6 +1144,18 @@ class TreeView(ListBox):
         """Unfold or fold an item to show or hide what hangs from it."""
         _lib.press_tree_view_set_expanded.argtypes = [ctypes.c_uint64, ctypes.c_int32, ctypes.c_bool]
         _check(_lib.press_tree_view_set_expanded(self.handle, index, expanded))
+
+    def set_foldable(self, index, foldable):
+        """Have an item show a fold mark even while nothing hangs from it, so that what does can be added when the user unfolds it: a folder whose folders are read only when it is opened."""
+        _lib.press_tree_view_set_foldable.argtypes = [ctypes.c_uint64, ctypes.c_int32, ctypes.c_bool]
+        _check(_lib.press_tree_view_set_foldable(self.handle, index, foldable))
+
+    def on_expanded(self, fn):
+        """The user unfolded or folded an item, by its mark or from the keyboard. Items added under it now show at once. The handler receives (index, expanded); pass None to disconnect."""
+        cfunc = ctypes.CFUNCTYPE(None, ctypes.c_uint64, ctypes.c_int32, ctypes.c_bool, ctypes.c_void_p)
+        connector = _lib.press_tree_view_on_expanded
+        connector.argtypes = [ctypes.c_uint64, cfunc, ctypes.c_void_p, _DESTROY]
+        self._connect("expanded", connector, cfunc, fn, lambda f: lambda _this, index, expanded, _userdata: f(index, expanded))
 
 
 class ProgressBar(Widget):
@@ -1608,7 +1654,7 @@ class MenuItem(Widget):
         return out.value
 
     def set_shortcut(self, value):
-        """One character that, typed with Control, chooses the item; empty for none. In a text field, Control with A, C, X or V edits the text instead."""
+        """One character that, typed with Control, chooses the item; empty for none. In a text field, Control with A, C, X or V edits the text instead. Or the name of a key that chooses the item alone: F1 to F12 but F10, Insert, Delete or Backspace (Delete and Backspace edit a text field that has the keyboard instead)."""
         _lib.press_menu_item_set_shortcut.argtypes = [ctypes.c_uint64, ctypes.c_char_p, ctypes.c_size_t]
         _check(_lib.press_menu_item_set_shortcut(self.handle, *_s(value)))
 

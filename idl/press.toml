@@ -700,6 +700,25 @@ doc = "A number picked by position: a knob that slides along a groove. Its value
   args = [{ name = "value", type = "i32" }]
 
 [[class]]
+name = "Divider"
+base = "Widget"
+doc = "The bar between two panes of a Stack, dragged to give one more room and the other less, as between a file manager's folders and what is in the one open. Add it to a stack between two of its children. Until it is dragged the stack lays them out as it always does; then the child before it is as long as it was left, and the children after it share what remains. The pointer shows arrows over it."
+
+  [class.constructor]
+  doc = "Create a divider for a stack laid out this way: horizontal for panes side by side, vertical for panes one over the other."
+  args = [{ name = "orientation", type = "Orientation" }]
+
+  [[class.property]]
+  name = "position"
+  type = "i32"
+  doc = "How long the pane before the divider is, in pixels along the stack. Reading it before it has been set or dragged gives the length the pane was last laid out at. Setting a negative length gives the pane back to the stack to lay out as it would."
+
+  [[class.event]]
+  name = "moved"
+  doc = "The user let go of the divider, having dragged it; position is where it was left."
+  args = [{ name = "position", type = "i32" }]
+
+[[class]]
 name = "ListBox"
 base = "Widget"
 doc = "Rows of text, one of which may be selected. It scrolls when there are more rows than fit. The arrow keys move the selection, and typing a letter jumps to the next row that starts with it."
@@ -861,6 +880,11 @@ doc = "Rows of text, one of which may be selected. It scrolls when there are mor
   doc = "Give an item a picture in colour, in place of its icon: the bytes of a PNG file, up to 16 pixels each way, with see-through parts if it has them. No bytes take the picture away."
   args = [{ name = "index", type = "i32" }, { name = "png", type = "bytes" }]
 
+  [[class.method]]
+  name = "set_large_image"
+  doc = "Give an item a large picture in colour, for an icon view: the bytes of a PNG file, up to 32 pixels each way, with see-through parts if it has them. An icon view shows it in place of the item's small picture drawn double size; picked out, every other pixel of it takes the colour the style selects in. No bytes take the picture away."
+  args = [{ name = "index", type = "i32" }, { name = "png", type = "bytes" }]
+
 [[class]]
 name = "Table"
 base = "ListBox"
@@ -941,6 +965,16 @@ doc = "A list box whose rows hang from one another and can be folded away. It is
   [[class.method]]
   name = "set_expanded"
   doc = "Unfold or fold an item to show or hide what hangs from it."
+  args = [{ name = "index", type = "i32" }, { name = "expanded", type = "bool" }]
+
+  [[class.method]]
+  name = "set_foldable"
+  doc = "Have an item show a fold mark even while nothing hangs from it, so that what does can be added when the user unfolds it: a folder whose folders are read only when it is opened."
+  args = [{ name = "index", type = "i32" }, { name = "foldable", type = "bool" }]
+
+  [[class.event]]
+  name = "expanded"
+  doc = "The user unfolded or folded an item, by its mark or from the keyboard. Items added under it now show at once."
   args = [{ name = "index", type = "i32" }, { name = "expanded", type = "bool" }]
 
 [[class]]
@@ -1337,7 +1371,7 @@ doc = "A command in a menu. A disabled item is greyed and cannot be chosen."
   name = "shortcut"
   type = "str"
   access = "w"
-  doc = "One character that, typed with Control, chooses the item; empty for none. In a text field, Control with A, C, X or V edits the text instead."
+  doc = "One character that, typed with Control, chooses the item; empty for none. In a text field, Control with A, C, X or V edits the text instead. Or the name of a key that chooses the item alone: F1 to F12 but F10, Insert, Delete or Backspace (Delete and Backspace edit a text field that has the keyboard instead)."
 
   [[class.method]]
   name = "set_submenu"
