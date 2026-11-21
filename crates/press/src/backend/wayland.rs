@@ -1001,6 +1001,18 @@ impl State {
     }
 
     fn draw(&mut self) {
+        // a window the program has made another size is that size from now on,
+        // and if it is of one size, of the new one
+        for s in self.surfaces.iter_mut().filter(|s| s.configured) {
+            if with(|rt| Ok(rt.ui.take_resized(s.handle))).unwrap_or(false) {
+                let (l, t, r, b) = with(|rt| Ok(rt.ui.frame_insets(s.handle))).unwrap_or_default();
+                if let Ok((w, h)) = with(|rt| Ok(rt.ui.window_size(s.handle)?)) {
+                    s.size = Some((s.units.out(w + l + r), s.units.out(h + t + b)));
+                }
+                limit(&s.window, s.handle, s.units);
+                s.needs_draw = true;
+            }
+        }
         for s in self.surfaces.iter_mut().filter(|s| s.configured && s.needs_draw) {
             // as fine as this window's screen, for a style that draws fine
             let fineness = s.units.k;

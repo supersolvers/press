@@ -276,8 +276,11 @@ PRESS_API press_status_t press_window_set_content(press_window_t self, press_wid
 /** Give the window a menu bar. It is drawn across the top and takes its height from the content area. */
 PRESS_API press_status_t press_window_set_menu_bar(press_window_t self, press_menu_bar_t bar);
 
-/** Make the window the size its content asks for, with room for its menu bar, in place of the size it was created with. Call it once the content and the menu bar are in place and before the window is first shown; a window that has been shown refuses. */
+/** Make the window the size its content asks for, with room for its menu bar, in place of the size it was created with. Call it once the content and the menu bar are in place. A window already showing is made that size, as set_size makes it. */
 PRESS_API press_status_t press_window_fit(press_window_t self);
+
+/** Give the window a new size, the size of its inside as new takes it, with room for its menu bar where that is in the window, as fit leaves it; even while it is showing: for a window that shows one thing and then another of another size. A window of one size stays of one size, the new one. */
+PRESS_API press_status_t press_window_set_size(press_window_t self, int32_t width, int32_t height);
 
 /** Make the window visible. */
 PRESS_API press_status_t press_window_show(press_window_t self);
@@ -380,6 +383,9 @@ PRESS_API press_status_t press_stack_add(press_stack_t self, press_widget_t chil
 /** Put a child at a place among the stack's children, counting from 0, with those after it moving along; a place past the end is the end. A child already in this stack is moved to the place, which is how children are put in another order. */
 PRESS_API press_status_t press_stack_insert(press_stack_t self, press_widget_t child, int32_t index);
 
+/** Lay the stack, and what is in it, on a pattern of black and white: eight bytes, a row of an 8 by 8 tile each, the leftmost pixel in the top bit, a set bit black, as Picture.fill takes them. The tile is laid from the window's corner, so stacks side by side join without a seam. No bytes take it away. */
+PRESS_API press_status_t press_stack_set_backdrop(press_stack_t self, const uint8_t *pattern, size_t pattern_len);
+
 /** Gap between children, in pixels. */
 PRESS_API press_status_t press_stack_set_spacing(press_stack_t self, int32_t value);
 
@@ -416,6 +422,9 @@ PRESS_API press_status_t press_button_set_is_cancel(press_button_t self, bool va
 
 /** Whether the button lies flat, with no edge of its own until the pointer is over it or down on it, and is no wider than its label needs: a tool in a toolbar. */
 PRESS_API press_status_t press_button_set_flat(press_button_t self, bool value);
+
+/** Whether the button is drawn as a key of a calculator: in the black and white style, a square face with a hard shadow below and to the right, as the first system's Calculator had them. A style without such keys draws an ordinary button. */
+PRESS_API press_status_t press_button_set_key(press_button_t self, bool value);
 
 /** The button was pressed, with the pointer or from the keyboard. */
 typedef void (*press_button_clicked_fn)(press_button_t self, void *userdata);
@@ -479,6 +488,9 @@ PRESS_API press_status_t press_text_field_set_placeholder(press_text_field_t sel
 /** The narrowest the field may be laid out, in pixels. */
 PRESS_API press_status_t press_text_field_set_min_width(press_text_field_t self, int32_t value);
 
+/** Where the text sits across the field: at the start, in the middle, or at the end, as figures do. In a text area each line sits so. Text too long for the field starts at the start and scrolls as ever. Fill is taken as Start. */
+PRESS_API press_status_t press_text_field_set_align(press_text_field_t self, press_align_t value);
+
 /** Show a bullet in place of each character. A password cannot be copied, cut or dragged out, input methods are kept away from it, and assistive technology is not told what it holds. Not available on a text area. */
 PRESS_API press_status_t press_text_field_set_password(press_text_field_t self, bool value);
 
@@ -504,6 +516,9 @@ PRESS_API press_status_t press_text_area_new(const char *text, size_t text_len, 
 
 /** The height of the area, in lines of text. Longer text scrolls. */
 PRESS_API press_status_t press_text_area_set_rows(press_text_area_t self, int32_t value);
+
+/** Draw it with no frame and no scroll bar, as writing on a page: for a note pad, say. Longer text still scrolls to keep the caret in view. */
+PRESS_API press_status_t press_text_area_set_plain(press_text_area_t self, bool value);
 
 /* ---- RadioButton (a Widget): One of a group of choices, of which one at most is chosen. Radio buttons that share a parent (the same Stack) are a group. The arrow keys move through the group, choosing as they go. */
 
@@ -620,6 +635,9 @@ PRESS_API press_status_t press_list_box_set_accepts_rows(press_list_box_t self, 
 /** Let the user drag a row to a new place: press it and pull it up or down, and a line shows where it will land. Where several rows are selected, pulling one moves them all. Items keep their indices; only the order they are shown in changes. In a tree view an item can also be dropped onto another, to hang from it, and takes along whatever hangs from it. Rows dragged onto something that takes text, here or in another program, arrive as their labels. */
 PRESS_API press_status_t press_list_box_set_reorderable(press_list_box_t self, bool value);
 
+/** Draw it with no frame of its own, to fill a window to its edges as the file windows of the original did: a double rule along its top, and its scroll bars lying on the window's edges, leaving the corner where they meet to the window's size box. */
+PRESS_API press_status_t press_list_box_set_flush(press_list_box_t self, bool value);
+
 /** The height of the list, in rows. */
 PRESS_API press_status_t press_list_box_set_rows(press_list_box_t self, int32_t value);
 
@@ -666,6 +684,15 @@ PRESS_API press_status_t press_table_add_column(press_table_t self, const char *
 
 /** Sort by a column, smallest first or largest first, or with -1 show the rows in the order they were added. */
 PRESS_API press_status_t press_table_sort_by(press_table_t self, int32_t column, bool ascending);
+
+/** Show a column's heading as the one the rows are in order of, without sorting them, for a program that puts its rows in order itself; -1 shows none. */
+PRESS_API press_status_t press_table_mark_order(press_table_t self, int32_t column);
+
+/** Where a column's cells and its heading sit in it: at the start, in the middle, or at the end, as numbers are. Fill is taken as Start. */
+PRESS_API press_status_t press_table_set_column_align(press_table_t self, int32_t column, press_align_t align);
+
+/** The typeface a column's cells are written in. Its heading keeps the interface's. */
+PRESS_API press_status_t press_table_set_column_typeface(press_table_t self, int32_t column, press_typeface_t face);
 
 /** Let the user sort the rows by clicking a column's heading; a second click turns the order round. Cells that start with numbers are ordered as numbers. Sorting changes the order rows are shown in, never their indices. */
 PRESS_API press_status_t press_table_set_sortable(press_table_t self, bool value);

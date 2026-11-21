@@ -211,6 +211,51 @@ impl Ui {
 
     /// Have a button lie flat, with no edge of its own until the pointer
     /// is over it or down on it: a tool in a bar.
+    /// Draw a button as a key of a calculator: square, with a hard shadow,
+    /// in a style that has such keys; as any button in one that has not.
+    pub fn button_set_key(&mut self, h: Handle, key: bool) -> Result<()> {
+        if !matches!(self.node(h)?.kind, Kind::Button { .. }) {
+            return Err(Error::WrongType);
+        }
+        self.keys.retain(|k| *k != h);
+        if key {
+            self.keys.push(h);
+        }
+        self.dirty = true;
+        Ok(())
+    }
+
+    /// Lay a stack on a pattern of black and white, eight rows of eight
+    /// pixels, the leftmost in the top bit, set for black; none takes it away.
+    pub fn stack_set_backdrop(&mut self, h: Handle, pattern: &[u8]) -> Result<()> {
+        if !matches!(self.node(h)?.kind, Kind::Stack { .. }) {
+            return Err(Error::WrongType);
+        }
+        match pattern.len() {
+            0 => {
+                self.backdrops.remove(&h);
+            }
+            8 => {
+                self.backdrops.insert(h, pattern.try_into().expect("eight bytes"));
+            }
+            _ => return Err(Error::InvalidArgument),
+        }
+        self.dirty = true;
+        Ok(())
+    }
+
+    /// Fill a box with a pattern laid from the window's corner, so that
+    /// boxes side by side join without a seam: `paper` for a clear bit and
+    /// `ink` for a set one.
+    pub(super) fn lay_pattern(canvas: &mut Canvas, r: Rect, pattern: &[u8; 8], paper: u32, ink: u32) {
+        for y in r.y.max(0)..(r.y + r.h).min(canvas.height) {
+            for x in r.x.max(0)..(r.x + r.w).min(canvas.width) {
+                let set = pattern[y.rem_euclid(8) as usize] & (0x80 >> x.rem_euclid(8)) != 0;
+                canvas.fill(Rect::new(x, y, 1, 1), if set { ink } else { paper });
+            }
+        }
+    }
+
     pub fn button_set_flat(&mut self, h: Handle, flat: bool) -> Result<()> {
         if !matches!(self.node(h)?.kind, Kind::Button { .. }) {
             return Err(Error::WrongType);

@@ -145,6 +145,8 @@ class _Object:
                 argtypes.push("ctypes.c_uint64".to_string());
             }
             for (name, ty) in &f.args {
+                // a name Python keeps for itself gets an underscore after it, as is the custom
+                let name = &if PYTHON_KEYWORDS.contains(&name.as_str()) { format!("{name}_") } else { name.clone() };
                 params.push(name.clone());
                 match ty {
                     Ty::Str => {
@@ -262,3 +264,8 @@ class _Object:
     }
     o
 }
+
+/// Words that cannot name a parameter in Python.
+const PYTHON_KEYWORDS: [&str; 35] = [
+    "False", "None", "True", "and", "as", "assert", "async", "await", "break", "class", "continue", "def", "del", "elif", "else", "except", "finally", "for", "from", "global", "if", "import", "in", "is", "lambda", "nonlocal", "not", "or", "pass", "raise", "return", "try", "while", "with", "yield",
+];

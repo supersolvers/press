@@ -219,7 +219,8 @@ enum {
     PRESS_STATE_VERTICAL = 32,
     PRESS_STATE_FRONT = 64,
     PRESS_STATE_BUSY = 128,
-    PRESS_STATE_HOT = 256      /* the pointer is over it: only for a style that wants HOVER */
+    PRESS_STATE_HOT = 256,     /* the pointer is over it: only for a style that wants HOVER */
+    PRESS_STATE_KEY = 512      /* a button drawn as a calculator's key, for a style that has them */
 };
 
 /* What a style would have the engine do for it, added together in
@@ -229,7 +230,12 @@ enum {
                                   and goes, with HOT set */
     PRESS_WANTS_FINE = 4,      /* from version 9: on a screen that magnifies, be drawn on a
                                 * surface as fine as the screen: see press_surface.scale */
-    PRESS_WANTS_PULSE = 2      /* a default button is drawn again twenty times a second */
+    PRESS_WANTS_PULSE = 2,     /* a default button is drawn again twenty times a second */
+    PRESS_WANTS_GREYS_BUTTONS = 8 /* a button that cannot be pressed comes with ENABLED
+                                     clear, and the style greys it itself; the engine
+                                     does not dim the whole of it afterwards */,
+    PRESS_WANTS_SQUARE_SCROLL_BOX = 16 /* the box in a scroll bar is a square, whatever
+                                          part of the whole is in view */
 };
 
 /* The engine's own families, which a style may have written in one of the

@@ -443,9 +443,14 @@ public class Window: Widget {
         try _check(press_window_set_menu_bar(handle, bar?.handle ?? 0))
     }
 
-    /// Make the window the size its content asks for, with room for its menu bar, in place of the size it was created with. Call it once the content and the menu bar are in place and before the window is first shown; a window that has been shown refuses.
+    /// Make the window the size its content asks for, with room for its menu bar, in place of the size it was created with. Call it once the content and the menu bar are in place. A window already showing is made that size, as set_size makes it.
     public func fit() throws {
         try _check(press_window_fit(handle))
+    }
+
+    /// Give the window a new size, the size of its inside as new takes it, with room for its menu bar where that is in the window, as fit leaves it; even while it is showing: for a window that shows one thing and then another of another size. A window of one size stays of one size, the new one.
+    public func setSize(_ width: Int, height: Int) throws {
+        try _check(press_window_set_size(handle, Int32(clamping: width), Int32(clamping: height)))
     }
 
     /// Make the window visible.
@@ -668,6 +673,11 @@ public class Stack: Widget {
         try _check(press_stack_insert(handle, child?.handle ?? 0, Int32(clamping: index)))
     }
 
+    /// Lay the stack, and what is in it, on a pattern of black and white: eight bytes, a row of an 8 by 8 tile each, the leftmost pixel in the top bit, a set bit black, as Picture.fill takes them. The tile is laid from the window's corner, so stacks side by side join without a seam. No bytes take it away.
+    public func setBackdrop(_ pattern: [UInt8]) throws {
+        try _check(press_stack_set_backdrop(handle, pattern, pattern.count))
+    }
+
     /// Gap between children, in pixels.
     public func setSpacing(_ value: Int) throws {
         try _check(press_stack_set_spacing(handle, Int32(clamping: value)))
@@ -739,6 +749,11 @@ public class Button: Widget {
     /// Whether the button lies flat, with no edge of its own until the pointer is over it or down on it, and is no wider than its label needs: a tool in a toolbar.
     public func setFlat(_ value: Bool) throws {
         try _check(press_button_set_flat(handle, value))
+    }
+
+    /// Whether the button is drawn as a key of a calculator: in the black and white style, a square face with a hard shadow below and to the right, as the first system's Calculator had them. A style without such keys draws an ordinary button.
+    public func setKey(_ value: Bool) throws {
+        try _check(press_button_set_key(handle, value))
     }
 
     /// The button was pressed, with the pointer or from the keyboard. A new handler takes the place of the last; pass nil to disconnect.
@@ -879,6 +894,11 @@ public class TextField: Widget {
         try _check(press_text_field_set_min_width(handle, Int32(clamping: value)))
     }
 
+    /// Where the text sits across the field: at the start, in the middle, or at the end, as figures do. In a text area each line sits so. Text too long for the field starts at the start and scrolls as ever. Fill is taken as Start.
+    public func setAlign(_ value: Align) throws {
+        try _check(press_text_field_set_align(handle, value.rawValue))
+    }
+
     /// Show a bullet in place of each character. A password cannot be copied, cut or dragged out, input methods are kept away from it, and assistive technology is not told what it holds. Not available on a text area.
     public func setPassword(_ value: Bool) throws {
         try _check(press_text_field_set_password(handle, value))
@@ -946,6 +966,11 @@ public class TextArea: TextField {
     /// The height of the area, in lines of text. Longer text scrolls.
     public func setRows(_ value: Int) throws {
         try _check(press_text_area_set_rows(handle, Int32(clamping: value)))
+    }
+
+    /// Draw it with no frame and no scroll bar, as writing on a page: for a note pad, say. Longer text still scrolls to keep the caret in view.
+    public func setPlain(_ value: Bool) throws {
+        try _check(press_text_area_set_plain(handle, value))
     }
 }
 
@@ -1190,6 +1215,11 @@ public class ListBox: Widget {
         try _check(press_list_box_set_reorderable(handle, value))
     }
 
+    /// Draw it with no frame of its own, to fill a window to its edges as the file windows of the original did: a double rule along its top, and its scroll bars lying on the window's edges, leaving the corner where they meet to the window's size box.
+    public func setFlush(_ value: Bool) throws {
+        try _check(press_list_box_set_flush(handle, value))
+    }
+
     /// The height of the list, in rows.
     public func setRows(_ value: Int) throws {
         try _check(press_list_box_set_rows(handle, Int32(clamping: value)))
@@ -1312,6 +1342,21 @@ public class Table: ListBox {
     /// Sort by a column, smallest first or largest first, or with -1 show the rows in the order they were added.
     public func sortBy(_ column: Int, ascending: Bool) throws {
         try _check(press_table_sort_by(handle, Int32(clamping: column), ascending))
+    }
+
+    /// Show a column's heading as the one the rows are in order of, without sorting them, for a program that puts its rows in order itself; -1 shows none.
+    public func markOrder(_ column: Int) throws {
+        try _check(press_table_mark_order(handle, Int32(clamping: column)))
+    }
+
+    /// Where a column's cells and its heading sit in it: at the start, in the middle, or at the end, as numbers are. Fill is taken as Start.
+    public func setColumnAlign(_ column: Int, align: Align) throws {
+        try _check(press_table_set_column_align(handle, Int32(clamping: column), align.rawValue))
+    }
+
+    /// The typeface a column's cells are written in. Its heading keeps the interface's.
+    public func setColumnTypeface(_ column: Int, face: Typeface) throws {
+        try _check(press_table_set_column_typeface(handle, Int32(clamping: column), face.rawValue))
     }
 
     /// Let the user sort the rows by clicking a column's heading; a second click turns the order round. Cells that start with numbers are ordered as numbers. Sorting changes the order rows are shown in, never their indices.

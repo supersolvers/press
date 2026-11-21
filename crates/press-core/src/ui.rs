@@ -216,6 +216,12 @@ enum Kind {
         rows: i32,
         /// Shows bullets in place of the characters.
         password: bool,
+        /// A text area drawn with no frame and no scroll bar, as writing
+        /// on a page.
+        plain: bool,
+        /// Where each line sits across the field: at the start, in the
+        /// middle, or at the end, as figures do.
+        align: Align,
         /// The column a run of up and down keys is keeping to.
         goal_x: Option<i32>,
         /// Scroll to keep the caret in view; off after the wheel has been
@@ -244,6 +250,10 @@ enum Kind {
         items: Vec<String>,
         selected: Option<usize>,
         scroll: i32,
+        /// How far a table or an icon view is scrolled sideways, in pixels.
+        across: i32,
+        /// Drawn with no frame, to fill a window to its edges.
+        flush: bool,
         rows: i32,
         min_width: i32,
         mode: list::ListMode,
@@ -258,6 +268,11 @@ enum Kind {
         sortable: bool,
         /// The column the rows are shown sorted by, and whether smallest first.
         sort: Option<(usize, bool)>,
+        /// The column shown as the one the rows are in order of, for a
+        /// program that orders them itself.
+        marked: Option<usize>,
+        /// How each column's cells sit in it, and the face they are in.
+        looks: Vec<(Align, crate::font::Face)>,
         /// Where a stretch of selection began.
         anchor: Option<usize>,
         /// The order the rows are shown in when not sorted: the order they
@@ -415,6 +430,10 @@ pub struct Ui {
     dress: HashMap<Handle, extra::Dress>,
     /// The buttons that lie flat until the pointer comes.
     flat: Vec<Handle>,
+    /// Buttons drawn as the keys of a calculator.
+    keys: Vec<Handle>,
+    /// Stacks laid on a pattern of black and white: eight rows of eight.
+    backdrops: HashMap<Handle, [u8; 8]>,
     /// The pictures of buttons that have one.
     images: HashMap<Handle, std::rc::Rc<Canvas>>,
     /// The words of help of widgets that have some.
@@ -441,6 +460,9 @@ pub struct Ui {
     /// The widget the pointer went down on, and whether it is still over it.
     pressed: Option<(Handle, bool)>,
     dirty: bool,
+    /// Windows the program has given a new size since the display last
+    /// asked, for the display to make them that size.
+    resized: Vec<Handle>,
     /// Nothing grows into spare room. The tests of single widgets put them
     /// in windows with room to spare and look at them at their natural size.
     natural: bool,
@@ -657,6 +679,8 @@ impl Ui {
             multiline,
             rows: 4,
             password: false,
+            plain: false,
+            align: Align::Start,
             goal_x: None,
             follow: true,
         })
@@ -894,8 +918,12 @@ impl Ui {
     /// for, with room for its menu bar if it draws one, and no smaller than
     /// a window may be.
     pub fn window_fit(&mut self, window: Handle) -> Result<()> {
+        // a window already showing is made the size, as set_size makes it
+        if let Kind::Window { visible: true, content, .. } = &self.node(window)?.kind {
+            let (w, h) = content.map_or((0, 0), |c| self.measure(c));
+            return self.window_set_size(window, w.clamp(64, 16384), h.clamp(32, 16384));
+        }
         let (content, bar) = match &self.node(window)?.kind {
-            Kind::Window { visible: true, .. } => return Err(Error::InvalidState),
             Kind::Window { content, menu_bar, bar_external, .. } => (*content, if menu_bar.is_some() && !bar_external { self.look.m.menu_bar_height } else { 0 }),
             _ => return Err(Error::WrongType),
         };
@@ -1139,6 +1167,43 @@ impl Ui {
     }
 
     /// Record the size the display gave the window.
+    /// The program gives a window a new size, whether or not it is showing:
+    /// the size of its inside, as `window_new` takes it. A window of one
+    /// size stays of one size, the new one.
+    pub fn window_set_size(&mut self, h: Handle, w: i32, h_px: i32) -> Result<()> {
+        if !(1..=16384).contains(&w) || !(1..=16384).contains(&h_px) {
+            return Err(Error::InvalidArgument);
+        }
+        // with room for its menu bar, where that is in the window, as fit leaves it
+        let bar = match &self.node(h)?.kind {
+            Kind::Window { menu_bar, bar_external, .. } if menu_bar.is_some() && !bar_external => self.look.m.menu_bar_height,
+            Kind::Window { .. } => 0,
+            _ => return Err(Error::WrongType),
+        };
+        self.window_resize(h, w, h_px + bar)?;
+        if !self.resized.contains(&h) {
+            self.resized.push(h);
+        }
+        self.dirty = true;
+        Ok(())
+    }
+
+    /// The size of a window's inside.
+    pub fn window_size(&self, h: Handle) -> Result<(i32, i32)> {
+        match &self.node(h)?.kind {
+            Kind::Window { width, height, .. } => Ok((*width, *height)),
+            _ => Err(Error::WrongType),
+        }
+    }
+
+    /// Whether the program has given a window a new size that the display
+    /// has still to make it; asking clears it.
+    pub fn take_resized(&mut self, h: Handle) -> bool {
+        let was = self.resized.contains(&h);
+        self.resized.retain(|r| *r != h);
+        was
+    }
+
     pub fn window_resize(&mut self, h: Handle, w: i32, h_px: i32) -> Result<()> {
         match &mut self.node_mut(h)?.kind {
             Kind::Window { width, height, .. } => {
@@ -1279,6 +1344,26 @@ impl Ui {
     }
 
     /// Set the height of a text area, in lines of text.
+    /// Where a field's text sits across it; Fill is taken as Start.
+    pub fn text_field_set_align(&mut self, h: Handle, value: Align) -> Result<()> {
+        match &mut self.node_mut(h)?.kind {
+            Kind::TextField { align, .. } => *align = if value == Align::Fill { Align::Start } else { value },
+            _ => return Err(Error::WrongType),
+        }
+        self.dirty = true;
+        Ok(())
+    }
+
+    /// Draw a text area with no frame and no scroll bar, as writing on a page.
+    pub fn text_area_set_plain(&mut self, h: Handle, value: bool) -> Result<()> {
+        match &mut self.node_mut(h)?.kind {
+            Kind::TextField { multiline: true, plain, .. } => *plain = value,
+            _ => return Err(Error::WrongType),
+        }
+        self.dirty = true;
+        Ok(())
+    }
+
     pub fn text_area_set_rows(&mut self, h: Handle, value: i32) -> Result<()> {
         if !(1..=1000).contains(&value) {
             return Err(Error::InvalidArgument);
@@ -1645,6 +1730,9 @@ impl Ui {
         match &node.kind {
             Kind::Window { .. } | Kind::MenuBar { .. } | Kind::Menu { .. } | Kind::MenuItem { .. } => {}
             Kind::Stack { .. } => {
+                if let Some(pattern) = self.backdrops.get(&h).copied() {
+                    Self::lay_pattern(canvas, rect, &pattern, self.look.pal.window, self.look.pal.text);
+                }
                 self.paint_dress(h, rect, canvas);
                 for c in self.children(h) {
                     self.paint(c, canvas, enabled, ctx);
@@ -1663,7 +1751,7 @@ impl Ui {
                     // a tool in a bar, with nobody near it: its label and no edge
                     self.paint_flat(rect, &label, canvas);
                 } else {
-                    let part = Part::new(PartKind::Button, rect).text(&label).phase(ants);
+                    let part = Part::new(PartKind::Button, rect).text(&label).phase(ants).when(state::ENABLED, enabled).when(state::KEY, self.keys.contains(&h));
                     self.part(canvas, part.when(state::DEFAULT, is_default).when(state::HELD, held).when(state::FOCUSED, live));
                 }
                 self.paint_button_image(h, rect, &label, canvas);
@@ -1694,7 +1782,9 @@ impl Ui {
                 return; // its content greys itself out
             }
         }
-        if !enabled {
+        // a style that greys its own buttons has done so
+        let greyed = matches!(self.nodes.get(h).map(|n| &n.kind), Some(Kind::Button { .. })) && self.look.wants & crate::style::wants::GREYS_BUTTONS != 0;
+        if !enabled && !greyed {
             self.part(canvas, Part::new(PartKind::Dim, rect));
         }
     }
@@ -1946,7 +2036,7 @@ impl Ui {
         out
     }
 
-    fn is_active(&self, window: Handle) -> bool {
+    pub(super) fn is_active(&self, window: Handle) -> bool {
         matches!(self.nodes.get(window).map(|n| &n.kind), Some(Kind::Window { active: true, .. }))
     }
 
@@ -2634,7 +2724,10 @@ mod tests {
         ui.stack_add(column, field).unwrap();
         assert_eq!(ui.window_focused(win), Ok(Some(field)));
         ui.window_show(win).unwrap();
-        assert_eq!(ui.window_fit(win), Err(Error::InvalidState));
+        // once showing, fitting it again tells the display of its new size
+        ui.take_resized(win);
+        ui.window_fit(win).unwrap();
+        assert!(ui.take_resized(win));
     }
 
     #[test]
@@ -3662,4 +3755,38 @@ mod style_tests {
         ui.button_set_image(pictured, Some(Canvas::new(400, 400))).unwrap();
         assert!(!ui.render(window).unwrap().pixels.contains(&0xff2060c0));
     }
+
+    #[test]
+    fn a_button_that_cannot_be_pressed_keeps_its_edge_in_black_and_white() {
+        let mut ui = Ui::natural();
+        // its words are greyed, and not its edge, as on the first system
+        let win = ui.window_new("Buttons", 200, 60).unwrap();
+        let button = ui.button_new("Save");
+        ui.set_enabled(button, false).unwrap();
+        let column = ui.stack_new(Orientation::Vertical);
+        ui.stack_add(column, button).unwrap();
+        ui.window_set_content(win, column).unwrap();
+        let canvas = ui.render(win).unwrap();
+        let r = ui.nodes.get(button).unwrap().rect;
+        assert_eq!(r.h, 18);
+        assert!((r.x + 3..r.x + r.w - 3).all(|x| canvas.get(x, r.y) == BLACK && canvas.get(x, r.y + r.h - 1) == BLACK));
+        assert!((r.y + 3..r.y + r.h - 3).all(|y| canvas.get(r.x, y) == BLACK));
+    }
+
+
+    #[test]
+    fn a_window_can_be_given_a_new_size_while_it_shows() {
+        let mut ui = Ui::natural();
+        let win = ui.window_new("Calculator", 104, 146).unwrap();
+        ui.window_set_resizable(win, false).unwrap();
+        assert!(!ui.take_resized(win));
+        ui.window_set_size(win, 516, 314).unwrap();
+        // the display is told once, and a window of one size is of the new one
+        assert!(ui.take_resized(win) && !ui.take_resized(win));
+        assert_eq!(ui.window_fixed_size(win).unwrap(), Some((516, 314)));
+        assert_eq!(ui.window_set_size(win, 0, 10), Err(Error::InvalidArgument));
+        let label = ui.label_new("x");
+        assert_eq!(ui.window_set_size(label, 10, 10), Err(Error::WrongType));
+    }
+
 }

@@ -257,6 +257,8 @@ pub mod state {
     pub const BUSY: u32 = 128;
     /// The pointer is over it. Only told to a style that [`wants`](super::wants) it.
     pub const HOT: u32 = 256;
+    /// A button drawn as a key of a calculator, for a style that has such keys.
+    pub const KEY: u32 = 512;
 }
 
 /// What a style would have the engine do for it beyond the ordinary: these
@@ -274,6 +276,13 @@ pub mod wants {
     /// drawn a pixel to a pixel and magnified whole, each pixel a square,
     /// which is what a style made of pixels wants.
     pub const FINE: u32 = 4;
+    /// A button that cannot be pressed is drawn with
+    /// [`ENABLED`](super::state::ENABLED) clear, and the style greys it as it
+    /// likes; the engine does not dim the whole of it afterwards.
+    pub const GREYS_BUTTONS: u32 = 8;
+    /// The box in a scroll bar is a square, whatever part of the whole is
+    /// in view, as on the first system.
+    pub const SQUARE_SCROLL_BOX: u32 = 16;
 }
 
 /// One piece of a window to be drawn.
@@ -359,6 +368,11 @@ pub trait Style: Send + Sync {
     fn frame_typeface(&self) -> Option<Type> {
         None
     }
+    /// The family the names under large pictures are written in: on the
+    /// desktop, and in a list shown as icons.
+    fn icon_face(&self) -> Face {
+        Face::Cicero
+    }
     /// What it would have the engine do for it: see [`wants`].
     fn wants(&self) -> u32 {
         0
@@ -381,16 +395,34 @@ pub const MENU_ITEM_LEFT: i32 = 17;
 #[derive(Debug, Clone, Copy, Default)]
 pub struct EightyFour;
 
+/// A scroll bar's arrow, pointing up: an outline round a white inside, as
+/// the first system drew it in a box sixteen pixels square, a pixel in
+/// from the left of the box and two down from its top.
+const ARROW: [&str; 11] = [
+    "      X      ", //
+    "     X.X     ",
+    "    X...X    ",
+    "   X.....X   ",
+    "  X.......X  ",
+    " X.........X ",
+    "XXXX.....XXXX",
+    "   X.....X   ",
+    "   X.....X   ",
+    "   X.....X   ",
+    "   XXXXXXX   ",
+];
+
 impl EightyFour {
     pub const METRICS: Metrics = Metrics {
-        button_height: 20,
+        button_height: 18,
         button_min_width: 58,
         button_pad: 12,
-        default_ring: 4, // 3 px ring plus a 1 px gap around a default button
+        // the first system drew no ring round the button Return presses
+        default_ring: 0,
         check_size: 12,
-        check_gap: 6,
+        check_gap: 5,
         radio_size: 12,
-        radio_gap: 6,
+        radio_gap: 5,
         field_inset_x: 5, // 1 px of room for the focus frame, the frame, 3 px of padding
         field_inset_y: 3,
         progress_height: 12,
@@ -432,6 +464,12 @@ impl EightyFour {
 
     fn scroll_bar(part: &Part, canvas: &mut Canvas) {
         let (rect, vertical, live) = (part.rect, part.is(state::VERTICAL), part.is(state::ENABLED));
+        if !part.is(state::FRONT) {
+            // in a window behind the others, an empty bar: no arrows, no box
+            canvas.fill(rect, WHITE);
+            canvas.frame(rect, BLACK);
+            return;
+        }
         let (start, len) = if vertical { (rect.y, rect.h) } else { (rect.x, rect.w) };
         let span = |start: i32, len: i32| if vertical { Rect::new(rect.x, start, rect.w, len) } else { Rect::new(start, rect.y, len, rect.h) };
         let thick = if vertical { rect.w } else { rect.h };
@@ -452,28 +490,104 @@ impl EightyFour {
         for (back, box_start) in [(true, start), (false, start + len - thick)] {
             let r = span(box_start, thick);
             canvas.frame(r, BLACK);
-            // a solid arrowhead, pointing the way the content will move into view
-            let (cx, cy) = (r.x + r.w / 2, r.y + r.h / 2);
-            for d in 0..5 {
-                let (ax, aw) = (-d, 2 * d + 1);
-                let (dx, dy, w, h) = match (vertical, back) {
-                    (true, true) => (ax, d - 2, aw, 1),
-                    (true, false) => (ax, 2 - d, aw, 1),
-                    (false, true) => (d - 2, ax, 1, aw),
-                    (false, false) => (2 - d, ax, 1, aw),
-                };
-                canvas.fill(Rect::new(cx + dx - if vertical { 0 } else { 1 }, cy + dy - if vertical { 1 } else { 0 }, w, h), BLACK);
-            }
-            if !live {
-                canvas.dim(r.inset(1));
-            } else if part.a == if back { 1 } else { 2 } {
-                canvas.invert(r.inset(1));
+            // a hollow arrow, pointing the way the content will move into
+            // view; filled black while it is held down
+            let held = live && part.a == if back { 1 } else { 2 };
+            // where the up arrow sits in its box: a pixel in, two down, or
+            // the same share of a box a theme has made another size
+            let (left, top) = ((r.w - ARROW[0].len() as i32 - 1) / 2, (r.h - ARROW.len() as i32 - 1) / 2);
+            for (row, line) in ARROW.iter().enumerate() {
+                for (col, b) in line.bytes().enumerate() {
+                    let shade = match b {
+                        b'X' => BLACK,
+                        b'.' if held => BLACK,
+                        _ => continue,
+                    };
+                    // the arrow is drawn pointing up; turned for the others, and
+                    // turned over for the far end, where it sits two from the bottom
+                    let (u, v) = (left + col as i32, top + row as i32);
+                    let (x, y) = match (vertical, back) {
+                        (true, true) => (u, v),
+                        (true, false) => (u, r.h - 1 - v),
+                        (false, true) => (v, u),
+                        (false, false) => (r.w - 1 - v, u),
+                    };
+                    // kept inside its box, should a theme make the bar thinner
+                    if r.inset(1).contains(r.x + x, r.y + y) {
+                        canvas.set(r.x + x, r.y + y, shade);
+                    }
+                }
             }
         }
         if part.b >= 0 {
             let r = span(part.b, part.c);
             canvas.fill(r, WHITE);
             canvas.frame(r, BLACK);
+        }
+    }
+
+    /// A push button's edge, round a white face: each corner cut away in
+    /// two steps, the steps two pixels long, as the original drew it.
+    pub fn push_button(canvas: &mut Canvas, r: Rect) {
+        if r.w < 8 || r.h < 8 {
+            canvas.fill(r, WHITE);
+            canvas.frame(r, BLACK);
+            return;
+        }
+        Self::push_button_inside(r, |row| canvas.fill(row, WHITE));
+        let (right, bottom) = (r.x + r.w - 1, r.y + r.h - 1);
+        // the straight runs
+        canvas.fill(Rect::new(r.x + 3, r.y, r.w - 6, 1), BLACK);
+        canvas.fill(Rect::new(r.x + 3, bottom, r.w - 6, 1), BLACK);
+        canvas.fill(Rect::new(r.x, r.y + 3, 1, r.h - 6), BLACK);
+        canvas.fill(Rect::new(right, r.y + 3, 1, r.h - 6), BLACK);
+        // and the corners, each two short steps
+        for (x, dx) in [(r.x, 1), (right, -1)] {
+            for (y, dy) in [(r.y, 1), (bottom, -1)] {
+                for (i, j) in [(1, 1), (2, 1), (0, 2), (1, 2)] {
+                    canvas.set(x + i * dx, y + j * dy, BLACK);
+                }
+                canvas.set(x + 2 * dx, y, BLACK);
+                canvas.set(x, y + 2 * dy, BLACK);
+            }
+        }
+    }
+
+    /// A key of a calculator, as the first system's Calculator drew them: a
+    /// square white face with a black edge, and a hard shadow two pixels
+    /// below and to the right; turned over while held.
+    fn calculator_key(part: &Part, p: &mut Painter, line: i32) {
+        let rect = part.rect;
+        let face = Rect::new(rect.x, rect.y, (rect.w - 2).max(1), (rect.h - 2).max(1));
+        let canvas = &mut *p.canvas;
+        canvas.fill(Rect::new(face.x + 2, face.y + 2, face.w, face.h), BLACK);
+        canvas.fill(face, WHITE);
+        canvas.frame(face, BLACK);
+        let tw = p.font.width(part.text);
+        let (tx, ty) = (face.x + (face.w - tw) / 2, face.y + (face.h - line) / 2);
+        p.font.draw(canvas, part.text, tx, ty, BLACK);
+        if !part.is(state::ENABLED) {
+            canvas.dim(Rect::new(face.x + 1, face.y + 1, face.w - 2, face.h - 2));
+        } else if part.is(state::HELD) {
+            canvas.invert(face.inset(1));
+        }
+        if part.is(state::FOCUSED) {
+            canvas.ants(rect.inset(-Self::RING_GAP), part.phase);
+        }
+    }
+
+    /// The rows of a push button inside its edge, for filling or turning over.
+    pub fn push_button_inside(r: Rect, mut row: impl FnMut(Rect)) {
+        if r.w < 8 || r.h < 8 {
+            return row(r.inset(1));
+        }
+        for y in 1..r.h - 1 {
+            let inset = match y.min(r.h - 1 - y) {
+                1 => 3,
+                2 => 2,
+                _ => 1,
+            };
+            row(Rect::new(r.x + inset, r.y + y, r.w - 2 * inset, 1));
         }
     }
 
@@ -517,6 +631,15 @@ impl Style for EightyFour {
         Self::METRICS
     }
 
+    fn wants(&self) -> u32 {
+        wants::GREYS_BUTTONS | wants::SQUARE_SCROLL_BOX
+    }
+
+    // the original named its icons in a small plain face, not the menus' heavy one
+    fn icon_face(&self) -> Face {
+        Face::Agate
+    }
+
     fn palette(&self) -> Palette {
         Self::PALETTE
     }
@@ -532,25 +655,19 @@ impl Style for EightyFour {
                 if focused {
                     canvas.ants(rect.inset(-Self::RING_GAP), part.phase);
                 }
-                let mut face = rect;
-                if part.is(state::DEFAULT) {
-                    canvas.round_frame(rect, 8, 3, BLACK, WHITE);
-                    face = rect.inset(m.default_ring);
+                if part.is(state::KEY) {
+                    Self::calculator_key(part, p, line);
+                    return true;
                 }
-                canvas.round_frame(face, 4, 1, BLACK, WHITE);
+                Self::push_button(canvas, rect);
                 let tw = p.font.width(part.text);
-                p.font.draw(canvas, part.text, face.x + (face.w - tw) / 2, face.y + (face.h - line) / 2, BLACK);
-                if held {
-                    // invert the face, keeping the rounded corners white
-                    let mut mask = Canvas::new(canvas.width, canvas.height);
-                    mask.round_fill(face, 4, BLACK);
-                    for y in face.y..face.y + face.h {
-                        for x in face.x..face.x + face.w {
-                            if mask.get(x, y) == BLACK {
-                                canvas.invert(Rect::new(x, y, 1, 1));
-                            }
-                        }
-                    }
+                let (tx, ty) = (rect.x + (rect.w - tw) / 2, rect.y + (rect.h - line) / 2);
+                p.font.draw(canvas, part.text, tx, ty, BLACK);
+                if !part.is(state::ENABLED) {
+                    // one that cannot be pressed keeps its edge and greys its words
+                    canvas.dim(Rect::new(tx - 1, rect.y + 1, tw + 2, rect.h - 2));
+                } else if held {
+                    Self::push_button_inside(rect, |r| canvas.invert(r));
                 }
             }
             PartKind::Checkbox => {
@@ -569,7 +686,8 @@ impl Style for EightyFour {
                         canvas.set(b.x + m.check_size - 1 - i, b.y + i, BLACK);
                     }
                 }
-                p.font.draw(canvas, part.text, rect.x + m.check_size + m.check_gap, rect.y + (rect.h - line) / 2, BLACK);
+                // the label a pixel above the middle, its capitals level with the box's inside, as on the original
+                p.font.draw(canvas, part.text, rect.x + m.check_size + m.check_gap, rect.y + (rect.h - line) / 2 - 1, BLACK);
             }
             PartKind::Radio => {
                 if focused {
@@ -581,15 +699,13 @@ impl Style for EightyFour {
                 if part.is(state::CHECKED) {
                     canvas.round_fill(ring.inset(3), m.radio_size / 2 - 3, BLACK);
                 }
-                p.font.draw(canvas, part.text, rect.x + m.radio_size + m.radio_gap, rect.y + (rect.h - line) / 2, BLACK);
+                p.font.draw(canvas, part.text, rect.x + m.radio_size + m.radio_gap, rect.y + (rect.h - line) / 2 - 1, BLACK);
             }
             PartKind::Well => {
+                // one line, whether or not typing goes here: the caret says where it does
                 let frame = rect.inset(1);
                 canvas.fill(frame, WHITE);
                 canvas.frame(frame, BLACK);
-                if focused {
-                    canvas.frame(rect, BLACK); // the frame doubles in weight while typing goes here
-                }
             }
             PartKind::Select => canvas.invert(rect),
             PartKind::Dim => canvas.dim(rect),
@@ -664,7 +780,8 @@ impl Style for EightyFour {
                 if !part.is(state::ENABLED) {
                     canvas.dim(rect);
                 } else if held {
-                    canvas.invert(rect);
+                    // turned over below a white line, clear of the screen's top edge
+                    canvas.invert(Rect::new(rect.x, rect.y + 1, rect.w, rect.h - 1));
                 }
             }
             PartKind::MenuFrame => {
@@ -674,7 +791,8 @@ impl Style for EightyFour {
                 canvas.fill(Rect::new(rect.x + w, rect.y, 1, h + 1), BLACK);
                 canvas.fill(Rect::new(rect.x, rect.y + h, w + 1, 1), BLACK);
                 canvas.fill(Rect::new(rect.x + w, rect.y, 1, 2), TRANSPARENT);
-                canvas.fill(Rect::new(rect.x, rect.y + h, 2, 1), TRANSPARENT);
+                // (along the bottom it starts a pixel further in than down the side, as on the original)
+                canvas.fill(Rect::new(rect.x, rect.y + h, 3, 1), TRANSPARENT);
             }
             PartKind::MenuSeparator => {
                 for x in (rect.x..rect.x + rect.w).filter(|x| x % 2 == 0) {
@@ -696,11 +814,9 @@ impl Style for EightyFour {
                 }
             }
             PartKind::SortArrow => {
-                // a small arrowhead: up for smallest first
-                for d in 0..4 {
-                    let dy = if part.is(state::CHECKED) { d - 2 } else { 1 - d };
-                    canvas.fill(Rect::new(part.a - d, part.b + dy, 2 * d + 1, 1), part.ink);
-                }
+                // the original underlined the heading of the column the rows were in order of
+                let under = rect.y + (rect.h - line) / 2 + p.font.ascent + 1;
+                canvas.fill(Rect::new(part.c, under, part.d, 1), part.ink);
             }
             PartKind::TreeFold => {
                 // a solid triangle: pointing right when folded, down when open
@@ -769,5 +885,24 @@ impl Look {
 impl Default for Look {
     fn default() -> Look {
         Look::of(std::sync::Arc::new(EightyFour))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The rows of a picture as `#` and `.`, for comparing with a drawing.
+    fn rows(c: &Canvas, r: Rect) -> Vec<String> {
+        (r.y..r.y + r.h).map(|y| (r.x..r.x + r.w).map(|x| if c.get(x, y) == BLACK { '#' } else { '.' }).collect()).collect()
+    }
+
+    #[test]
+    fn a_button_is_drawn_as_the_first_system_drew_it() {
+        let mut c = Canvas::filled(12, 18, WHITE);
+        EightyFour::push_button(&mut c, Rect::new(0, 0, 12, 18));
+        // each corner cut in two steps two pixels long; the same at the bottom
+        assert_eq!(rows(&c, Rect::new(0, 0, 12, 4)), ["..########..", ".##......##.", "##........##", "#..........#"]);
+        assert_eq!(rows(&c, Rect::new(0, 14, 12, 4)), ["#..........#", "##........##", ".##......##.", "..########.."]);
     }
 }

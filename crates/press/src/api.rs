@@ -208,6 +208,10 @@ pub fn window_fit(this: Handle) -> Result {
     with(|rt| Ok(rt.ui.window_fit(this)?))
 }
 
+pub fn window_set_size(this: Handle, width: i32, height: i32) -> Result {
+    with(|rt| Ok(rt.ui.window_set_size(this, width, height)?))
+}
+
 pub fn window_focused(this: Handle) -> Result<Handle> {
     with(|rt| Ok(rt.ui.window_focused(this)?.unwrap_or(Handle(0))))
 }
@@ -497,6 +501,19 @@ pub fn text_field_set_password(this: Handle, value: bool) -> Result {
 
 pub fn text_area_new(text: &str) -> Result<Handle> {
     with(|rt| Ok(rt.ui.text_area_new(text)))
+}
+
+pub fn text_field_set_align(this: Handle, value: Align) -> Result {
+    let value = match value {
+        Align::Center => press_core::Align::Center,
+        Align::End => press_core::Align::End,
+        Align::Start | Align::Fill => press_core::Align::Start,
+    };
+    with(|rt| Ok(rt.ui.text_field_set_align(this, value)?))
+}
+
+pub fn text_area_set_plain(this: Handle, value: bool) -> Result {
+    with(|rt| Ok(rt.ui.text_area_set_plain(this, value)?))
 }
 
 pub fn text_area_set_rows(this: Handle, value: i32) -> Result {
@@ -892,12 +909,34 @@ pub fn table_sort_by(this: Handle, column: i32, ascending: bool) -> Result {
     with(|rt| Ok(rt.ui.table_sort_by(this, column, ascending)?))
 }
 
+pub fn table_mark_order(this: Handle, column: i32) -> Result {
+    with(|rt| Ok(rt.ui.table_mark_order(this, column)?))
+}
+
+pub fn table_set_column_align(this: Handle, column: i32, align: Align) -> Result {
+    let align = match align {
+        Align::Center => press_core::Align::Center,
+        Align::End => press_core::Align::End,
+        Align::Start | Align::Fill => press_core::Align::Start,
+    };
+    with(|rt| Ok(rt.ui.table_set_column_align(this, column, align)?))
+}
+
+pub fn table_set_column_typeface(this: Handle, column: i32, face: Typeface) -> Result {
+    let face = face_of(face);
+    with(|rt| Ok(rt.ui.table_set_column_typeface(this, column, face)?))
+}
+
 pub fn list_box_set_picture(this: Handle, index: i32, art: &str) -> Result {
     with(|rt| Ok(rt.ui.list_box_set_picture(this, index, art)?))
 }
 
 pub fn list_box_set_reorderable(this: Handle, value: bool) -> Result {
     with(|rt| Ok(rt.ui.list_box_set_reorderable(this, value)?))
+}
+
+pub fn list_box_set_flush(this: Handle, value: bool) -> Result {
+    with(|rt| Ok(rt.ui.list_box_set_flush(this, value)?))
 }
 
 pub fn list_box_move_item(this: Handle, index: i32, position: i32) -> Result {
@@ -1085,6 +1124,14 @@ fn image_from_png(png: &[u8]) -> Result<Option<press_core::Canvas>> {
 
 pub fn widget_set_tooltip(this: Handle, value: &str) -> Result {
     with(|rt| Ok(rt.ui.set_tooltip(this, value)?))
+}
+
+pub fn button_set_key(this: Handle, value: bool) -> Result {
+    with(|rt| Ok(rt.ui.button_set_key(this, value)?))
+}
+
+pub fn stack_set_backdrop(this: Handle, pattern: &[u8]) -> Result {
+    with(|rt| Ok(rt.ui.stack_set_backdrop(this, pattern)?))
 }
 
 pub fn button_set_flat(this: Handle, value: bool) -> Result {

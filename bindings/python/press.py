@@ -342,9 +342,14 @@ class Window(Widget):
         _check(_lib.press_window_set_menu_bar(self.handle, _h(bar)))
 
     def fit(self):
-        """Make the window the size its content asks for, with room for its menu bar, in place of the size it was created with. Call it once the content and the menu bar are in place and before the window is first shown; a window that has been shown refuses."""
+        """Make the window the size its content asks for, with room for its menu bar, in place of the size it was created with. Call it once the content and the menu bar are in place. A window already showing is made that size, as set_size makes it."""
         _lib.press_window_fit.argtypes = [ctypes.c_uint64]
         _check(_lib.press_window_fit(self.handle))
+
+    def set_size(self, width, height):
+        """Give the window a new size, the size of its inside as new takes it, with room for its menu bar where that is in the window, as fit leaves it; even while it is showing: for a window that shows one thing and then another of another size. A window of one size stays of one size, the new one."""
+        _lib.press_window_set_size.argtypes = [ctypes.c_uint64, ctypes.c_int32, ctypes.c_int32]
+        _check(_lib.press_window_set_size(self.handle, width, height))
 
     def show(self):
         """Make the window visible."""
@@ -512,6 +517,11 @@ class Stack(Widget):
         _lib.press_stack_insert.argtypes = [ctypes.c_uint64, ctypes.c_uint64, ctypes.c_int32]
         _check(_lib.press_stack_insert(self.handle, _h(child), index))
 
+    def set_backdrop(self, pattern):
+        """Lay the stack, and what is in it, on a pattern of black and white: eight bytes, a row of an 8 by 8 tile each, the leftmost pixel in the top bit, a set bit black, as Picture.fill takes them. The tile is laid from the window's corner, so stacks side by side join without a seam. No bytes take it away."""
+        _lib.press_stack_set_backdrop.argtypes = [ctypes.c_uint64, ctypes.c_char_p, ctypes.c_size_t]
+        _check(_lib.press_stack_set_backdrop(self.handle, *_b(pattern)))
+
     def set_spacing(self, value):
         """Gap between children, in pixels."""
         _lib.press_stack_set_spacing.argtypes = [ctypes.c_uint64, ctypes.c_int32]
@@ -577,6 +587,11 @@ class Button(Widget):
         _lib.press_button_set_flat.argtypes = [ctypes.c_uint64, ctypes.c_bool]
         _check(_lib.press_button_set_flat(self.handle, value))
 
+    def set_key(self, value):
+        """Whether the button is drawn as a key of a calculator: in the black and white style, a square face with a hard shadow below and to the right, as the first system's Calculator had them. A style without such keys draws an ordinary button."""
+        _lib.press_button_set_key.argtypes = [ctypes.c_uint64, ctypes.c_bool]
+        _check(_lib.press_button_set_key(self.handle, value))
+
     def on_clicked(self, fn):
         """The button was pressed, with the pointer or from the keyboard. The handler receives (); pass None to disconnect."""
         cfunc = ctypes.CFUNCTYPE(None, ctypes.c_uint64, ctypes.c_void_p)
@@ -633,10 +648,10 @@ class TextField(Widget):
         _lib.press_text_field_select_all.argtypes = [ctypes.c_uint64]
         _check(_lib.press_text_field_select_all(self.handle))
 
-    def select(self, from, to):
+    def select(self, from_, to):
         """Select from one place in the text to another, each a byte offset into its UTF-8: `to` is where the caret goes, and is scrolled into view, so a selection made backwards has `to` first. The same place twice puts the caret there with nothing selected. A place inside a character moves to its start, and one past the end to the end. Made by the program, it does not raise selected."""
         _lib.press_text_field_select.argtypes = [ctypes.c_uint64, ctypes.c_int32, ctypes.c_int32]
-        _check(_lib.press_text_field_select(self.handle, from, to))
+        _check(_lib.press_text_field_select(self.handle, from_, to))
 
     def selection_start(self):
         """Where the selection begins, as a byte offset into the text's UTF-8; with nothing selected, where the caret is."""
@@ -691,6 +706,11 @@ class TextField(Widget):
         _lib.press_text_field_set_min_width.argtypes = [ctypes.c_uint64, ctypes.c_int32]
         _check(_lib.press_text_field_set_min_width(self.handle, value))
 
+    def set_align(self, value):
+        """Where the text sits across the field: at the start, in the middle, or at the end, as figures do. In a text area each line sits so. Text too long for the field starts at the start and scrolls as ever. Fill is taken as Start."""
+        _lib.press_text_field_set_align.argtypes = [ctypes.c_uint64, ctypes.c_int32]
+        _check(_lib.press_text_field_set_align(self.handle, int(value)))
+
     def set_password(self, value):
         """Show a bullet in place of each character. A password cannot be copied, cut or dragged out, input methods are kept away from it, and assistive technology is not told what it holds. Not available on a text area."""
         _lib.press_text_field_set_password.argtypes = [ctypes.c_uint64, ctypes.c_bool]
@@ -731,6 +751,11 @@ class TextArea(TextField):
         """The height of the area, in lines of text. Longer text scrolls."""
         _lib.press_text_area_set_rows.argtypes = [ctypes.c_uint64, ctypes.c_int32]
         _check(_lib.press_text_area_set_rows(self.handle, value))
+
+    def set_plain(self, value):
+        """Draw it with no frame and no scroll bar, as writing on a page: for a note pad, say. Longer text still scrolls to keep the caret in view."""
+        _lib.press_text_area_set_plain.argtypes = [ctypes.c_uint64, ctypes.c_bool]
+        _check(_lib.press_text_area_set_plain(self.handle, value))
 
 
 class RadioButton(Widget):
@@ -938,6 +963,11 @@ class ListBox(Widget):
         _lib.press_list_box_set_reorderable.argtypes = [ctypes.c_uint64, ctypes.c_bool]
         _check(_lib.press_list_box_set_reorderable(self.handle, value))
 
+    def set_flush(self, value):
+        """Draw it with no frame of its own, to fill a window to its edges as the file windows of the original did: a double rule along its top, and its scroll bars lying on the window's edges, leaving the corner where they meet to the window's size box."""
+        _lib.press_list_box_set_flush.argtypes = [ctypes.c_uint64, ctypes.c_bool]
+        _check(_lib.press_list_box_set_flush(self.handle, value))
+
     def set_rows(self, value):
         """The height of the list, in rows."""
         _lib.press_list_box_set_rows.argtypes = [ctypes.c_uint64, ctypes.c_int32]
@@ -1009,6 +1039,21 @@ class Table(ListBox):
         """Sort by a column, smallest first or largest first, or with -1 show the rows in the order they were added."""
         _lib.press_table_sort_by.argtypes = [ctypes.c_uint64, ctypes.c_int32, ctypes.c_bool]
         _check(_lib.press_table_sort_by(self.handle, column, ascending))
+
+    def mark_order(self, column):
+        """Show a column's heading as the one the rows are in order of, without sorting them, for a program that puts its rows in order itself; -1 shows none."""
+        _lib.press_table_mark_order.argtypes = [ctypes.c_uint64, ctypes.c_int32]
+        _check(_lib.press_table_mark_order(self.handle, column))
+
+    def set_column_align(self, column, align):
+        """Where a column's cells and its heading sit in it: at the start, in the middle, or at the end, as numbers are. Fill is taken as Start."""
+        _lib.press_table_set_column_align.argtypes = [ctypes.c_uint64, ctypes.c_int32, ctypes.c_int32]
+        _check(_lib.press_table_set_column_align(self.handle, column, int(align)))
+
+    def set_column_typeface(self, column, face):
+        """The typeface a column's cells are written in. Its heading keeps the interface's."""
+        _lib.press_table_set_column_typeface.argtypes = [ctypes.c_uint64, ctypes.c_int32, ctypes.c_int32]
+        _check(_lib.press_table_set_column_typeface(self.handle, column, int(face)))
 
     def set_sortable(self, value):
         """Let the user sort the rows by clicking a column's heading; a second click turns the order round. Cells that start with numbers are ordered as numbers. Sorting changes the order rows are shown in, never their indices."""

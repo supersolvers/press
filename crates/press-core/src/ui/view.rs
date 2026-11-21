@@ -143,9 +143,9 @@ impl Ui {
         let layout = self.view_layout(h)?;
         let scroll = self.clamp_view(h);
         Some(if horizontal {
-            Bar { rect: layout.hbar?, vertical: false, value: scroll.0, max: layout.max.0, page: layout.port.w, step: STEP, enabled, together: self.look.m.scroll_arrows == 1 }
+            Bar { rect: layout.hbar?, vertical: false, value: scroll.0, max: layout.max.0, page: layout.port.w, step: STEP, enabled, square: false, together: self.look.m.scroll_arrows == 1 }
         } else {
-            Bar { rect: layout.vbar, vertical: true, value: scroll.1, max: layout.max.1, page: layout.port.h, step: STEP, enabled, together: self.look.m.scroll_arrows == 1 }
+            Bar { rect: layout.vbar, vertical: true, value: scroll.1, max: layout.max.1, page: layout.port.h, step: STEP, enabled, square: false, together: self.look.m.scroll_arrows == 1 }
         })
     }
 

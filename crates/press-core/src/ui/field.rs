@@ -27,6 +27,7 @@ const BREAK_WIDTH: i32 = 4;
 pub(super) struct Shape {
     multiline: bool,
     password: bool,
+    align: Align,
     scroll: i32,
     follow: bool,
 }
@@ -35,15 +36,15 @@ impl Ui {
     pub(super) fn shape_of(&self, h: Handle) -> Option<(Shape, Rect)> {
         let node = self.nodes.get(h)?;
         match &node.kind {
-            Kind::TextField { multiline, password, scroll, follow, .. } => {
+            Kind::TextField { multiline, password, scroll, follow, plain, align, .. } => {
                 let mut inner = field_inner(node.rect, &self.look.m);
                 // a combo box keeps its right-hand end for its button
                 inner.w = (inner.w - self.combo_room(h)).max(0);
-                if *multiline {
+                if *multiline && !*plain {
                     // a text area keeps its right-hand side for the scroll bar
                     inner.w = (Self::area_bar_rect(node.rect, self.look.m.scroll_bar).x - 2 - inner.x).max(0);
                 }
-                Some((Shape { multiline: *multiline, password: *password, scroll: *scroll, follow: *follow }, inner))
+                Some((Shape { multiline: *multiline, password: *password, align: *align, scroll: *scroll, follow: *follow }, inner))
             }
             _ => None,
         }
@@ -90,6 +91,20 @@ impl Ui {
         out
     }
 
+    /// How far in a line is drawn from the start of the field for its
+    /// alignment: nothing at the start, its spare room at the end, half of
+    /// it in the middle. A line too long to fit has no room to spare.
+    fn indent(&mut self, text: &str, lines: &[Line], row: usize, width: i32, shape: Shape) -> i32 {
+        if shape.align == Align::Start {
+            return 0;
+        }
+        let (start, end) = lines[row];
+        // a wrapped line's last space hangs off its end, as it does at the start
+        let words = if shape.multiline { text[start..end].trim_end_matches(' ') } else { &text[start..end] };
+        let spare = (width - 2 - self.font.width(&Self::masked(words, shape.password))).max(0);
+        if shape.align == Align::End { spare } else { spare / 2 }
+    }
+
     /// The visual line a position is on. A position where one line wraps
     /// into the next belongs to the next.
     fn line_of(lines: &[Line], at: usize) -> usize {
@@ -134,6 +149,7 @@ impl Ui {
         } else {
             (0, x - inner.x - 1 + shape.scroll)
         };
+        let x = x - self.indent(&text, &lines, row, inner.w, shape);
         self.index_in_line(&text, &lines, row, x, shape.password)
     }
 
@@ -151,12 +167,19 @@ impl Ui {
         };
         let lines = self.wrap(&text, inner.w - 2, shape.multiline);
         let row = Self::line_of(&lines, caret);
-        let goal = goal.unwrap_or_else(|| self.font.width(&text[lines[row].0..caret]));
+        // the column is kept across the field, wherever each line sits in it
+        let goal = goal.unwrap_or_else(|| self.indent(&text, &lines, row, inner.w, shape) + self.font.width(&text[lines[row].0..caret]));
         let target = match (down, row) {
             (false, 0) => 0, // up from the top line goes to the very start
             (true, r) if r + 1 >= lines.len() => text.len(),
-            (false, r) => self.index_in_line(&text, &lines, r - 1, goal, false),
-            (true, r) => self.index_in_line(&text, &lines, r + 1, goal, false),
+            (false, r) => {
+                let x = goal - self.indent(&text, &lines, r - 1, inner.w, shape);
+                self.index_in_line(&text, &lines, r - 1, x, false)
+            }
+            (true, r) => {
+                let x = goal - self.indent(&text, &lines, r + 1, inner.w, shape);
+                self.index_in_line(&text, &lines, r + 1, x, false)
+            }
         };
         self.editor_mut(h)?.move_to(target, extend);
         if let Kind::TextField { goal_x, .. } = &mut self.node_mut(h)?.kind {
@@ -282,7 +305,12 @@ impl Ui {
         let (edit, placeholder) = (edit.clone(), placeholder.clone());
         let line = self.font.line_height();
         let (paper, ink) = (self.look.pal.paper, self.look.pal.ink);
-        self.part(canvas, Part::new(PartKind::Well, rect).numbers(if shape.multiline { 2 } else { 0 }, 0, 0).when(state::FOCUSED, live));
+        // a plain text area is the paper itself, with no edge
+        if matches!(self.nodes.get(h).map(|n| &n.kind), Some(Kind::TextField { plain: true, .. })) {
+            canvas.fill(rect, paper);
+        } else {
+            self.part(canvas, Part::new(PartKind::Well, rect).numbers(if shape.multiline { 2 } else { 0 }, 0, 0).when(state::FOCUSED, live));
+        }
         if inner.w <= 0 || inner.h <= 0 {
             return;
         }
@@ -321,7 +349,14 @@ impl Ui {
         let mut clip = Canvas::like(canvas, inner.w, inner.h, paper);
         let top = |row: usize| if shape.multiline { (row - first) as i32 * line } else { (inner.h - line) / 2 };
         if shown.is_empty() {
-            self.font.draw(&mut clip, &placeholder, 1, top(first), ink);
+            // the hint sits where the text will
+            let room = (inner.w - 2 - self.font.width(&placeholder)).max(0);
+            let at = match shape.align {
+                Align::End => room,
+                Align::Center => room / 2,
+                _ => 0,
+            };
+            self.font.draw(&mut clip, &placeholder, 1 + at, top(first), ink);
             self.part(&mut clip, Part::new(PartKind::Dim, Rect::new(0, 0, inner.w, inner.h)));
         }
         let selection = (live && pre.is_empty() && edit.has_selection()).then(|| edit.selection());
@@ -329,6 +364,8 @@ impl Ui {
         for row in first..lines.len().min(first + rows) {
             let (start, end) = lines[row];
             let y = top(row);
+            // drawn further in by the line's alignment, as if scrolled back that far
+            let slide = slide - self.indent(&shown, &lines, row, inner.w, shape);
             // the band this line occupies: the whole height of a one-line field
             let band = if shape.multiline { Rect::new(0, y, inner.w, line) } else { Rect::new(0, 0, inner.w, inner.h) };
             let drawn = Self::masked(&shown[start..end], shape.password);
@@ -378,7 +415,7 @@ impl Ui {
         let pre = self.preedit.as_ref().filter(|(f, _)| *f == h).map(|(_, t)| t.clone()).unwrap_or_default();
         let lines = self.wrap(&text, inner.w - 2, shape.multiline);
         let row = Self::line_of(&lines, from);
-        let x = self.font.width(&Self::masked(&text[lines[row].0..from], shape.password)) + self.font.width(&pre);
+        let x = self.indent(&text, &lines, row, inner.w, shape) + self.font.width(&Self::masked(&text[lines[row].0..from], shape.password)) + self.font.width(&pre);
         let line = self.font.line_height();
         Some(if shape.multiline {
             Rect::new(inner.x + x, inner.y + (row as i32 - shape.scroll) * line, 1, line)
@@ -635,4 +672,68 @@ mod tests {
         assert_eq!(ui.selection_events(), vec![Emitted { target: area, event: "TextField.selected", args: vec![Value::I32(5), Value::I32(6)] }]);
         assert_eq!(ui.text_field_select(area, -1, 0), Err(Error::InvalidArgument));
     }
+
+    #[test]
+    fn text_can_sit_at_the_end_of_its_field_or_in_the_middle() {
+        let mut ui = Ui::natural();
+        let win = ui.window_new("Figures", 200, 60).unwrap();
+        let col = ui.stack_new(Orientation::Vertical);
+        let field = ui.text_field_new("42");
+        ui.text_field_set_min_width(field, 120).unwrap();
+        ui.stack_add(col, field).unwrap();
+        ui.window_set_content(win, col).unwrap();
+        ui.render(win).unwrap();
+        let (_, inner) = ui.shape_of(field).unwrap();
+        let wide = ui.font.width("42");
+        // at the start, the figures are at the left; at the end, at the right
+        let ink_at = |ui: &mut Ui| {
+            let canvas = ui.render(win).unwrap();
+            let xs: Vec<i32> = (inner.x..inner.x + inner.w).filter(|x| (inner.y..inner.y + inner.h).any(|y| canvas.get(*x, y) == BLACK)).collect();
+            (xs[0], *xs.last().unwrap())
+        };
+        assert!(ink_at(&mut ui).0 < inner.x + 4);
+        ui.text_field_set_align(field, Align::End).unwrap();
+        let (left, right) = ink_at(&mut ui);
+        assert!(right >= inner.x + inner.w - 3 && left > inner.x + inner.w - wide - 6, "the figures end at the right");
+        // a click over a figure lands on it, and the caret goes where they are
+        let middle = inner.x + inner.w - 1 - wide / 2;
+        let at = ui.index_at(field, middle, inner.y + 2);
+        assert!((1..=2).contains(&at));
+        let caret = ui.caret_rect(field).unwrap();
+        assert!(caret.x >= inner.x + inner.w - wide - 3);
+        // a click left of them goes to the start
+        assert_eq!(ui.index_at(field, inner.x + 2, inner.y + 2), 0);
+        // in the middle, half the spare room is on each side
+        ui.text_field_set_align(field, Align::Center).unwrap();
+        let (left, right) = ink_at(&mut ui);
+        assert!(((left - inner.x) - (inner.x + inner.w - 1 - right)).abs() <= 3);
+        // text too long to fit starts at the start, as ever
+        ui.text_field_set_align(field, Align::End).unwrap();
+        let long = "1234567890".repeat(4);
+        ui.text_field_set_text(field, &long).unwrap();
+        ui.render(win).unwrap();
+        let canvas = ui.render(win).unwrap();
+        assert!((inner.x..inner.x + 4).any(|x| (inner.y..inner.y + inner.h).any(|y| canvas.get(x, y) == BLACK)));
+        let label = ui.label_new("x");
+        assert_eq!(ui.text_field_set_align(label, Align::End), Err(Error::WrongType));
+    }
+
+
+    #[test]
+    fn each_line_of_a_text_area_sits_in_the_middle_and_the_caret_keeps_its_column() {
+        let (mut ui, _win, area, _ok) = area("ab\na much longer line", 4);
+        ui.text_field_set_align(area, Align::Center).unwrap();
+        // the short line starts further in than the long one
+        ui.text_field_select(area, 0, 0).unwrap();
+        let short = ui.caret_rect(area).unwrap().x;
+        ui.text_field_select(area, 3, 3).unwrap();
+        let long = ui.caret_rect(area).unwrap().x;
+        assert!(short > long + 40);
+        // down from the start of the short line lands under it, in the middle of the long one
+        ui.text_field_select(area, 0, 0).unwrap();
+        ui.field_vertical(area, true, false).unwrap();
+        let below = ui.caret_rect(area).unwrap().x;
+        assert!((below - short).abs() <= 8, "the caret went from {short} to {below}");
+    }
+
 }

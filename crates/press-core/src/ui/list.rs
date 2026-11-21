@@ -124,6 +124,10 @@ impl ItemMeta {
     }
 }
 
+/// How deep the double rule along the top of a flush list is: two lines
+/// with a pixel between them, the lower of them the top of the scroll bar.
+const RULE: i32 = 3;
+
 /// The largest picture that fits before a label.
 const ART_MAX: usize = 14;
 
@@ -223,6 +227,8 @@ impl Ui {
             items: Vec::new(),
             selected: None,
             scroll: 0,
+            across: 0,
+            flush: false,
             rows: 5,
             min_width: 140,
             mode,
@@ -232,6 +238,8 @@ impl Ui {
             editable: false,
             sortable: false,
             sort: None,
+            marked: None,
+            looks: Vec::new(),
             anchor: None,
             order: Vec::new(),
             reorderable: false,
@@ -268,6 +276,21 @@ impl Ui {
         put.unwrap_or(((place as i32 % across) * CELL.0, (place as i32 / across) * CELL.1))
     }
 
+    /// Where an icon is drawn: its place among all the icons, less how far
+    /// the view is scrolled sideways.
+    fn icon_shown(&self, h: Handle, place: usize, item: usize) -> (i32, i32) {
+        let (x, y) = self.icon_cell(h, place, item);
+        (x - self.list_across(h), y)
+    }
+
+    /// How far a list is scrolled sideways.
+    fn list_across(&self, h: Handle) -> i32 {
+        match self.nodes.get(h).map(|n| &n.kind) {
+            Some(Kind::List { across, .. }) => *across,
+            _ => 0,
+        }
+    }
+
     /// Put an icon at a place in its view, measured from the top left of
     /// all the icons, or with a negative place back in line with the rest.
     pub fn icon_view_set_position(&mut self, h: Handle, index: i32, x: i32, y: i32) -> Result<()> {
@@ -297,7 +320,7 @@ impl Ui {
         let cell = |ui: &Ui, item: usize| rows.iter().position(|r| *r == item).map(|place| ui.icon_cell(h, place, item));
         let Some(held) = cell(self, drag.item) else { return Vec::new() };
         // how far the pressed icon goes is how far they all go
-        let to = (drag.point.0 - area.x - drag.grip.0, drag.point.1 - area.y + scroll * CELL.1 - drag.grip.1);
+        let to = (drag.point.0 - area.x + self.list_across(h) - drag.grip.0, drag.point.1 - area.y + scroll * CELL.1 - drag.grip.1);
         let moving: Vec<(usize, (i32, i32))> = self.moving_rows(h, drag.item).into_iter().filter_map(|item| Some((item, cell(self, item)?))).collect();
         let mut out = Vec::new();
         for (item, was) in moving {
@@ -314,7 +337,76 @@ impl Ui {
     /// How many icons an icon view shows across.
     fn icons_across(&self, h: Handle) -> i32 {
         let Some(node) = self.nodes.get(h) else { return 1 };
-        ((Self::area_bar_rect(node.rect, self.look.m.scroll_bar).x - node.rect.x - 2) / CELL.0).max(1)
+        ((self.list_side(h).x - node.rect.x - self.list_inset(h)) / CELL.0).max(1)
+    }
+
+    fn list_is_flush(&self, h: Handle) -> bool {
+        matches!(self.nodes.get(h).map(|n| &n.kind), Some(Kind::List { flush: true, .. }))
+    }
+
+    /// How far in from the list's left edge its rows start: past its frame,
+    /// or for a flush list right at the edge.
+    fn list_inset(&self, h: Handle) -> i32 {
+        if self.list_is_flush(h) { 0 } else { 2 }
+    }
+
+    /// How far down from the list's top edge: past its frame, or for a
+    /// flush list past the double rule along its top.
+    fn list_top(&self, h: Handle) -> i32 {
+        if self.list_is_flush(h) { RULE } else { 2 }
+    }
+
+    /// Where the bar down a list's side is, all the way down. A flush
+    /// list's lies over its right edge, so that the window's outline is
+    /// the bar's, and starts at the lower line of the rule along its top.
+    fn list_side(&self, h: Handle) -> Rect {
+        let Some(node) = self.nodes.get(h) else { return Rect::new(0, 0, 0, 0) };
+        let (r, thick) = (node.rect, self.look.m.scroll_bar);
+        if self.list_is_flush(h) {
+            let top = self.list_header(h) + RULE - 1;
+            Rect::new(r.x + r.w - thick + 1, r.y + top, thick, r.h - top + 1)
+        } else {
+            Self::area_bar_rect(r, thick)
+        }
+    }
+
+    /// How wide what a table or an icon view shows is, for scrolling
+    /// sideways; none for a list that does not scroll that way.
+    fn list_content_width(&self, h: Handle) -> Option<i32> {
+        let Some(Kind::List { mode, columns, .. }) = self.nodes.get(h).map(|n| &n.kind) else { return None };
+        match mode {
+            ListMode::Icons => {
+                let rows = self.list_rows(h);
+                Some(rows.iter().enumerate().map(|(place, row)| self.icon_cell(h, place, row.item).0 + CELL.0).max().unwrap_or(0))
+            }
+            ListMode::Table if !columns.is_empty() => Some(columns.iter().map(|c| c.1).sum()),
+            _ => None,
+        }
+    }
+
+    /// A list's scroll bars: the one down its side, and the one along its
+    /// bottom if it has one. An icon view or a flush table always has both,
+    /// as the original's windows did; another table has the second only
+    /// when its columns are too wide to show at once.
+    fn list_bars(&self, h: Handle) -> Option<(Rect, Option<Rect>)> {
+        let node = self.nodes.get(h).filter(|n| matches!(n.kind, Kind::List { .. }))?;
+        let thick = self.look.m.scroll_bar;
+        let side = self.list_side(h);
+        let shown = side.x - node.rect.x - self.list_inset(h);
+        let wanted = match self.list_content_width(h) {
+            // as the original's windows had, so the corner is free for the size box
+            Some(_) if self.list_is(h, ListMode::Icons) || self.list_is_flush(h) => true,
+            Some(wide) => wide > shown,
+            None => false,
+        };
+        if !wanted || side.h < 3 * thick {
+            return Some((side, None));
+        }
+        // the two meet at the corner, each leaving the other its edge; a
+        // flush list's lies over its bottom and left edges, as the side one does
+        let frame = if self.list_is_flush(h) { node.rect.inset(-1) } else { node.rect.inset(1) };
+        let bottom = Rect::new(frame.x, frame.y + frame.h - thick, side.x - frame.x + 1, thick);
+        Some((Rect::new(side.x, side.y, side.w, side.h - thick + 1), Some(bottom)))
     }
 
     pub fn tree_view_new(&mut self) -> Handle {
@@ -449,6 +541,14 @@ impl Ui {
 
     /// Let rows dragged out of another list be dropped here. The rows leave
     /// that list and join this one.
+    /// Draw a list with no frame of its own, to fill a window to its edges.
+    pub fn list_box_set_flush(&mut self, h: Handle, on: bool) -> Result<()> {
+        self.list_flag(h, |k| match k {
+            Kind::List { flush, .. } => Some(flush),
+            _ => None,
+        }, on)
+    }
+
     pub fn list_box_set_accepts_rows(&mut self, h: Handle, on: bool) -> Result<()> {
         self.list_flag(h, |k| if let Kind::List { accepts, .. } = k { Some(accepts) } else { None }, on)
     }
@@ -1174,12 +1274,46 @@ impl Ui {
             return Err(Error::InvalidArgument);
         }
         match &mut self.node_mut(h)?.kind {
-            Kind::List { mode: ListMode::Table, columns, .. } => {
+            Kind::List { mode: ListMode::Table, columns, looks, .. } => {
                 columns.push((title.to_string(), width));
+                looks.resize(columns.len(), (Align::Start, crate::font::Face::default()));
                 Ok(())
             }
             _ => Err(Error::WrongType),
         }
+    }
+
+    /// Show a column's heading as the one the rows are in order of, or none.
+    pub fn table_mark_order(&mut self, h: Handle, column: i32) -> Result<()> {
+        match &mut self.node_mut(h)?.kind {
+            Kind::List { mode: ListMode::Table, columns, marked, .. } => {
+                if column >= columns.len() as i32 || column < -1 {
+                    return Err(Error::InvalidArgument);
+                }
+                *marked = (column >= 0).then_some(column as usize);
+            }
+            _ => return Err(Error::WrongType),
+        }
+        self.dirty = true;
+        Ok(())
+    }
+
+    /// Where a column's cells sit in it, and the face they are written in.
+    fn table_set_look(&mut self, h: Handle, column: i32, change: impl FnOnce(&mut (Align, crate::font::Face))) -> Result<()> {
+        match &mut self.node_mut(h)?.kind {
+            Kind::List { mode: ListMode::Table, looks, .. } => change(looks.get_mut(column.max(0) as usize).filter(|_| column >= 0).ok_or(Error::InvalidArgument)?),
+            _ => return Err(Error::WrongType),
+        }
+        self.dirty = true;
+        Ok(())
+    }
+
+    pub fn table_set_column_align(&mut self, h: Handle, column: i32, align: Align) -> Result<()> {
+        self.table_set_look(h, column, |look| look.0 = if align == Align::Fill { Align::Start } else { align })
+    }
+
+    pub fn table_set_column_typeface(&mut self, h: Handle, column: i32, face: crate::font::Face) -> Result<()> {
+        self.table_set_look(h, column, |look| look.1 = face)
     }
 
     /// Add an item to a tree under another (or at the top with -1). Returns
@@ -1262,14 +1396,30 @@ impl Ui {
 
     /// The height of a table's row of headings.
     fn list_header(&self, h: Handle) -> i32 {
-        if self.list_is(h, ListMode::Table) { self.look.m.row_height + 1 } else { 0 }
+        // a flush table's headings have the double rule under them for an edge, and no line of their own
+        match self.list_is(h, ListMode::Table) {
+            true if self.list_is_flush(h) => self.look.m.row_height,
+            true => self.look.m.row_height + 1,
+            false => 0,
+        }
+    }
+
+    /// Where a table's headings are drawn from: over its rows, or for a
+    /// flush table at its top, above the double rule.
+    fn heading_top(&self, h: Handle, area: Rect) -> i32 {
+        match self.nodes.get(h) {
+            Some(node) if self.list_is_flush(h) => node.rect.y,
+            _ => area.y - self.list_header(h),
+        }
     }
 
     /// The area the rows are drawn in, how many fit, and how many there are.
     fn list_shape(&self, h: Handle) -> Option<(Rect, i32, i32)> {
         let node = self.nodes.get(h).filter(|n| matches!(n.kind, Kind::List { .. }))?;
-        let (bar, header) = (Self::area_bar_rect(node.rect, self.look.m.scroll_bar), self.list_header(h));
-        let rows = Rect::new(node.rect.x + 2, node.rect.y + 2 + header, (bar.x - node.rect.x - 2).max(0), (node.rect.h - 4 - header).max(0));
+        let ((bar, bottom), header) = (self.list_bars(h)?, self.list_header(h));
+        let (inset, top) = (self.list_inset(h), node.rect.y + self.list_top(h) + header);
+        let end = bottom.map_or(node.rect.y + node.rect.h - inset, |b| b.y);
+        let rows = Rect::new(node.rect.x + inset, top, (bar.x - node.rect.x - inset).max(0), (end - top).max(0));
         if self.list_is(h, ListMode::Icons) {
             // counted in rows of icons, each holding as many as fit across
             let across = self.icons_across(h);
@@ -1290,7 +1440,17 @@ impl Ui {
         let node = self.nodes.get(h)?;
         let Kind::List { scroll, .. } = &node.kind else { return None };
         let max = (count - fit).max(0);
-        Some(Bar { rect: Self::area_bar_rect(node.rect, self.look.m.scroll_bar), vertical: true, value: (*scroll).clamp(0, max), max, page: fit, step: 1, enabled, together: self.look.m.scroll_arrows == 1 })
+        let (side, _) = self.list_bars(h)?;
+        Some(Bar { rect: side, vertical: true, value: (*scroll).clamp(0, max), max, page: fit, step: 1, enabled, square: false, together: self.look.m.scroll_arrows == 1 })
+    }
+
+    /// A list's scroll bar along its bottom, if it has one.
+    pub(super) fn list_bar_across(&self, h: Handle, enabled: bool) -> Option<Bar> {
+        let (_, bottom) = self.list_bars(h)?;
+        let (area, ..) = self.list_shape(h)?;
+        let max = (self.list_content_width(h)? - area.w).max(0);
+        let value = self.list_across(h).clamp(0, max);
+        Some(Bar { rect: bottom?, vertical: false, value, max, page: area.w, step: 16, enabled, square: false, together: self.look.m.scroll_arrows == 1 })
     }
 
     /// After rows appear or disappear: keep the scroll position in range,
@@ -1298,8 +1458,10 @@ impl Ui {
     /// hung from.
     fn list_settle(&mut self, h: Handle) {
         let showing: Vec<usize> = self.list_rows(h).iter().map(|r| r.item).collect();
-        let Some((_, fit, count)) = self.list_shape(h) else { return };
-        if let Some(Kind::List { selected, scroll, meta, .. }) = self.nodes.get_mut(h).map(|n| &mut n.kind) {
+        let Some((area, fit, count)) = self.list_shape(h) else { return };
+        let widest = (self.list_content_width(h).unwrap_or(0) - area.w).max(0);
+        if let Some(Kind::List { selected, scroll, meta, across, .. }) = self.nodes.get_mut(h).map(|n| &mut n.kind) {
+            *across = (*across).clamp(0, widest);
             for i in 0..meta.len() {
                 if meta[i].picked && !showing.contains(&i) {
                     meta[i].picked = false;
@@ -1373,7 +1535,7 @@ impl Ui {
             // the last drawn is in front, so it is looked for first
             let (px, py) = (x - area.x, y - area.y + scroll * CELL.1);
             let found = rows.iter().enumerate().rev().find(|(place, row)| {
-                let (cx, cy) = self.icon_cell(h, *place, row.item);
+                let (cx, cy) = self.icon_shown(h, *place, row.item);
                 Rect::new(cx, cy, CELL.0, CELL.1).contains(px, py)
             })?;
             return Some((found.1.item, false));
@@ -1454,7 +1616,8 @@ impl Ui {
     /// Each column's left edge and width, from the left of the rows area.
     fn column_spans(&self, h: Handle) -> Vec<(i32, i32)> {
         let Some(Kind::List { columns, .. }) = self.nodes.get(h).map(|n| &n.kind) else { return Vec::new() };
-        let mut x = 0;
+        // measured from the left of the rows as they are shown, scrolled sideways
+        let mut x = -self.list_across(h);
         columns
             .iter()
             .map(|(_, w)| {
@@ -1474,8 +1637,8 @@ impl Ui {
 
     fn heading_at(&self, h: Handle, x: i32, y: i32) -> Option<(usize, bool)> {
         let (area, ..) = self.list_shape(h)?;
-        let header = self.list_header(h);
-        if header == 0 || !(area.y - header..area.y).contains(&y) || !(area.x..area.x + area.w).contains(&x) {
+        let (header, top) = (self.list_header(h), self.heading_top(h, area));
+        if header == 0 || !(top..top + header).contains(&y) || !(area.x..area.x + area.w).contains(&x) {
             return None;
         }
         let spans = self.column_spans(h);
@@ -1494,7 +1657,7 @@ impl Ui {
 
     pub(super) fn measure_list(&self, h: Handle) -> (i32, i32) {
         match self.nodes.get(h).map(|n| &n.kind) {
-            Some(Kind::List { rows, min_width, mode: ListMode::Icons, .. }) => ((*min_width).max(3 * CELL.0 + self.look.m.scroll_bar + 4), rows * CELL.1 + 4),
+            Some(Kind::List { rows, min_width, mode: ListMode::Icons, .. }) => ((*min_width).max(3 * CELL.0 + self.look.m.scroll_bar + 4), rows * CELL.1 + 4 + self.look.m.scroll_bar - 1),
             Some(Kind::List { rows, min_width, columns, .. }) => {
                 // a table is as wide as its columns need
                 let wide = columns.iter().map(|c| c.1).sum::<i32>() + self.look.m.scroll_bar + 4;
@@ -1502,6 +1665,19 @@ impl Ui {
             }
             _ => (0, 0),
         }
+    }
+
+    /// Where text starts in a cell `room` wide starting at `x`, set as the
+    /// column has it, and how wide it is.
+    fn place_cell(&mut self, text: &str, x: i32, room: i32, align: Align) -> (i32, i32) {
+        let wide = self.font.width(text);
+        let spare = (room - wide).max(0);
+        let at = match align {
+            Align::End => x + spare,
+            Align::Center => x + spare / 2,
+            _ => x,
+        };
+        (at, wide)
     }
 
     /// Draw text into a cell, cut short if it will not fit.
@@ -1613,25 +1789,39 @@ impl Ui {
         }
     }
 
+    /// What a list is drawn on: its frame, or for a flush list plain
+    /// paper under a double rule.
+    fn paint_ground(&mut self, h: Handle, rect: Rect, live: bool, canvas: &mut Canvas) {
+        if !self.list_is_flush(h) {
+            return self.part(canvas, Part::new(PartKind::Well, rect).numbers(1, 0, 0).when(state::FOCUSED, live));
+        }
+        canvas.fill(rect, self.look.pal.list);
+        let top = rect.y + self.list_header(h);
+        for y in [top, top + RULE - 1] {
+            canvas.fill(Rect::new(rect.x, y, rect.w, 1), self.look.pal.list_ink);
+        }
+    }
+
     /// Draw a list shown as icons.
     fn paint_icons(&mut self, h: Handle, rect: Rect, live: bool, canvas: &mut Canvas) {
         let Some((area, fit, count)) = self.list_shape(h) else { return };
         let (rows, across) = (self.list_rows(h), self.icons_across(h));
         let Some(Kind::List { items, scroll, meta, .. }) = self.nodes.get(h).map(|n| &n.kind) else { return };
         let (items, meta, scroll) = (items.clone(), meta.clone(), (*scroll).clamp(0, (count - fit).max(0)));
-        self.part(canvas, Part::new(PartKind::Well, rect).numbers(1, 0, 0).when(state::FOCUSED, live));
+        self.paint_ground(h, rect, live, canvas);
         let editing = self.list_edit.as_ref().filter(|e| e.list == h).map(|e| e.item);
         let mut clip = Canvas::like(canvas, area.w.max(1), area.h.max(1), self.look.pal.list);
         let _ = across;
+        let mut names = self.look.font(self.look.style.icon_face());
         for (place, row) in rows.iter().enumerate() {
-            let (x, y) = self.icon_cell(h, place, row.item);
+            let (x, y) = self.icon_shown(h, place, row.item);
             let y = y - scroll * CELL.1 + 2;
             if y + CELL.1 < 0 || y > (fit + 1) * CELL.1 {
                 continue; // scrolled out of sight
             }
             let name = items[row.item].split('\t').next().unwrap_or("");
             let art = Self::big_picture(&meta[row.item]);
-            let drawn = crate::pictures::labelled(&mut self.font, name, &art, CELL.0, meta[row.item].picked);
+            let drawn = crate::pictures::labelled(&mut names, name, &art, CELL.0, meta[row.item].picked);
             clip.blit(&drawn, x, y);
             if editing == Some(row.item) {
                 self.paint_edit(h, &mut clip, y + crate::pictures::SIDE + 2, area.w);
@@ -1639,6 +1829,7 @@ impl Ui {
         }
         canvas.blit(&clip, area.x, area.y);
         self.bar_draw(h, false, canvas);
+        self.bar_draw(h, true, canvas);
     }
 
     pub(super) fn paint_list(&mut self, h: Handle, rect: Rect, live: bool, canvas: &mut Canvas) {
@@ -1648,16 +1839,24 @@ impl Ui {
         let Some((area, fit, count)) = self.list_shape(h) else { return };
         let rows = self.list_rows(h);
         let (header, spans) = (self.list_header(h), self.column_spans(h));
-        let Some(Kind::List { items, scroll, columns, meta, sort, .. }) = self.nodes.get(h).map(|n| &n.kind) else { return };
-        let (items, columns, meta, sort) = (items.clone(), columns.clone(), meta.clone(), *sort);
+        let Some(Kind::List { items, scroll, columns, meta, sort, marked, looks, .. }) = self.nodes.get(h).map(|n| &n.kind) else { return };
+        let (items, columns, meta, looks) = (items.clone(), columns.clone(), meta.clone(), looks.clone());
+        // the column the rows are in order of: sorted here, or marked by the program
+        let sort = sort.or(marked.map(|c| (c, true)));
+        let marked_only = sort.is_some() && matches!(self.nodes.get(h).map(|n| &n.kind), Some(Kind::List { sort: None, .. }));
         let scroll = (*scroll).clamp(0, (count - fit).max(0));
+        let across = self.list_across(h);
+        let flush = self.list_is_flush(h);
         let line = self.font.line_height();
         let (paper, ink) = (self.look.pal.list, self.look.pal.list_ink);
-        self.part(canvas, Part::new(PartKind::Well, rect).numbers(1, 0, 0).when(state::FOCUSED, live));
+        self.paint_ground(h, rect, live, canvas);
         // headings and rows share one sheet so that both are clipped to the list
         let mut clip = Canvas::like(canvas, area.w.max(1), (area.h + header).max(1), paper);
         if header > 0 {
-            self.part(&mut clip, Part::new(PartKind::Header, Rect::new(0, 0, area.w, header)));
+            // a flush table's headings stand over the double rule, which is their edge
+            if !flush {
+                self.part(&mut clip, Part::new(PartKind::Header, Rect::new(0, 0, area.w, header)));
+            }
             // the heading the pointer is over, for a style that lights it
             let hot = if self.hover == Some(h) && (1000..2000).contains(&self.hover_piece) { Some((self.hover_piece - 1000) as usize) } else { None };
             for (i, (x, width)) in spans.iter().enumerate() {
@@ -1667,19 +1866,23 @@ impl Ui {
         let text_y = (self.look.m.row_height - line) / 2;
         let has_icons = meta.iter().any(ItemMeta::has_picture);
         for (i, ((title, _), (x, width))) in columns.iter().zip(&spans).enumerate() {
-            self.draw_cell(&mut clip, title, x + 4, text_y, width - 8 - if sort.is_some_and(|s| s.0 == i) { 10 } else { 0 });
+            let align = looks.get(i).map_or(Align::Start, |l| l.0);
+            let room = width - 8 - if sort.is_some_and(|s| s.0 == i) && !marked_only { 10 } else { 0 };
+            let (at, wide) = self.place_cell(title, x + 4, room, align);
+            self.draw_cell(&mut clip, title, at, text_y, room);
             if let Some((_, ascending)) = sort.filter(|s| s.0 == i) {
-                // a mark at the column's right
+                // a mark at the column's right; and where its heading's words are,
+                // for a style that marks the heading itself
                 let (cx, cy) = (x + width - 9, self.look.m.row_height / 2);
-                let mark = Part::new(PartKind::SortArrow, Rect::new(*x, 0, *width, header)).numbers(cx, cy, 0).ink(ink);
-                self.part(&mut clip, mark.when(state::CHECKED, ascending));
+                let mark = Part::new(PartKind::SortArrow, Rect::new(*x, 0, *width, header)).numbers(cx, cy, at).ink(ink);
+                self.part(&mut clip, Part { d: wide.min(room), ..mark.when(state::CHECKED, ascending) });
             }
         }
         let editing = self.list_edit.as_ref().filter(|e| e.list == h).map(|e| (e.item, e.column));
         for (at, row) in rows.iter().enumerate().skip(scroll as usize).take(fit as usize + 1) {
             let y = header + (at as i32 - scroll) * self.look.m.row_height;
             let text = &items[row.item];
-            let label_x = self.label_x(h, row);
+            let label_x = self.label_x(h, row) - across;
             if let Some(open) = row.fold {
                 let (cx, cy) = (4 + row.depth * INDENT + 4, y + self.look.m.row_height / 2);
                 let mark = Part::new(PartKind::TreeFold, Rect::new(cx - 5, cy - 5, 11, 11)).numbers(cx, cy, 0).ink(ink);
@@ -1698,8 +1901,15 @@ impl Ui {
             } else {
                 for (i, (cell, (x, width))) in text.split('\t').zip(&spans).enumerate() {
                     // the first column makes room for the icon
-                    let inset = if i == 0 { label_x } else { 4 };
-                    self.draw_cell(&mut clip, cell, x + inset, y + text_y, width - inset - 4);
+                    let inset = if i == 0 { label_x + across } else { 4 };
+                    let (align, face) = looks.get(i).copied().unwrap_or((Align::Start, crate::font::Face::default()));
+                    // every column's words stand on the same line, whatever their face
+                    let baseline = y + text_y + self.font.ascent;
+                    self.wearing(face, |ui| {
+                        let (at, _) = ui.place_cell(cell, x + inset, width - inset - 4, align);
+                        let top = baseline - ui.font.ascent;
+                        ui.draw_cell(&mut clip, cell, at, top, width - inset - 4);
+                    });
                 }
             }
             if meta[row.item].picked {
@@ -1730,8 +1940,15 @@ impl Ui {
                 }
             }
         }
-        canvas.blit(&clip, area.x, area.y - header);
+        if flush {
+            // the headings above the rule, the rows below it
+            canvas.copy(&clip, Rect::new(0, 0, area.w, header), (area.x, self.heading_top(h, area)));
+            canvas.copy(&clip, Rect::new(0, header, area.w, area.h), (area.x, area.y));
+        } else {
+            canvas.blit(&clip, area.x, area.y - header);
+        }
         self.bar_draw(h, false, canvas);
+        self.bar_draw(h, true, canvas);
     }
 
     // --------------------------------------------------- editing in place
@@ -1743,7 +1960,7 @@ impl Ui {
         if self.list_is(h, ListMode::Icons) {
             // the name under the icon, the width of its cell
             let place = rows.iter().position(|r| r.item == edit.item)?;
-            return Some((self.icon_cell(h, place, edit.item).0 + 2, CELL.0 - 4));
+            return Some((self.icon_shown(h, place, edit.item).0 + 2, CELL.0 - 4));
         }
         let row = rows.iter().find(|r| r.item == edit.item)?;
         let label_x = self.label_x(h, row);
@@ -2024,7 +2241,7 @@ impl Ui {
                         (Some(drag), ..) => drag.grip,
                         (None, Some((area, ..)), Some(Kind::List { scroll, mode: ListMode::Icons, .. })) => {
                             let place = self.list_rows(h).iter().position(|r| r.item == item).unwrap_or(0);
-                            let cell = self.icon_cell(h, place, item);
+                            let cell = self.icon_shown(h, place, item);
                             (self.clicks.1 - area.x - cell.0, self.clicks.2 - area.y + scroll * CELL.1 - cell.1)
                         }
                         _ => (0, 0),
@@ -3111,8 +3328,8 @@ mod tests {
         let win = ui.window_new("Folder", 320, 140).unwrap();
         let view = ui.icon_view_new();
         assert!(ui.is_a(view, "ListBox").unwrap() && ui.is_a(view, "IconView").unwrap() && !ui.is_a(view, "Table").unwrap());
-        // three across at its natural width, three rows high
-        assert_eq!(ui.measure_list(view), (3 * CELL.0 + BAR + 4, 3 * CELL.1 + 4));
+        // three across at its natural width, three rows high, with a scroll bar along the bottom
+        assert_eq!(ui.measure_list(view), (3 * CELL.0 + BAR + 4, 3 * CELL.1 + 4 + BAR - 1));
         for (i, name) in ["Letters", "Pictures", "memo\t1K\tdocument", "plan", "tool", "x", "y"].iter().enumerate() {
             ui.list_box_add(view, name).unwrap();
             ui.list_box_set_icon(view, i as i32, [Icon::Folder, Icon::Document, Icon::Application][i % 3]).unwrap();
@@ -3209,5 +3426,107 @@ mod tests {
         let list = ui.list_box_new();
         assert_eq!(ui.icon_view_set_position(list, 0, 1, 1), Err(Error::WrongType));
         assert_eq!(ui.icon_view_set_position(view, 9, 1, 1), Err(Error::InvalidArgument));
+    }
+
+    #[test]
+    fn an_icon_view_and_a_wide_table_scroll_sideways() {
+        let mut ui = Ui::natural();
+        let win = ui.window_new("Folder", 320, 160).unwrap();
+        let view = ui.icon_view_new();
+        for name in ["Letters", "Pictures", "Far"] {
+            ui.list_box_add(view, name).unwrap();
+        }
+        ui.window_set_content(win, view).unwrap();
+        ui.render(win).unwrap();
+        // an icon view always has a bar along its bottom, with nothing to scroll yet
+        let bar = ui.bar_of(view, true).expect("a bar along the bottom");
+        assert_eq!((bar.max, bar.value, bar.vertical), (0, 0, false));
+        let (side, _) = ui.list_bars(view).unwrap();
+        assert!(side.y + side.h <= bar.rect.y + 1 && bar.rect.x + bar.rect.w <= side.x + 1, "the two bars meet at the corner");
+        // an icon put far to the right makes something to scroll to
+        ui.icon_view_set_position(view, 2, 600, 0).unwrap();
+        let (area, ..) = ui.list_shape(view).unwrap();
+        let bar = ui.bar_of(view, true).unwrap();
+        assert_eq!(bar.max, 600 + CELL.0 - area.w);
+        // its arrow is hollow: white inside a black outline
+        let canvas = ui.render(win).unwrap();
+        let arrow = Rect::new(bar.rect.x + bar.rect.w - bar.rect.h, bar.rect.y, bar.rect.h, bar.rect.h);
+        let (cx, cy) = (arrow.x + arrow.w / 2, arrow.y + arrow.h / 2);
+        assert_eq!(canvas.get(cx, cy), WHITE);
+        assert!((arrow.x + 1..arrow.x + arrow.w - 1).any(|x| canvas.get(x, cy) == BLACK));
+        // the right arrow moves the view along, and the far icon can then be clicked
+        ui.pointer(win, cx, cy, PointerKind::Press).unwrap();
+        ui.pointer(win, cx, cy, PointerKind::Release).unwrap();
+        assert_eq!(ui.list_across(view), 16);
+        ui.list_box_set_selected(view, 2).unwrap();
+        ui.render(win).unwrap();
+        let bar = ui.bar_of(view, true).unwrap();
+        let canvas = ui.render(win).unwrap();
+        assert!(canvas.pixels.iter().all(|p| *p == BLACK || *p == WHITE));
+        let to_end = bar.max;
+        let _ = ui.bar_move(view, true, to_end);
+        let far = area.x + 600 - to_end + CELL.0 / 2;
+        ui.pointer(win, far, area.y + 20, PointerKind::Press).unwrap();
+        ui.pointer(win, far, area.y + 20, PointerKind::Release).unwrap();
+        assert_eq!(ui.list_box_selected(view), Ok(2));
+        // a table gets the bar only when its columns are too wide to show
+        let mut ui = Ui::natural();
+        let win = ui.window_new("Files", 200, 140).unwrap();
+        let table = ui.table_new();
+        ui.table_add_column(table, "Name", 150).unwrap();
+        ui.table_add_column(table, "Kind", 150).unwrap();
+        ui.list_box_add(table, "System\tsuitcase").unwrap();
+        ui.window_set_content(win, table).unwrap();
+        ui.render(win).unwrap();
+        let bar = ui.bar_of(table, true).expect("too wide to show");
+        let (area, ..) = ui.list_shape(table).unwrap();
+        assert_eq!(bar.max, 300 - area.w);
+        let _ = ui.bar_move(table, true, 40);
+        assert_eq!(ui.column_spans(table), [(-40, 150), (110, 150)]);
+        ui.render(win).unwrap();
+        let roomy = ui.window_new("Files", 400, 140).unwrap();
+        let narrow = ui.table_new();
+        ui.table_add_column(narrow, "Name", 100).unwrap();
+        ui.window_set_content(roomy, narrow).unwrap();
+        ui.render(roomy).unwrap();
+        assert!(ui.bar_of(narrow, true).is_none());
+    }
+
+    #[test]
+    fn a_flush_list_fills_its_window_to_the_edges() {
+        let mut ui = Ui::natural();
+        let win = ui.window_new("Files", 300, 160).unwrap();
+        let table = ui.table_new();
+        ui.table_add_column(table, "Name", 100).unwrap();
+        ui.list_box_add(table, "System").unwrap();
+        ui.list_box_set_flush(table, true).unwrap();
+        ui.window_set_content(win, table).unwrap();
+        let canvas = ui.render(win).unwrap();
+        let r = ui.nodes.get(table).unwrap().rect;
+        // the headings at the top, a double rule under them, and no frame down the left
+        let rule = r.y + ROW_HEIGHT;
+        assert_eq!((canvas.get(r.x + 20, rule), canvas.get(r.x + 20, rule + 1), canvas.get(r.x + 20, rule + 2)), (BLACK, WHITE, BLACK));
+        assert_eq!(ui.heading_over(table, r.x + 20, r.y + 4), Some((0, false)));
+        assert_eq!(canvas.get(r.x, r.y + 40), WHITE);
+        // both bars, though the columns fit, their outer edges past the list's own
+        let (side, bottom) = (ui.bar_of(table, false).unwrap().rect, ui.bar_of(table, true).expect("a bar along the bottom").rect);
+        assert_eq!((side.x + side.w, bottom.y + bottom.h, bottom.x), (r.x + r.w + 1, r.y + r.h + 1, r.x - 1));
+        assert_eq!((side.y, side.y + side.h - 1), (rule + 2, bottom.y));
+        // the rows start under the rule
+        let (area, ..) = ui.list_shape(table).unwrap();
+        assert_eq!((area.x, area.y, area.x + area.w, area.y + area.h), (r.x, rule + RULE, side.x, bottom.y));
+        // a column can sit at the end of its cells, in another face; and be marked as the order
+        ui.table_set_column_align(table, 0, Align::End).unwrap();
+        ui.table_set_column_typeface(table, 0, crate::font::Face::Agate).unwrap();
+        ui.table_mark_order(table, 0).unwrap();
+        assert_eq!(ui.table_set_column_align(table, 1, Align::End), Err(Error::InvalidArgument));
+        assert_eq!(ui.table_mark_order(table, 1), Err(Error::InvalidArgument));
+        let marked = ui.render(win).unwrap();
+        let right = (r.x..side.x).rev().find(|x| (area.y..area.y + ROW_HEIGHT).any(|y| marked.get(*x, y) == BLACK)).unwrap();
+        assert!(right > r.x + 100 - 12, "the cell's words end near the column's right");
+        assert!((r.y..rule).any(|y| (r.x + 60..r.x + 96).filter(|x| marked.get(*x, y) == BLACK).count() > 15), "the heading is underlined");
+        // not a list's: flush is for lists only
+        let label = ui.label_new("x");
+        assert_eq!(ui.list_box_set_flush(label, true), Err(Error::WrongType));
     }
 }

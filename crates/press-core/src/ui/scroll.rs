@@ -3,8 +3,8 @@
 //!
 //! The look is the original's: an arrow at each end, a grey track, and a
 //! white box that slides. Two things are of today. The box is sized to show
-//! how much of the whole is in view, and holding an arrow or the track
-//! repeats.
+//! how much of the whole is in view, unless the style would have it square
+//! as the original's was, and holding an arrow or the track repeats.
 //!
 //! Both kinds are worked by the same code. Each is described as a [`Bar`]:
 //! where it is and the numbers it stands for.
@@ -60,6 +60,9 @@ pub(super) struct Bar {
     pub enabled: bool,
     /// Both arrows are at the far end, one beside the other.
     pub together: bool,
+    /// The box is a square, the bar's thickness each way, wherever it is,
+    /// as on the original; otherwise it is as long as the part in view.
+    pub square: bool,
 }
 
 impl Bar {
@@ -95,7 +98,7 @@ impl Bar {
             return None;
         }
         let whole = (self.max + self.page.max(1)) as i64;
-        let size = ((len as i64 * self.page.max(1) as i64 / whole) as i32).clamp(THUMB_MIN, len);
+        let size = if self.square { self.thick().min(len) } else { ((len as i64 * self.page.max(1) as i64 / whole) as i32).clamp(THUMB_MIN, len) };
         let travel = (len - size) as i64;
         Some((start + (travel * self.value.clamp(0, self.max) as i64 / self.max as i64) as i32, size))
     }
@@ -260,7 +263,8 @@ impl Ui {
     /// The scroll bar a widget is or has, down its side or (`horizontal`)
     /// along its bottom. A scroll view may have both; the others have one.
     pub(super) fn bar_of(&mut self, h: Handle, horizontal: bool) -> Option<Bar> {
-        self.in_face(h, |ui| ui.bar_of_in(h, horizontal))
+        let square = self.look.wants & crate::style::wants::SQUARE_SCROLL_BOX != 0;
+        self.in_face(h, |ui| ui.bar_of_in(h, horizontal)).map(|bar| Bar { square, ..bar })
     }
 
     fn bar_of_in(&mut self, h: Handle, horizontal: bool) -> Option<Bar> {
@@ -269,6 +273,7 @@ impl Ui {
         match &node.kind {
             Kind::ScrollView { .. } => self.view_bar(h, horizontal, enabled),
             Kind::List { .. } if !horizontal => self.list_bar(h, enabled),
+            Kind::List { .. } => self.list_bar_across(h, enabled),
             Kind::ScrollBar { orientation, .. } if (*orientation == Orientation::Horizontal) != horizontal => None,
             Kind::TextField { .. } if horizontal => None,
             Kind::ScrollBar { orientation, value, max, page, step, .. } => Some(Bar {
@@ -284,15 +289,16 @@ impl Ui {
                 page: *page,
                 step: *step,
                 enabled,
-                together: self.look.m.scroll_arrows == 1,
+                square: false, together: self.look.m.scroll_arrows == 1,
             }),
+            Kind::TextField { multiline: true, plain: true, .. } => None,
             Kind::TextField { multiline: true, edit, scroll, .. } => {
                 let (rect, text, scroll) = (node.rect, edit.text().to_string(), *scroll);
                 let (_, inner) = self.shape_of(h)?;
                 let rows = (inner.h / self.font.line_height()).max(1);
                 let lines = self.wrap(&text, inner.w - 2, true).len() as i32;
                 let max = (lines - rows).max(0);
-                Some(Bar { rect: Self::area_bar_rect(rect, self.look.m.scroll_bar), vertical: true, value: scroll.clamp(0, max), max, page: rows, step: 1, enabled, together: self.look.m.scroll_arrows == 1 })
+                Some(Bar { rect: Self::area_bar_rect(rect, self.look.m.scroll_bar), vertical: true, value: scroll.clamp(0, max), max, page: rows, step: 1, enabled, square: false, together: self.look.m.scroll_arrows == 1 })
             }
             _ => None,
         }
@@ -311,7 +317,7 @@ impl Ui {
     }
 
     /// Move a bar because the user worked it, and say so if it is a widget.
-    fn bar_move(&mut self, h: Handle, horizontal: bool, to: i32) -> Vec<Emitted> {
+    pub(super) fn bar_move(&mut self, h: Handle, horizontal: bool, to: i32) -> Vec<Emitted> {
         let Some(bar) = self.bar_of(h, horizontal) else { return Vec::new() };
         let to = to.clamp(0, bar.max.max(0));
         if to == bar.value {
@@ -328,8 +334,8 @@ impl Ui {
                 *follow = false; // the view stays put until the caret next moves
                 Vec::new()
             }
-            Some(Kind::List { scroll, .. }) => {
-                *scroll = to;
+            Some(Kind::List { scroll, across, .. }) => {
+                *if horizontal { across } else { scroll } = to;
                 Vec::new()
             }
             Some(Kind::ScrollView { scroll, .. }) => {
@@ -436,8 +442,10 @@ impl Ui {
     /// Draw one of a widget's scroll bars.
     pub(super) fn bar_draw(&mut self, h: Handle, horizontal: bool, canvas: &mut Canvas) {
         let held = self.bar_held(h, horizontal);
+        // whether its window is the one in front, for a style that empties the bars of the others
+        let front = self.window_of(h).is_none_or(|w| self.is_active(w));
         if let Some(bar) = self.bar_of(h, horizontal) {
-            let mut part = bar.as_part(held);
+            let mut part = bar.as_part(held).when(state::FRONT, front);
             // the piece of it the pointer is over, for a style that lights it
             let piece = self.hover_piece - 2000 - i32::from(horizontal) * 10;
             if self.hover == Some(h) && (1..=3).contains(&piece) {
@@ -460,7 +468,7 @@ mod tests {
     use super::*;
 
     fn bar(value: i32, max: i32, page: i32) -> Bar {
-        Bar { rect: Rect::new(10, 20, BAR, 200), vertical: true, value, max, page, step: 1, enabled: true, together: false }
+        Bar { rect: Rect::new(10, 20, BAR, 200), vertical: true, value, max, page, step: 1, enabled: true, square: false, together: false }
     }
 
     #[test]
@@ -481,6 +489,14 @@ mod tests {
         for value in [0, 1, 37, 89, 90] {
             let b = bar(value, 90, 10);
             assert_eq!(b.value_at(b.thumb().unwrap().0), value);
+        }
+        // a style may have it square, as the original's was, wherever it is and however much is in view
+        let square = |value| Bar { square: true, ..bar(value, 90, 10) };
+        let (track, len) = square(0).track();
+        assert_eq!(square(0).thumb(), Some((track, BAR)));
+        assert_eq!(square(90).thumb(), Some((track + len - BAR, BAR)));
+        for value in [0, 1, 37, 89, 90] {
+            assert_eq!(square(value).value_at(square(value).thumb().unwrap().0), value);
         }
     }
 
