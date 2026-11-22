@@ -537,6 +537,13 @@ extension Runtime {
                 try PressCore.App.shutdown()
                 exit(0)
             }
+            // With no display there is nobody to close the last window, so
+            // the program is over once its windows are made: as the engine's
+            // own loop, press_app_run, returns at once without one.
+            if ProcessInfo.processInfo.environment["PRESS_BACKEND"] == "headless" {
+                try PressCore.App.shutdown()
+                exit(0)
+            }
             // press is asked for the descriptor that says it has work, and
             // the main queue waits on that, so that tasks on the main actor
             // and press's events take turns in one loop.

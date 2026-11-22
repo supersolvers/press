@@ -1319,7 +1319,8 @@ before, after or in place of the standard ones. A window tagged as a box
 
 To look at a Press program without a screen, `PRESS_SNAPSHOT=file.png`
 with `PRESS_BACKEND=headless` draws its first window to a PNG file and
-stops.
+stops. With no display and no file asked for, a Press program makes its
+windows and ends at once, as `press_app_run` returns at once.
 
 The engine bindings expose `Stack.insert` to insert or move a child,
 `Window.fit` to size a window to its content, and `Window.focused` to find
