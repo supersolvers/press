@@ -155,7 +155,12 @@ targets: [.executableTarget(name: "Hello", dependencies: [.product(name: "Press"
 The package links against the `libpress.so` built last in its own checkout
 (`cargo build` there first), or the one in `PRESS_LIB_DIR` if that is set,
 or failing both an installed one. `sudo make install` installs the library,
-its headers and the styles under `PREFIX` (`/usr/local`).
+its headers, the styles and their themes under `PREFIX` (`/usr/local`).
+
+The fonts as files, for other programs to set type in, are installed with
+them only if they have been built (`make fonts-venv fonts`, which needs
+Python: see `fonts/README.md`). The library carries its own copy of them
+and needs nothing more.
 
 ## Layout
 
@@ -510,6 +515,13 @@ that would offer it too.
 - **String results** are copied into a buffer the caller supplies. The full
   length always comes back, the copy is NUL-terminated, and a copy that does
   not fit is cut on a character boundary. Pass `NULL, 0` for the length alone.
+
+The library is named for the version of this interface: `libpress.so.1`,
+from `abi_version` in `idl/press.toml`. A program linked against it asks
+for it by that name, so a library with another version of the interface is
+never handed to it. `libpress.so` is a link to it, for building against. The
+version changes when something a program already relies on changes; adding
+to the interface does not change it.
 
 ## Keyboard and focus
 
@@ -1320,7 +1332,7 @@ are out of date.
 
 ## Licence
 
-GPL-3.0-or-later. The bundled fonts are the Fonts of Old families,
+GPL-3.0-or-later; the licence is in `COPYING`. The bundled fonts are the Fonts of Old families,
 Copyright 2026 The Fonts of Old Project Authors, under the SIL Open Font
 License 1.1; their Chinese, Japanese and Korean characters come from
 Fusion Pixel Font and the projects it draws on, under the same licence
