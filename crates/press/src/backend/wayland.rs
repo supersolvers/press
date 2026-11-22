@@ -1223,6 +1223,17 @@ impl State {
     /// Carry out the copies and pastes the engine has queued.
     fn clipboard(&mut self, qh: &QueueHandle<Self>) {
         let (copy, paste) = with(|rt| Ok((rt.ui.take_copy(), rt.ui.take_paste_request()))).unwrap_or_default();
+        // the text copied first, then what goes beside it (a rich text
+        // widget's RTF, say), so the one does not undo the other
+        if let Some(text) = copy {
+            self.copy_text = text;
+            self.copy_data.clear();
+            if let (Some(manager), Some(device)) = (&self.data_manager, &self.data_device) {
+                let source = manager.create_copy_paste_source(qh, TEXT_MIMES);
+                source.set_selection(device, self.serial);
+                self.copy_source = Some(source); // replacing it withdraws the previous offer
+            }
+        }
         // things other than text: offered as their own kinds, with the text
         // last copied if they were added to it
         let copies = with(|rt| Ok(rt.ui.take_copy_data())).unwrap_or_default();
@@ -1246,15 +1257,6 @@ impl State {
         }
         for (window, kind) in with(|rt| Ok(rt.ui.take_paste_data_requests())).unwrap_or_default() {
             self.paste_data(window, kind);
-        }
-        if let Some(text) = copy {
-            self.copy_text = text;
-            self.copy_data.clear();
-            if let (Some(manager), Some(device)) = (&self.data_manager, &self.data_device) {
-                let source = manager.create_copy_paste_source(qh, TEXT_MIMES);
-                source.set_selection(device, self.serial);
-                self.copy_source = Some(source); // replacing it withdraws the previous offer
-            }
         }
         let Some(field) = paste else { return };
         if self.copy_source.is_some() || self.data_device.is_none() {

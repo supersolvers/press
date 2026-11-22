@@ -499,6 +499,12 @@ doc = "A push button."
   doc = "Whether the button lies flat, with no edge of its own until the pointer is over it or down on it, and is no wider than its label needs: a tool in a toolbar."
 
   [[class.property]]
+  name = "down"
+  type = "bool"
+  access = "w"
+  doc = "Whether the button stays in, drawn held down, as a tool that is on does: Bold in a word processor's bar, say. Clicking it still raises clicked, and the program says whether it is down."
+
+  [[class.property]]
   name = "key"
   type = "bool"
   access = "w"
@@ -1480,3 +1486,155 @@ doc = "A text field with a list of things it might say, dropped from a button at
   [[class.method]]
   name = "clear"
   doc = "Take every choice away. The text in the field stays."
+
+[[class]]
+name = "RichText"
+base = "Widget"
+doc = "A document of words with looks of their own, edited as a word processor edits: each stretch of words in a font and size of its own, bold, italic, underlined, struck through and in a colour, in paragraphs aligned, indented and bulleted. Lines break at word gaps to fit the widget, or a width the program sets. It scrolls up and down, with a bar of its own. Its document is read and written as RTF. Places in it are byte offsets into the UTF-8 of its plain text, paragraphs parted by line breaks. Typing, the keys and the pointer work as in a text area; Control with B, I or U turns bold, italic or underline on or off, and Control with Z and Y undoes and does again, unless a menu has those keys. Copying puts the selection on the clipboard as RTF and as plain text; pasting takes RTF where the clipboard has it."
+
+  [class.constructor]
+  doc = "Create an empty rich text widget."
+
+  [[class.property]]
+  name = "rtf"
+  type = "str"
+  doc = "The whole document as RTF. Setting it reads RTF (or, if it is not RTF, plain text) in place of what was there, forgets what could be undone, and does not raise changed."
+
+  [[class.property]]
+  name = "text"
+  type = "str"
+  doc = "The document's words, as plain text, paragraphs parted by line breaks. Setting it puts plain text in place of what was there, in the look the first words had, and does not raise changed."
+
+  [[class.property]]
+  name = "wrap_width"
+  type = "i32"
+  access = "w"
+  doc = "Break lines at this many pixels, as on a page, whatever the widget's width; 0, the default, breaks them to fit the widget."
+
+  [[class.property]]
+  name = "bold"
+  type = "bool"
+  doc = "Whether the selection is bold: as its first character is. Setting it makes the selection bold or not, or with nothing selected what is typed next."
+
+  [[class.property]]
+  name = "italic"
+  type = "bool"
+  doc = "Whether the selection is italic; setting it works as bold does."
+
+  [[class.property]]
+  name = "underline"
+  type = "bool"
+  doc = "Whether the selection is underlined; setting it works as bold does."
+
+  [[class.property]]
+  name = "strikeout"
+  type = "bool"
+  doc = "Whether the selection is struck through; setting it works as bold does."
+
+  [[class.property]]
+  name = "font"
+  type = "str"
+  doc = "The family of the selection's font, as fontconfig knows it; setting it works as bold does."
+
+  [[class.property]]
+  name = "size"
+  type = "i32"
+  doc = "The size of the selection's type, in points; setting it works as bold does."
+
+  [[class.property]]
+  name = "color"
+  type = "u32"
+  doc = "The colour of the selection, 0xRRGGBB; setting it works as bold does."
+
+  [[class.property]]
+  name = "justify"
+  type = "Align"
+  doc = "Where the lines of the paragraph the caret is in sit: Start at the left, Center in the middle, End at the right, Fill with both edges straight. Setting it sets every paragraph the selection touches."
+
+  [[class.property]]
+  name = "bullet"
+  type = "bool"
+  doc = "Whether the paragraph the caret is in has a bullet. Setting it sets every paragraph the selection touches."
+
+  [[class.method]]
+  name = "set_indents"
+  doc = "Set the indents of every paragraph the selection touches, in pixels at 96 to the inch: in from the left, in from the right, and how much further in (or, if less than nought, out) the first line goes."
+  args = [{ name = "left", type = "i32" }, { name = "right", type = "i32" }, { name = "first", type = "i32" }]
+
+  [[class.method]]
+  name = "indent_left"
+  doc = "How far in from the left the paragraph the caret is in is, in pixels."
+  returns = "i32"
+
+  [[class.method]]
+  name = "indent_right"
+  doc = "How far in from the right the paragraph the caret is in is, in pixels."
+  returns = "i32"
+
+  [[class.method]]
+  name = "indent_first"
+  doc = "How much further in than the rest the first line of the paragraph the caret is in goes, in pixels."
+  returns = "i32"
+
+  [[class.method]]
+  name = "select"
+  doc = "Select from one place to another, each a byte offset into the plain text: `to` is where the caret goes, and is scrolled into view. The same place twice puts the caret there. Made by the program, it does not raise selected."
+  args = [{ name = "from", type = "i32" }, { name = "to", type = "i32" }]
+
+  [[class.method]]
+  name = "selection_start"
+  doc = "Where the selection begins; with nothing selected, where the caret is."
+  returns = "i32"
+
+  [[class.method]]
+  name = "selection_end"
+  doc = "Where the selection ends; with nothing selected, where the caret is."
+  returns = "i32"
+
+  [[class.method]]
+  name = "select_all"
+  doc = "Select the whole document."
+
+  [[class.method]]
+  name = "insert"
+  doc = "Put text in place of the selection, as if typed, in the look the selection has. Line breaks in it start paragraphs. It can be undone. It does not raise changed."
+  args = [{ name = "text", type = "str" }]
+
+  [[class.method]]
+  name = "copy"
+  doc = "Copy the selection to the clipboard, as RTF and as plain text. With nothing selected the clipboard is left alone."
+
+  [[class.method]]
+  name = "cut"
+  doc = "Copy the selection, then take it out. Raises changed."
+
+  [[class.method]]
+  name = "paste"
+  doc = "Put the clipboard's words in place of the selection: its RTF if it has any, otherwise its plain text. Raises changed; on a display the words may arrive a moment after this returns."
+
+  [[class.method]]
+  name = "undo"
+  doc = "Undo the last change, if there is one. It does not raise changed."
+
+  [[class.method]]
+  name = "redo"
+  doc = "Do again what was last undone, if anything was. It does not raise changed."
+
+  [[class.method]]
+  name = "can_undo"
+  doc = "Whether there is a change to undo."
+  returns = "bool"
+
+  [[class.method]]
+  name = "can_redo"
+  doc = "Whether there is a change undone to do again."
+  returns = "bool"
+
+  [[class.event]]
+  name = "changed"
+  doc = "The user changed the document: by typing, the keys, a cut, a paste, or undoing."
+
+  [[class.event]]
+  name = "selected"
+  doc = "The user moved the caret or changed the selection. The handler is given where the selection begins and ends, the start first; equal, they are the caret. It comes after changed when both happen."
+  args = [{ name = "start", type = "i32" }, { name = "end", type = "i32" }]

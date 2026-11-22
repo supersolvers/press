@@ -1156,6 +1156,10 @@ pub fn stack_set_backdrop(this: Handle, pattern: &[u8]) -> Result {
     with(|rt| Ok(rt.ui.stack_set_backdrop(this, pattern)?))
 }
 
+pub fn button_set_down(this: Handle, value: bool) -> Result {
+    with(|rt| Ok(rt.ui.button_set_down(this, value)?))
+}
+
 pub fn button_set_flat(this: Handle, value: bool) -> Result {
     with(|rt| Ok(rt.ui.button_set_flat(this, value)?))
 }
@@ -1237,4 +1241,218 @@ pub fn combo_box_add(this: Handle, choice: &str) -> Result {
 
 pub fn combo_box_clear(this: Handle) -> Result {
     with(|rt| Ok(rt.ui.combo_box_clear(this)?))
+}
+
+// ----------------------------------------------------------------- RichText
+
+pub fn rich_text_new() -> Result<Handle> {
+    with(|rt| Ok(rt.ui.rich_text_new()))
+}
+
+pub fn rich_text_set_rtf(this: Handle, value: &str) -> Result {
+    with(|rt| Ok(rt.ui.rich_text_set_rtf(this, value)?))
+}
+
+pub fn rich_text_get_rtf(this: Handle) -> Result<String> {
+    with(|rt| Ok(rt.ui.rich_text_rtf(this)?))
+}
+
+pub fn rich_text_set_text(this: Handle, value: &str) -> Result {
+    with(|rt| Ok(rt.ui.rich_text_set_text(this, value)?))
+}
+
+pub fn rich_text_get_text(this: Handle) -> Result<String> {
+    with(|rt| Ok(rt.ui.rich_text_text(this)?))
+}
+
+pub fn rich_text_set_wrap_width(this: Handle, value: i32) -> Result {
+    with(|rt| Ok(rt.ui.rich_text_set_wrap(this, value)?))
+}
+
+fn rich_look<T>(this: Handle, get: impl FnOnce(&press_core::rich::Look) -> T) -> Result<T> {
+    with(|rt| Ok(get(&rt.ui.rich_text_look(this)?)))
+}
+
+fn rich_restyle(this: Handle, change: impl Fn(&mut press_core::rich::Look)) -> Result {
+    with(|rt| Ok(rt.ui.rich_text_restyle(this, change)?))
+}
+
+pub fn rich_text_set_bold(this: Handle, value: bool) -> Result {
+    rich_restyle(this, |l| l.bold = value)
+}
+
+pub fn rich_text_get_bold(this: Handle) -> Result<bool> {
+    rich_look(this, |l| l.bold)
+}
+
+pub fn rich_text_set_italic(this: Handle, value: bool) -> Result {
+    rich_restyle(this, |l| l.italic = value)
+}
+
+pub fn rich_text_get_italic(this: Handle) -> Result<bool> {
+    rich_look(this, |l| l.italic)
+}
+
+pub fn rich_text_set_underline(this: Handle, value: bool) -> Result {
+    rich_restyle(this, |l| l.underline = value)
+}
+
+pub fn rich_text_get_underline(this: Handle) -> Result<bool> {
+    rich_look(this, |l| l.underline)
+}
+
+pub fn rich_text_set_strikeout(this: Handle, value: bool) -> Result {
+    rich_restyle(this, |l| l.strike = value)
+}
+
+pub fn rich_text_get_strikeout(this: Handle) -> Result<bool> {
+    rich_look(this, |l| l.strike)
+}
+
+pub fn rich_text_set_font(this: Handle, value: &str) -> Result {
+    if value.trim().is_empty() {
+        return Err(Status::InvalidArgument);
+    }
+    let family = value.trim().to_string();
+    rich_restyle(this, move |l| l.family = family.clone())
+}
+
+pub fn rich_text_get_font(this: Handle) -> Result<String> {
+    rich_look(this, |l| l.family.clone())
+}
+
+pub fn rich_text_set_size(this: Handle, value: i32) -> Result {
+    if !(1..=1600).contains(&value) {
+        return Err(Status::InvalidArgument);
+    }
+    rich_restyle(this, |l| l.size = (value * 2) as u16)
+}
+
+pub fn rich_text_get_size(this: Handle) -> Result<i32> {
+    rich_look(this, |l| (l.size as i32 + 1) / 2)
+}
+
+pub fn rich_text_set_color(this: Handle, value: u32) -> Result {
+    rich_restyle(this, |l| l.colour = value & 0xff_ffff)
+}
+
+pub fn rich_text_get_color(this: Handle) -> Result<u32> {
+    rich_look(this, |l| l.colour)
+}
+
+pub fn rich_text_set_justify(this: Handle, value: Align) -> Result {
+    use press_core::rich::Justify;
+    let justify = match value {
+        Align::Start => Justify::Left,
+        Align::Center => Justify::Centre,
+        Align::End => Justify::Right,
+        Align::Fill => Justify::Full,
+    };
+    with(|rt| Ok(rt.ui.rich_text_reset_paragraphs(this, |p| p.justify = justify)?))
+}
+
+pub fn rich_text_get_justify(this: Handle) -> Result<Align> {
+    use press_core::rich::Justify;
+    with(|rt| {
+        Ok(match rt.ui.rich_text_paragraph(this)?.justify {
+            Justify::Left => Align::Start,
+            Justify::Centre => Align::Center,
+            Justify::Right => Align::End,
+            Justify::Full => Align::Fill,
+        })
+    })
+}
+
+pub fn rich_text_set_bullet(this: Handle, value: bool) -> Result {
+    with(|rt| {
+        Ok(rt.ui.rich_text_reset_paragraphs(this, |p| {
+            p.bullet = value;
+            // a bullet hangs a quarter inch out from its words, as word processors set it
+            if value && p.left == 0 && p.first == 0 {
+                (p.left, p.first) = (360, -360);
+            } else if !value && p.left == 360 && p.first == -360 {
+                (p.left, p.first) = (0, 0);
+            }
+        })?)
+    })
+}
+
+pub fn rich_text_get_bullet(this: Handle) -> Result<bool> {
+    with(|rt| Ok(rt.ui.rich_text_paragraph(this)?.bullet))
+}
+
+pub fn rich_text_set_indents(this: Handle, left: i32, right: i32, first: i32) -> Result {
+    use press_core::rich::pixels_to_twips;
+    with(|rt| {
+        Ok(rt.ui.rich_text_reset_paragraphs(this, |p| {
+            (p.left, p.right, p.first) = (pixels_to_twips(left.max(0)), pixels_to_twips(right.max(0)), pixels_to_twips(first));
+        })?)
+    })
+}
+
+pub fn rich_text_indent_left(this: Handle) -> Result<i32> {
+    with(|rt| Ok(press_core::rich::twips_to_pixels(rt.ui.rich_text_paragraph(this)?.left)))
+}
+
+pub fn rich_text_indent_right(this: Handle) -> Result<i32> {
+    with(|rt| Ok(press_core::rich::twips_to_pixels(rt.ui.rich_text_paragraph(this)?.right)))
+}
+
+pub fn rich_text_indent_first(this: Handle) -> Result<i32> {
+    with(|rt| Ok(press_core::rich::twips_to_pixels(rt.ui.rich_text_paragraph(this)?.first)))
+}
+
+pub fn rich_text_select(this: Handle, from: i32, to: i32) -> Result {
+    with(|rt| Ok(rt.ui.rich_text_select(this, from, to)?))
+}
+
+pub fn rich_text_selection_start(this: Handle) -> Result<i32> {
+    with(|rt| Ok(rt.ui.rich_text_selection(this)?.0))
+}
+
+pub fn rich_text_selection_end(this: Handle) -> Result<i32> {
+    with(|rt| Ok(rt.ui.rich_text_selection(this)?.1))
+}
+
+pub fn rich_text_select_all(this: Handle) -> Result {
+    with(|rt| Ok(rt.ui.rich_text_select_all(this)?))
+}
+
+pub fn rich_text_insert(this: Handle, text: &str) -> Result {
+    with(|rt| Ok(rt.ui.rich_text_insert(this, text)?))
+}
+
+pub fn rich_text_copy(this: Handle) -> Result {
+    with(|rt| Ok(rt.ui.rich_text_copy(this)?))?;
+    settle_clipboard();
+    Ok(())
+}
+
+pub fn rich_text_cut(this: Handle) -> Result {
+    let events = with(|rt| Ok(rt.ui.rich_text_cut(this)?))?;
+    settle_clipboard();
+    deliver(events);
+    Ok(())
+}
+
+pub fn rich_text_paste(this: Handle) -> Result {
+    with(|rt| Ok(rt.ui.rich_text_paste(this)?))?;
+    settle_clipboard();
+    Ok(())
+}
+
+pub fn rich_text_undo(this: Handle) -> Result {
+    with(|rt| Ok(rt.ui.rich_text_undo(this)?))
+}
+
+pub fn rich_text_redo(this: Handle) -> Result {
+    with(|rt| Ok(rt.ui.rich_text_redo(this)?))
+}
+
+pub fn rich_text_can_undo(this: Handle) -> Result<bool> {
+    with(|rt| Ok(rt.ui.rich_text_can_undo(this)?))
+}
+
+pub fn rich_text_can_redo(this: Handle) -> Result<bool> {
+    with(|rt| Ok(rt.ui.rich_text_can_redo(this)?))
 }

@@ -751,6 +751,11 @@ public class Button: Widget {
         try _check(press_button_set_flat(handle, value))
     }
 
+    /// Whether the button stays in, drawn held down, as a tool that is on does: Bold in a word processor's bar, say. Clicking it still raises clicked, and the program says whether it is down.
+    public func setDown(_ value: Bool) throws {
+        try _check(press_button_set_down(handle, value))
+    }
+
     /// Whether the button is drawn as a key of a calculator: in the black and white style, a square face with a hard shadow below and to the right, as the first system's Calculator had them. A style without such keys draws an ordinary button.
     public func setKey(_ value: Bool) throws {
         try _check(press_button_set_key(handle, value))
@@ -2335,5 +2340,299 @@ public class ComboBox: TextField {
     /// Take every choice away. The text in the field stays.
     public func clear() throws {
         try _check(press_combo_box_clear(handle))
+    }
+}
+
+/// A document of words with looks of their own, edited as a word processor edits: each stretch of words in a font and size of its own, bold, italic, underlined, struck through and in a colour, in paragraphs aligned, indented and bulleted. Lines break at word gaps to fit the widget, or a width the program sets. It scrolls up and down, with a bar of its own. Its document is read and written as RTF. Places in it are byte offsets into the UTF-8 of its plain text, paragraphs parted by line breaks. Typing, the keys and the pointer work as in a text area; Control with B, I or U turns bold, italic or underline on or off, and Control with Z and Y undoes and does again, unless a menu has those keys. Copying puts the selection on the clipboard as RTF and as plain text; pasting takes RTF where the clipboard has it.
+public class RichText: Widget {
+    public override init(handle: UInt64) {
+        super.init(handle: handle)
+    }
+
+    /// Create an empty rich text widget.
+    public init() throws {
+        var out = UInt64(0)
+        try _check(press_rich_text_new(&out))
+        super.init(handle: out)
+    }
+
+    /// Set the indents of every paragraph the selection touches, in pixels at 96 to the inch: in from the left, in from the right, and how much further in (or, if less than nought, out) the first line goes.
+    public func setIndents(_ left: Int, right: Int, first: Int) throws {
+        try _check(press_rich_text_set_indents(handle, Int32(clamping: left), Int32(clamping: right), Int32(clamping: first)))
+    }
+
+    /// How far in from the left the paragraph the caret is in is, in pixels.
+    public func indentLeft() throws -> Int {
+        var out = Int32(0)
+        try _check(press_rich_text_indent_left(handle, &out))
+        return Int(out)
+    }
+
+    /// How far in from the right the paragraph the caret is in is, in pixels.
+    public func indentRight() throws -> Int {
+        var out = Int32(0)
+        try _check(press_rich_text_indent_right(handle, &out))
+        return Int(out)
+    }
+
+    /// How much further in than the rest the first line of the paragraph the caret is in goes, in pixels.
+    public func indentFirst() throws -> Int {
+        var out = Int32(0)
+        try _check(press_rich_text_indent_first(handle, &out))
+        return Int(out)
+    }
+
+    /// Select from one place to another, each a byte offset into the plain text: `to` is where the caret goes, and is scrolled into view. The same place twice puts the caret there. Made by the program, it does not raise selected.
+    public func select(_ from: Int, to: Int) throws {
+        try _check(press_rich_text_select(handle, Int32(clamping: from), Int32(clamping: to)))
+    }
+
+    /// Where the selection begins; with nothing selected, where the caret is.
+    public func selectionStart() throws -> Int {
+        var out = Int32(0)
+        try _check(press_rich_text_selection_start(handle, &out))
+        return Int(out)
+    }
+
+    /// Where the selection ends; with nothing selected, where the caret is.
+    public func selectionEnd() throws -> Int {
+        var out = Int32(0)
+        try _check(press_rich_text_selection_end(handle, &out))
+        return Int(out)
+    }
+
+    /// Select the whole document.
+    public func selectAll() throws {
+        try _check(press_rich_text_select_all(handle))
+    }
+
+    /// Put text in place of the selection, as if typed, in the look the selection has. Line breaks in it start paragraphs. It can be undone. It does not raise changed.
+    public func insert(_ text: String) throws {
+        try _check(press_rich_text_insert(handle, text, text.utf8.count))
+    }
+
+    /// Copy the selection to the clipboard, as RTF and as plain text. With nothing selected the clipboard is left alone.
+    public func copy() throws {
+        try _check(press_rich_text_copy(handle))
+    }
+
+    /// Copy the selection, then take it out. Raises changed.
+    public func cut() throws {
+        try _check(press_rich_text_cut(handle))
+    }
+
+    /// Put the clipboard's words in place of the selection: its RTF if it has any, otherwise its plain text. Raises changed; on a display the words may arrive a moment after this returns.
+    public func paste() throws {
+        try _check(press_rich_text_paste(handle))
+    }
+
+    /// Undo the last change, if there is one. It does not raise changed.
+    public func undo() throws {
+        try _check(press_rich_text_undo(handle))
+    }
+
+    /// Do again what was last undone, if anything was. It does not raise changed.
+    public func redo() throws {
+        try _check(press_rich_text_redo(handle))
+    }
+
+    /// Whether there is a change to undo.
+    public func canUndo() throws -> Bool {
+        var out = false
+        try _check(press_rich_text_can_undo(handle, &out))
+        return out
+    }
+
+    /// Whether there is a change undone to do again.
+    public func canRedo() throws -> Bool {
+        var out = false
+        try _check(press_rich_text_can_redo(handle, &out))
+        return out
+    }
+
+    /// The whole document as RTF. Setting it reads RTF (or, if it is not RTF, plain text) in place of what was there, forgets what could be undone, and does not raise changed.
+    public func setRtf(_ value: String) throws {
+        try _check(press_rich_text_set_rtf(handle, value, value.utf8.count))
+    }
+
+    /// The whole document as RTF. Setting it reads RTF (or, if it is not RTF, plain text) in place of what was there, forgets what could be undone, and does not raise changed.
+    public var rtf: String {
+        get throws {
+            return try _string { press_rich_text_get_rtf(handle, $0, $1, $2) }
+        }
+    }
+
+    /// The document's words, as plain text, paragraphs parted by line breaks. Setting it puts plain text in place of what was there, in the look the first words had, and does not raise changed.
+    public func setText(_ value: String) throws {
+        try _check(press_rich_text_set_text(handle, value, value.utf8.count))
+    }
+
+    /// The document's words, as plain text, paragraphs parted by line breaks. Setting it puts plain text in place of what was there, in the look the first words had, and does not raise changed.
+    public var text: String {
+        get throws {
+            return try _string { press_rich_text_get_text(handle, $0, $1, $2) }
+        }
+    }
+
+    /// Break lines at this many pixels, as on a page, whatever the widget's width; 0, the default, breaks them to fit the widget.
+    public func setWrapWidth(_ value: Int) throws {
+        try _check(press_rich_text_set_wrap_width(handle, Int32(clamping: value)))
+    }
+
+    /// Whether the selection is bold: as its first character is. Setting it makes the selection bold or not, or with nothing selected what is typed next.
+    public func setBold(_ value: Bool) throws {
+        try _check(press_rich_text_set_bold(handle, value))
+    }
+
+    /// Whether the selection is bold: as its first character is. Setting it makes the selection bold or not, or with nothing selected what is typed next.
+    public var bold: Bool {
+        get throws {
+            var out = false
+            try _check(press_rich_text_get_bold(handle, &out))
+            return out
+        }
+    }
+
+    /// Whether the selection is italic; setting it works as bold does.
+    public func setItalic(_ value: Bool) throws {
+        try _check(press_rich_text_set_italic(handle, value))
+    }
+
+    /// Whether the selection is italic; setting it works as bold does.
+    public var italic: Bool {
+        get throws {
+            var out = false
+            try _check(press_rich_text_get_italic(handle, &out))
+            return out
+        }
+    }
+
+    /// Whether the selection is underlined; setting it works as bold does.
+    public func setUnderline(_ value: Bool) throws {
+        try _check(press_rich_text_set_underline(handle, value))
+    }
+
+    /// Whether the selection is underlined; setting it works as bold does.
+    public var underline: Bool {
+        get throws {
+            var out = false
+            try _check(press_rich_text_get_underline(handle, &out))
+            return out
+        }
+    }
+
+    /// Whether the selection is struck through; setting it works as bold does.
+    public func setStrikeout(_ value: Bool) throws {
+        try _check(press_rich_text_set_strikeout(handle, value))
+    }
+
+    /// Whether the selection is struck through; setting it works as bold does.
+    public var strikeout: Bool {
+        get throws {
+            var out = false
+            try _check(press_rich_text_get_strikeout(handle, &out))
+            return out
+        }
+    }
+
+    /// The family of the selection's font, as fontconfig knows it; setting it works as bold does.
+    public func setFont(_ value: String) throws {
+        try _check(press_rich_text_set_font(handle, value, value.utf8.count))
+    }
+
+    /// The family of the selection's font, as fontconfig knows it; setting it works as bold does.
+    public var font: String {
+        get throws {
+            return try _string { press_rich_text_get_font(handle, $0, $1, $2) }
+        }
+    }
+
+    /// The size of the selection's type, in points; setting it works as bold does.
+    public func setSize(_ value: Int) throws {
+        try _check(press_rich_text_set_size(handle, Int32(clamping: value)))
+    }
+
+    /// The size of the selection's type, in points; setting it works as bold does.
+    public var size: Int {
+        get throws {
+            var out = Int32(0)
+            try _check(press_rich_text_get_size(handle, &out))
+            return Int(out)
+        }
+    }
+
+    /// The colour of the selection, 0xRRGGBB; setting it works as bold does.
+    public func setColor(_ value: UInt32) throws {
+        try _check(press_rich_text_set_color(handle, value))
+    }
+
+    /// The colour of the selection, 0xRRGGBB; setting it works as bold does.
+    public var color: UInt32 {
+        get throws {
+            var out = UInt32(0)
+            try _check(press_rich_text_get_color(handle, &out))
+            return out
+        }
+    }
+
+    /// Where the lines of the paragraph the caret is in sit: Start at the left, Center in the middle, End at the right, Fill with both edges straight. Setting it sets every paragraph the selection touches.
+    public func setJustify(_ value: Align) throws {
+        try _check(press_rich_text_set_justify(handle, value.rawValue))
+    }
+
+    /// Where the lines of the paragraph the caret is in sit: Start at the left, Center in the middle, End at the right, Fill with both edges straight. Setting it sets every paragraph the selection touches.
+    public var justify: Align {
+        get throws {
+            var out = Int32(0)
+            try _check(press_rich_text_get_justify(handle, &out))
+            guard let value = Align(rawValue: out) else {
+                throw PressError(.`internal`)
+            }
+            return value
+        }
+    }
+
+    /// Whether the paragraph the caret is in has a bullet. Setting it sets every paragraph the selection touches.
+    public func setBullet(_ value: Bool) throws {
+        try _check(press_rich_text_set_bullet(handle, value))
+    }
+
+    /// Whether the paragraph the caret is in has a bullet. Setting it sets every paragraph the selection touches.
+    public var bullet: Bool {
+        get throws {
+            var out = false
+            try _check(press_rich_text_get_bullet(handle, &out))
+            return out
+        }
+    }
+
+    /// The user changed the document: by typing, the keys, a cut, a paste, or undoing. A new handler takes the place of the last; pass nil to disconnect.
+    public func onChanged(_ handler: (() -> Void)?) throws {
+        guard let handler else {
+            return try _check(press_rich_text_on_changed(handle, nil, nil, nil))
+        }
+        let box = Unmanaged.passRetained(_Box<() -> Void>(handler))
+        let status = press_rich_text_on_changed(handle, { _, userdata in
+            _unbox(userdata, as: (() -> Void).self)()
+        }, box.toOpaque(), _release)
+        if status != 0 {
+            box.release()
+        }
+        try _check(status)
+    }
+
+    /// The user moved the caret or changed the selection. The handler is given where the selection begins and ends, the start first; equal, they are the caret. It comes after changed when both happen. The handler receives (start, end). A new handler takes the place of the last; pass nil to disconnect.
+    public func onSelected(_ handler: ((Int, Int) -> Void)?) throws {
+        guard let handler else {
+            return try _check(press_rich_text_on_selected(handle, nil, nil, nil))
+        }
+        let box = Unmanaged.passRetained(_Box<(Int, Int) -> Void>(handler))
+        let status = press_rich_text_on_selected(handle, { _, start, end, userdata in
+            _unbox(userdata, as: ((Int, Int) -> Void).self)(Int(start), Int(end))
+        }, box.toOpaque(), _release)
+        if status != 0 {
+            box.release()
+        }
+        try _check(status)
     }
 }

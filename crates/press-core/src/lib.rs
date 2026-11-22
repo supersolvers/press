@@ -10,6 +10,8 @@ pub mod drives;
 pub mod font;
 pub mod pictures;
 pub mod programs;
+pub mod rich;
+pub mod rtf;
 pub mod slots;
 pub mod style;
 pub mod text;

@@ -292,6 +292,8 @@ impl Ui {
                 square: false, together: self.look.m.scroll_arrows == 1,
             }),
             Kind::TextField { multiline: true, plain: true, .. } => None,
+            Kind::RichText(_) if horizontal => None,
+            Kind::RichText(_) => self.rich_bar(h, enabled),
             Kind::TextField { multiline: true, edit, scroll, .. } => {
                 let (rect, text, scroll) = (node.rect, edit.text().to_string(), *scroll);
                 let (_, inner) = self.shape_of(h)?;
@@ -332,6 +334,10 @@ impl Ui {
             Some(Kind::TextField { scroll, follow, .. }) => {
                 *scroll = to;
                 *follow = false; // the view stays put until the caret next moves
+                Vec::new()
+            }
+            Some(Kind::RichText(_)) => {
+                self.rich_bar_moved(h, to);
                 Vec::new()
             }
             Some(Kind::List { scroll, across, .. }) => {

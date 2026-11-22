@@ -154,6 +154,12 @@ impl Ui {
                     out.value = (!*password).then(|| edit.text().to_string());
                     out.placeholder = Some(placeholder.clone()).filter(|p| !p.is_empty());
                 }
+                // read out as a text area is: its words, many lines of them
+                Kind::RichText(state) => {
+                    out.role = AccessRole::TextField;
+                    out.multiline = true;
+                    out.value = Some(state.edit.document.text().to_string());
+                }
                 Kind::Picture { description, .. } => {
                     out.role = AccessRole::Image;
                     out.label = description.clone();

@@ -97,6 +97,10 @@ impl Ui {
     /// What the clipboard held of the kind a window asked for has arrived.
     pub fn paste_data_into(&mut self, window: Handle, kind: &str, data: Vec<u8>) -> Result<Vec<Emitted>> {
         self.check_window(window)?;
+        // RTF asked for by a rich text widget is its, not the program's
+        if let Some(out) = self.rich_pasted(window, kind, &data) {
+            return Ok(out);
+        }
         Ok(vec![Emitted { target: window, event: "Window.data_pasted", args: vec![Value::Str(kind.into()), Value::Bytes(data)] }])
     }
 

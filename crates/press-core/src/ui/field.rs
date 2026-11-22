@@ -405,6 +405,9 @@ impl Ui {
 
     /// Where the caret is drawn, in window coordinates.
     pub(super) fn caret_rect(&mut self, h: Handle) -> Option<Rect> {
+        if self.is_rich(h) {
+            return self.rich_caret_rect(h);
+        }
         self.in_face(h, |ui| ui.caret_rect_in(h))
     }
 

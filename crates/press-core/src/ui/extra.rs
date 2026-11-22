@@ -268,6 +268,19 @@ impl Ui {
         Ok(())
     }
 
+    /// Have a button stay in, drawn held, as a tool that is on does.
+    pub fn button_set_down(&mut self, h: Handle, down: bool) -> Result<()> {
+        if !matches!(self.node(h)?.kind, Kind::Button { .. }) {
+            return Err(Error::WrongType);
+        }
+        self.downs.retain(|d| *d != h);
+        if down {
+            self.downs.push(h);
+        }
+        self.dirty = true;
+        Ok(())
+    }
+
     /// Give a button a picture, in colour, before its label; none takes it away.
     pub fn button_set_image(&mut self, h: Handle, image: Option<Canvas>) -> Result<()> {
         if !matches!(self.node(h)?.kind, Kind::Button { .. }) {

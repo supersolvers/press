@@ -587,6 +587,11 @@ class Button(Widget):
         _lib.press_button_set_flat.argtypes = [ctypes.c_uint64, ctypes.c_bool]
         _check(_lib.press_button_set_flat(self.handle, value))
 
+    def set_down(self, value):
+        """Whether the button stays in, drawn held down, as a tool that is on does: Bold in a word processor's bar, say. Clicking it still raises clicked, and the program says whether it is down."""
+        _lib.press_button_set_down.argtypes = [ctypes.c_uint64, ctypes.c_bool]
+        _check(_lib.press_button_set_down(self.handle, value))
+
     def set_key(self, value):
         """Whether the button is drawn as a key of a calculator: in the black and white style, a square face with a hard shadow below and to the right, as the first system's Calculator had them. A style without such keys draws an ordinary button."""
         _lib.press_button_set_key.argtypes = [ctypes.c_uint64, ctypes.c_bool]
@@ -1778,3 +1783,264 @@ class ComboBox(TextField):
         """Take every choice away. The text in the field stays."""
         _lib.press_combo_box_clear.argtypes = [ctypes.c_uint64]
         _check(_lib.press_combo_box_clear(self.handle))
+
+
+class RichText(Widget):
+    """A document of words with looks of their own, edited as a word processor edits: each stretch of words in a font and size of its own, bold, italic, underlined, struck through and in a colour, in paragraphs aligned, indented and bulleted. Lines break at word gaps to fit the widget, or a width the program sets. It scrolls up and down, with a bar of its own. Its document is read and written as RTF. Places in it are byte offsets into the UTF-8 of its plain text, paragraphs parted by line breaks. Typing, the keys and the pointer work as in a text area; Control with B, I or U turns bold, italic or underline on or off, and Control with Z and Y undoes and does again, unless a menu has those keys. Copying puts the selection on the clipboard as RTF and as plain text; pasting takes RTF where the clipboard has it."""
+    def __init__(self):
+        """Create an empty rich text widget."""
+        _lib.press_rich_text_new.argtypes = [ctypes.POINTER(ctypes.c_uint64)]
+        out = ctypes.c_uint64()
+        _check(_lib.press_rich_text_new(ctypes.byref(out)))
+        _Object.__init__(self, out.value)
+
+    def set_indents(self, left, right, first):
+        """Set the indents of every paragraph the selection touches, in pixels at 96 to the inch: in from the left, in from the right, and how much further in (or, if less than nought, out) the first line goes."""
+        _lib.press_rich_text_set_indents.argtypes = [ctypes.c_uint64, ctypes.c_int32, ctypes.c_int32, ctypes.c_int32]
+        _check(_lib.press_rich_text_set_indents(self.handle, left, right, first))
+
+    def indent_left(self):
+        """How far in from the left the paragraph the caret is in is, in pixels."""
+        _lib.press_rich_text_indent_left.argtypes = [ctypes.c_uint64, ctypes.POINTER(ctypes.c_int32)]
+        out = ctypes.c_int32()
+        _check(_lib.press_rich_text_indent_left(self.handle, ctypes.byref(out)))
+        return out.value
+
+    def indent_right(self):
+        """How far in from the right the paragraph the caret is in is, in pixels."""
+        _lib.press_rich_text_indent_right.argtypes = [ctypes.c_uint64, ctypes.POINTER(ctypes.c_int32)]
+        out = ctypes.c_int32()
+        _check(_lib.press_rich_text_indent_right(self.handle, ctypes.byref(out)))
+        return out.value
+
+    def indent_first(self):
+        """How much further in than the rest the first line of the paragraph the caret is in goes, in pixels."""
+        _lib.press_rich_text_indent_first.argtypes = [ctypes.c_uint64, ctypes.POINTER(ctypes.c_int32)]
+        out = ctypes.c_int32()
+        _check(_lib.press_rich_text_indent_first(self.handle, ctypes.byref(out)))
+        return out.value
+
+    def select(self, from_, to):
+        """Select from one place to another, each a byte offset into the plain text: `to` is where the caret goes, and is scrolled into view. The same place twice puts the caret there. Made by the program, it does not raise selected."""
+        _lib.press_rich_text_select.argtypes = [ctypes.c_uint64, ctypes.c_int32, ctypes.c_int32]
+        _check(_lib.press_rich_text_select(self.handle, from_, to))
+
+    def selection_start(self):
+        """Where the selection begins; with nothing selected, where the caret is."""
+        _lib.press_rich_text_selection_start.argtypes = [ctypes.c_uint64, ctypes.POINTER(ctypes.c_int32)]
+        out = ctypes.c_int32()
+        _check(_lib.press_rich_text_selection_start(self.handle, ctypes.byref(out)))
+        return out.value
+
+    def selection_end(self):
+        """Where the selection ends; with nothing selected, where the caret is."""
+        _lib.press_rich_text_selection_end.argtypes = [ctypes.c_uint64, ctypes.POINTER(ctypes.c_int32)]
+        out = ctypes.c_int32()
+        _check(_lib.press_rich_text_selection_end(self.handle, ctypes.byref(out)))
+        return out.value
+
+    def select_all(self):
+        """Select the whole document."""
+        _lib.press_rich_text_select_all.argtypes = [ctypes.c_uint64]
+        _check(_lib.press_rich_text_select_all(self.handle))
+
+    def insert(self, text):
+        """Put text in place of the selection, as if typed, in the look the selection has. Line breaks in it start paragraphs. It can be undone. It does not raise changed."""
+        _lib.press_rich_text_insert.argtypes = [ctypes.c_uint64, ctypes.c_char_p, ctypes.c_size_t]
+        _check(_lib.press_rich_text_insert(self.handle, *_s(text)))
+
+    def copy(self):
+        """Copy the selection to the clipboard, as RTF and as plain text. With nothing selected the clipboard is left alone."""
+        _lib.press_rich_text_copy.argtypes = [ctypes.c_uint64]
+        _check(_lib.press_rich_text_copy(self.handle))
+
+    def cut(self):
+        """Copy the selection, then take it out. Raises changed."""
+        _lib.press_rich_text_cut.argtypes = [ctypes.c_uint64]
+        _check(_lib.press_rich_text_cut(self.handle))
+
+    def paste(self):
+        """Put the clipboard's words in place of the selection: its RTF if it has any, otherwise its plain text. Raises changed; on a display the words may arrive a moment after this returns."""
+        _lib.press_rich_text_paste.argtypes = [ctypes.c_uint64]
+        _check(_lib.press_rich_text_paste(self.handle))
+
+    def undo(self):
+        """Undo the last change, if there is one. It does not raise changed."""
+        _lib.press_rich_text_undo.argtypes = [ctypes.c_uint64]
+        _check(_lib.press_rich_text_undo(self.handle))
+
+    def redo(self):
+        """Do again what was last undone, if anything was. It does not raise changed."""
+        _lib.press_rich_text_redo.argtypes = [ctypes.c_uint64]
+        _check(_lib.press_rich_text_redo(self.handle))
+
+    def can_undo(self):
+        """Whether there is a change to undo."""
+        _lib.press_rich_text_can_undo.argtypes = [ctypes.c_uint64, ctypes.POINTER(ctypes.c_bool)]
+        out = ctypes.c_bool()
+        _check(_lib.press_rich_text_can_undo(self.handle, ctypes.byref(out)))
+        return out.value
+
+    def can_redo(self):
+        """Whether there is a change undone to do again."""
+        _lib.press_rich_text_can_redo.argtypes = [ctypes.c_uint64, ctypes.POINTER(ctypes.c_bool)]
+        out = ctypes.c_bool()
+        _check(_lib.press_rich_text_can_redo(self.handle, ctypes.byref(out)))
+        return out.value
+
+    def set_rtf(self, value):
+        """The whole document as RTF. Setting it reads RTF (or, if it is not RTF, plain text) in place of what was there, forgets what could be undone, and does not raise changed."""
+        _lib.press_rich_text_set_rtf.argtypes = [ctypes.c_uint64, ctypes.c_char_p, ctypes.c_size_t]
+        _check(_lib.press_rich_text_set_rtf(self.handle, *_s(value)))
+
+    def get_rtf(self):
+        """The whole document as RTF. Setting it reads RTF (or, if it is not RTF, plain text) in place of what was there, forgets what could be undone, and does not raise changed."""
+        _lib.press_rich_text_get_rtf.argtypes = [ctypes.c_uint64, ctypes.c_char_p, ctypes.c_size_t, ctypes.POINTER(ctypes.c_size_t)]
+        size = ctypes.c_size_t()
+        _check(_lib.press_rich_text_get_rtf(self.handle, None, 0, ctypes.byref(size)))
+        buffer = ctypes.create_string_buffer(size.value + 1)
+        _check(_lib.press_rich_text_get_rtf(self.handle, buffer, len(buffer), ctypes.byref(size)))
+        return buffer.raw[:min(size.value, len(buffer) - 1)].decode("utf-8")
+
+    def set_text(self, value):
+        """The document's words, as plain text, paragraphs parted by line breaks. Setting it puts plain text in place of what was there, in the look the first words had, and does not raise changed."""
+        _lib.press_rich_text_set_text.argtypes = [ctypes.c_uint64, ctypes.c_char_p, ctypes.c_size_t]
+        _check(_lib.press_rich_text_set_text(self.handle, *_s(value)))
+
+    def get_text(self):
+        """The document's words, as plain text, paragraphs parted by line breaks. Setting it puts plain text in place of what was there, in the look the first words had, and does not raise changed."""
+        _lib.press_rich_text_get_text.argtypes = [ctypes.c_uint64, ctypes.c_char_p, ctypes.c_size_t, ctypes.POINTER(ctypes.c_size_t)]
+        size = ctypes.c_size_t()
+        _check(_lib.press_rich_text_get_text(self.handle, None, 0, ctypes.byref(size)))
+        buffer = ctypes.create_string_buffer(size.value + 1)
+        _check(_lib.press_rich_text_get_text(self.handle, buffer, len(buffer), ctypes.byref(size)))
+        return buffer.raw[:min(size.value, len(buffer) - 1)].decode("utf-8")
+
+    def set_wrap_width(self, value):
+        """Break lines at this many pixels, as on a page, whatever the widget's width; 0, the default, breaks them to fit the widget."""
+        _lib.press_rich_text_set_wrap_width.argtypes = [ctypes.c_uint64, ctypes.c_int32]
+        _check(_lib.press_rich_text_set_wrap_width(self.handle, value))
+
+    def set_bold(self, value):
+        """Whether the selection is bold: as its first character is. Setting it makes the selection bold or not, or with nothing selected what is typed next."""
+        _lib.press_rich_text_set_bold.argtypes = [ctypes.c_uint64, ctypes.c_bool]
+        _check(_lib.press_rich_text_set_bold(self.handle, value))
+
+    def get_bold(self):
+        """Whether the selection is bold: as its first character is. Setting it makes the selection bold or not, or with nothing selected what is typed next."""
+        _lib.press_rich_text_get_bold.argtypes = [ctypes.c_uint64, ctypes.POINTER(ctypes.c_bool)]
+        out = ctypes.c_bool()
+        _check(_lib.press_rich_text_get_bold(self.handle, ctypes.byref(out)))
+        return out.value
+
+    def set_italic(self, value):
+        """Whether the selection is italic; setting it works as bold does."""
+        _lib.press_rich_text_set_italic.argtypes = [ctypes.c_uint64, ctypes.c_bool]
+        _check(_lib.press_rich_text_set_italic(self.handle, value))
+
+    def get_italic(self):
+        """Whether the selection is italic; setting it works as bold does."""
+        _lib.press_rich_text_get_italic.argtypes = [ctypes.c_uint64, ctypes.POINTER(ctypes.c_bool)]
+        out = ctypes.c_bool()
+        _check(_lib.press_rich_text_get_italic(self.handle, ctypes.byref(out)))
+        return out.value
+
+    def set_underline(self, value):
+        """Whether the selection is underlined; setting it works as bold does."""
+        _lib.press_rich_text_set_underline.argtypes = [ctypes.c_uint64, ctypes.c_bool]
+        _check(_lib.press_rich_text_set_underline(self.handle, value))
+
+    def get_underline(self):
+        """Whether the selection is underlined; setting it works as bold does."""
+        _lib.press_rich_text_get_underline.argtypes = [ctypes.c_uint64, ctypes.POINTER(ctypes.c_bool)]
+        out = ctypes.c_bool()
+        _check(_lib.press_rich_text_get_underline(self.handle, ctypes.byref(out)))
+        return out.value
+
+    def set_strikeout(self, value):
+        """Whether the selection is struck through; setting it works as bold does."""
+        _lib.press_rich_text_set_strikeout.argtypes = [ctypes.c_uint64, ctypes.c_bool]
+        _check(_lib.press_rich_text_set_strikeout(self.handle, value))
+
+    def get_strikeout(self):
+        """Whether the selection is struck through; setting it works as bold does."""
+        _lib.press_rich_text_get_strikeout.argtypes = [ctypes.c_uint64, ctypes.POINTER(ctypes.c_bool)]
+        out = ctypes.c_bool()
+        _check(_lib.press_rich_text_get_strikeout(self.handle, ctypes.byref(out)))
+        return out.value
+
+    def set_font(self, value):
+        """The family of the selection's font, as fontconfig knows it; setting it works as bold does."""
+        _lib.press_rich_text_set_font.argtypes = [ctypes.c_uint64, ctypes.c_char_p, ctypes.c_size_t]
+        _check(_lib.press_rich_text_set_font(self.handle, *_s(value)))
+
+    def get_font(self):
+        """The family of the selection's font, as fontconfig knows it; setting it works as bold does."""
+        _lib.press_rich_text_get_font.argtypes = [ctypes.c_uint64, ctypes.c_char_p, ctypes.c_size_t, ctypes.POINTER(ctypes.c_size_t)]
+        size = ctypes.c_size_t()
+        _check(_lib.press_rich_text_get_font(self.handle, None, 0, ctypes.byref(size)))
+        buffer = ctypes.create_string_buffer(size.value + 1)
+        _check(_lib.press_rich_text_get_font(self.handle, buffer, len(buffer), ctypes.byref(size)))
+        return buffer.raw[:min(size.value, len(buffer) - 1)].decode("utf-8")
+
+    def set_size(self, value):
+        """The size of the selection's type, in points; setting it works as bold does."""
+        _lib.press_rich_text_set_size.argtypes = [ctypes.c_uint64, ctypes.c_int32]
+        _check(_lib.press_rich_text_set_size(self.handle, value))
+
+    def get_size(self):
+        """The size of the selection's type, in points; setting it works as bold does."""
+        _lib.press_rich_text_get_size.argtypes = [ctypes.c_uint64, ctypes.POINTER(ctypes.c_int32)]
+        out = ctypes.c_int32()
+        _check(_lib.press_rich_text_get_size(self.handle, ctypes.byref(out)))
+        return out.value
+
+    def set_color(self, value):
+        """The colour of the selection, 0xRRGGBB; setting it works as bold does."""
+        _lib.press_rich_text_set_color.argtypes = [ctypes.c_uint64, ctypes.c_uint32]
+        _check(_lib.press_rich_text_set_color(self.handle, value))
+
+    def get_color(self):
+        """The colour of the selection, 0xRRGGBB; setting it works as bold does."""
+        _lib.press_rich_text_get_color.argtypes = [ctypes.c_uint64, ctypes.POINTER(ctypes.c_uint32)]
+        out = ctypes.c_uint32()
+        _check(_lib.press_rich_text_get_color(self.handle, ctypes.byref(out)))
+        return out.value
+
+    def set_justify(self, value):
+        """Where the lines of the paragraph the caret is in sit: Start at the left, Center in the middle, End at the right, Fill with both edges straight. Setting it sets every paragraph the selection touches."""
+        _lib.press_rich_text_set_justify.argtypes = [ctypes.c_uint64, ctypes.c_int32]
+        _check(_lib.press_rich_text_set_justify(self.handle, int(value)))
+
+    def get_justify(self):
+        """Where the lines of the paragraph the caret is in sit: Start at the left, Center in the middle, End at the right, Fill with both edges straight. Setting it sets every paragraph the selection touches."""
+        _lib.press_rich_text_get_justify.argtypes = [ctypes.c_uint64, ctypes.POINTER(ctypes.c_int32)]
+        out = ctypes.c_int32()
+        _check(_lib.press_rich_text_get_justify(self.handle, ctypes.byref(out)))
+        return Align(out.value)
+
+    def set_bullet(self, value):
+        """Whether the paragraph the caret is in has a bullet. Setting it sets every paragraph the selection touches."""
+        _lib.press_rich_text_set_bullet.argtypes = [ctypes.c_uint64, ctypes.c_bool]
+        _check(_lib.press_rich_text_set_bullet(self.handle, value))
+
+    def get_bullet(self):
+        """Whether the paragraph the caret is in has a bullet. Setting it sets every paragraph the selection touches."""
+        _lib.press_rich_text_get_bullet.argtypes = [ctypes.c_uint64, ctypes.POINTER(ctypes.c_bool)]
+        out = ctypes.c_bool()
+        _check(_lib.press_rich_text_get_bullet(self.handle, ctypes.byref(out)))
+        return out.value
+
+    def on_changed(self, fn):
+        """The user changed the document: by typing, the keys, a cut, a paste, or undoing. The handler receives (); pass None to disconnect."""
+        cfunc = ctypes.CFUNCTYPE(None, ctypes.c_uint64, ctypes.c_void_p)
+        connector = _lib.press_rich_text_on_changed
+        connector.argtypes = [ctypes.c_uint64, cfunc, ctypes.c_void_p, _DESTROY]
+        self._connect("changed", connector, cfunc, fn, lambda f: lambda _this, _userdata: f())
+
+    def on_selected(self, fn):
+        """The user moved the caret or changed the selection. The handler is given where the selection begins and ends, the start first; equal, they are the caret. It comes after changed when both happen. The handler receives (start, end); pass None to disconnect."""
+        cfunc = ctypes.CFUNCTYPE(None, ctypes.c_uint64, ctypes.c_int32, ctypes.c_int32, ctypes.c_void_p)
+        connector = _lib.press_rich_text_on_selected
+        connector.argtypes = [ctypes.c_uint64, cfunc, ctypes.c_void_p, _DESTROY]
+        self._connect("selected", connector, cfunc, fn, lambda f: lambda _this, start, end, _userdata: f(start, end))

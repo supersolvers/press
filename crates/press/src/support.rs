@@ -341,6 +341,11 @@ pub fn settle_clipboard() {
             let data = rt.clipboard_data.iter().find(|(have, _)| *have == kind).map(|(_, data)| data.clone()).unwrap_or_default();
             events.extend(rt.ui.paste_data_into(window, &kind, data).unwrap_or_default());
         }
+        // a rich text widget that found no RTF asks again, for plain text
+        if let Some(field) = rt.ui.take_paste_request() {
+            let text = rt.clipboard.clone();
+            events.extend(rt.ui.paste_into(field, &text).unwrap_or_default());
+        }
         Ok(events)
     });
     deliver(events.unwrap_or_default());

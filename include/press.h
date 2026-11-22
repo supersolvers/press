@@ -188,6 +188,7 @@ typedef press_handle_t press_status_bar_t;
 typedef press_handle_t press_button_row_t;
 typedef press_handle_t press_stepper_t;
 typedef press_handle_t press_combo_box_t;
+typedef press_handle_t press_rich_text_t;
 
 /** Called when a callback is dropped, so its userdata can be released. */
 typedef void (*press_destroy_fn)(void *userdata);
@@ -423,6 +424,9 @@ PRESS_API press_status_t press_button_set_is_cancel(press_button_t self, bool va
 
 /** Whether the button lies flat, with no edge of its own until the pointer is over it or down on it, and is no wider than its label needs: a tool in a toolbar. */
 PRESS_API press_status_t press_button_set_flat(press_button_t self, bool value);
+
+/** Whether the button stays in, drawn held down, as a tool that is on does: Bold in a word processor's bar, say. Clicking it still raises clicked, and the program says whether it is down. */
+PRESS_API press_status_t press_button_set_down(press_button_t self, bool value);
 
 /** Whether the button is drawn as a key of a calculator: in the black and white style, a square face with a hard shadow below and to the right, as the first system's Calculator had them. A style without such keys draws an ordinary button. */
 PRESS_API press_status_t press_button_set_key(press_button_t self, bool value);
@@ -1106,6 +1110,138 @@ PRESS_API press_status_t press_combo_box_add(press_combo_box_t self, const char 
 
 /** Take every choice away. The text in the field stays. */
 PRESS_API press_status_t press_combo_box_clear(press_combo_box_t self);
+
+/* ---- RichText (a Widget): A document of words with looks of their own, edited as a word processor edits: each stretch of words in a font and size of its own, bold, italic, underlined, struck through and in a colour, in paragraphs aligned, indented and bulleted. Lines break at word gaps to fit the widget, or a width the program sets. It scrolls up and down, with a bar of its own. Its document is read and written as RTF. Places in it are byte offsets into the UTF-8 of its plain text, paragraphs parted by line breaks. Typing, the keys and the pointer work as in a text area; Control with B, I or U turns bold, italic or underline on or off, and Control with Z and Y undoes and does again, unless a menu has those keys. Copying puts the selection on the clipboard as RTF and as plain text; pasting takes RTF where the clipboard has it. */
+
+/** Create an empty rich text widget. */
+PRESS_API press_status_t press_rich_text_new(press_rich_text_t *out);
+
+/** Set the indents of every paragraph the selection touches, in pixels at 96 to the inch: in from the left, in from the right, and how much further in (or, if less than nought, out) the first line goes. */
+PRESS_API press_status_t press_rich_text_set_indents(press_rich_text_t self, int32_t left, int32_t right, int32_t first);
+
+/** How far in from the left the paragraph the caret is in is, in pixels. */
+PRESS_API press_status_t press_rich_text_indent_left(press_rich_text_t self, int32_t *out);
+
+/** How far in from the right the paragraph the caret is in is, in pixels. */
+PRESS_API press_status_t press_rich_text_indent_right(press_rich_text_t self, int32_t *out);
+
+/** How much further in than the rest the first line of the paragraph the caret is in goes, in pixels. */
+PRESS_API press_status_t press_rich_text_indent_first(press_rich_text_t self, int32_t *out);
+
+/** Select from one place to another, each a byte offset into the plain text: `to` is where the caret goes, and is scrolled into view. The same place twice puts the caret there. Made by the program, it does not raise selected. */
+PRESS_API press_status_t press_rich_text_select(press_rich_text_t self, int32_t from, int32_t to);
+
+/** Where the selection begins; with nothing selected, where the caret is. */
+PRESS_API press_status_t press_rich_text_selection_start(press_rich_text_t self, int32_t *out);
+
+/** Where the selection ends; with nothing selected, where the caret is. */
+PRESS_API press_status_t press_rich_text_selection_end(press_rich_text_t self, int32_t *out);
+
+/** Select the whole document. */
+PRESS_API press_status_t press_rich_text_select_all(press_rich_text_t self);
+
+/** Put text in place of the selection, as if typed, in the look the selection has. Line breaks in it start paragraphs. It can be undone. It does not raise changed. */
+PRESS_API press_status_t press_rich_text_insert(press_rich_text_t self, const char *text, size_t text_len);
+
+/** Copy the selection to the clipboard, as RTF and as plain text. With nothing selected the clipboard is left alone. */
+PRESS_API press_status_t press_rich_text_copy(press_rich_text_t self);
+
+/** Copy the selection, then take it out. Raises changed. */
+PRESS_API press_status_t press_rich_text_cut(press_rich_text_t self);
+
+/** Put the clipboard's words in place of the selection: its RTF if it has any, otherwise its plain text. Raises changed; on a display the words may arrive a moment after this returns. */
+PRESS_API press_status_t press_rich_text_paste(press_rich_text_t self);
+
+/** Undo the last change, if there is one. It does not raise changed. */
+PRESS_API press_status_t press_rich_text_undo(press_rich_text_t self);
+
+/** Do again what was last undone, if anything was. It does not raise changed. */
+PRESS_API press_status_t press_rich_text_redo(press_rich_text_t self);
+
+/** Whether there is a change to undo. */
+PRESS_API press_status_t press_rich_text_can_undo(press_rich_text_t self, bool *out);
+
+/** Whether there is a change undone to do again. */
+PRESS_API press_status_t press_rich_text_can_redo(press_rich_text_t self, bool *out);
+
+/** The whole document as RTF. Setting it reads RTF (or, if it is not RTF, plain text) in place of what was there, forgets what could be undone, and does not raise changed. */
+PRESS_API press_status_t press_rich_text_set_rtf(press_rich_text_t self, const char *value, size_t value_len);
+
+/** The whole document as RTF. Setting it reads RTF (or, if it is not RTF, plain text) in place of what was there, forgets what could be undone, and does not raise changed. */
+PRESS_API press_status_t press_rich_text_get_rtf(press_rich_text_t self, char *out, size_t out_cap, size_t *out_len);
+
+/** The document's words, as plain text, paragraphs parted by line breaks. Setting it puts plain text in place of what was there, in the look the first words had, and does not raise changed. */
+PRESS_API press_status_t press_rich_text_set_text(press_rich_text_t self, const char *value, size_t value_len);
+
+/** The document's words, as plain text, paragraphs parted by line breaks. Setting it puts plain text in place of what was there, in the look the first words had, and does not raise changed. */
+PRESS_API press_status_t press_rich_text_get_text(press_rich_text_t self, char *out, size_t out_cap, size_t *out_len);
+
+/** Break lines at this many pixels, as on a page, whatever the widget's width; 0, the default, breaks them to fit the widget. */
+PRESS_API press_status_t press_rich_text_set_wrap_width(press_rich_text_t self, int32_t value);
+
+/** Whether the selection is bold: as its first character is. Setting it makes the selection bold or not, or with nothing selected what is typed next. */
+PRESS_API press_status_t press_rich_text_set_bold(press_rich_text_t self, bool value);
+
+/** Whether the selection is bold: as its first character is. Setting it makes the selection bold or not, or with nothing selected what is typed next. */
+PRESS_API press_status_t press_rich_text_get_bold(press_rich_text_t self, bool *out);
+
+/** Whether the selection is italic; setting it works as bold does. */
+PRESS_API press_status_t press_rich_text_set_italic(press_rich_text_t self, bool value);
+
+/** Whether the selection is italic; setting it works as bold does. */
+PRESS_API press_status_t press_rich_text_get_italic(press_rich_text_t self, bool *out);
+
+/** Whether the selection is underlined; setting it works as bold does. */
+PRESS_API press_status_t press_rich_text_set_underline(press_rich_text_t self, bool value);
+
+/** Whether the selection is underlined; setting it works as bold does. */
+PRESS_API press_status_t press_rich_text_get_underline(press_rich_text_t self, bool *out);
+
+/** Whether the selection is struck through; setting it works as bold does. */
+PRESS_API press_status_t press_rich_text_set_strikeout(press_rich_text_t self, bool value);
+
+/** Whether the selection is struck through; setting it works as bold does. */
+PRESS_API press_status_t press_rich_text_get_strikeout(press_rich_text_t self, bool *out);
+
+/** The family of the selection's font, as fontconfig knows it; setting it works as bold does. */
+PRESS_API press_status_t press_rich_text_set_font(press_rich_text_t self, const char *value, size_t value_len);
+
+/** The family of the selection's font, as fontconfig knows it; setting it works as bold does. */
+PRESS_API press_status_t press_rich_text_get_font(press_rich_text_t self, char *out, size_t out_cap, size_t *out_len);
+
+/** The size of the selection's type, in points; setting it works as bold does. */
+PRESS_API press_status_t press_rich_text_set_size(press_rich_text_t self, int32_t value);
+
+/** The size of the selection's type, in points; setting it works as bold does. */
+PRESS_API press_status_t press_rich_text_get_size(press_rich_text_t self, int32_t *out);
+
+/** The colour of the selection, 0xRRGGBB; setting it works as bold does. */
+PRESS_API press_status_t press_rich_text_set_color(press_rich_text_t self, uint32_t value);
+
+/** The colour of the selection, 0xRRGGBB; setting it works as bold does. */
+PRESS_API press_status_t press_rich_text_get_color(press_rich_text_t self, uint32_t *out);
+
+/** Where the lines of the paragraph the caret is in sit: Start at the left, Center in the middle, End at the right, Fill with both edges straight. Setting it sets every paragraph the selection touches. */
+PRESS_API press_status_t press_rich_text_set_justify(press_rich_text_t self, press_align_t value);
+
+/** Where the lines of the paragraph the caret is in sit: Start at the left, Center in the middle, End at the right, Fill with both edges straight. Setting it sets every paragraph the selection touches. */
+PRESS_API press_status_t press_rich_text_get_justify(press_rich_text_t self, press_align_t *out);
+
+/** Whether the paragraph the caret is in has a bullet. Setting it sets every paragraph the selection touches. */
+PRESS_API press_status_t press_rich_text_set_bullet(press_rich_text_t self, bool value);
+
+/** Whether the paragraph the caret is in has a bullet. Setting it sets every paragraph the selection touches. */
+PRESS_API press_status_t press_rich_text_get_bullet(press_rich_text_t self, bool *out);
+
+/** The user changed the document: by typing, the keys, a cut, a paste, or undoing. */
+typedef void (*press_rich_text_changed_fn)(press_rich_text_t self, void *userdata);
+/** Connect a handler (replacing any earlier one); pass NULL to disconnect. */
+PRESS_API press_status_t press_rich_text_on_changed(press_rich_text_t self, press_rich_text_changed_fn callback, void *userdata, press_destroy_fn destroy);
+
+/** The user moved the caret or changed the selection. The handler is given where the selection begins and ends, the start first; equal, they are the caret. It comes after changed when both happen. */
+typedef void (*press_rich_text_selected_fn)(press_rich_text_t self, int32_t start, int32_t end, void *userdata);
+/** Connect a handler (replacing any earlier one); pass NULL to disconnect. */
+PRESS_API press_status_t press_rich_text_on_selected(press_rich_text_t self, press_rich_text_selected_fn callback, void *userdata, press_destroy_fn destroy);
 
 #ifdef __cplusplus
 }

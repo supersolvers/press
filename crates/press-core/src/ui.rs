@@ -36,6 +36,7 @@ mod more;
 mod picture;
 pub use picture::LineStyle;
 mod popup;
+mod rich;
 mod scroll;
 mod view;
 use scroll::BarPress;
@@ -303,6 +304,9 @@ enum Kind {
     ScrollBar { orientation: Orientation, value: i32, max: i32, page: i32, step: i32, length: i32 },
     MenuBar { menus: Vec<Handle> },
     Menu { title: String, items: Vec<Handle> },
+    /// A document of words with looks of their own, in paragraphs set as
+    /// they say (see rich.rs).
+    RichText(Box<rich::RichState>),
     /// `separator` items are dividing lines made by the engine itself.
     MenuItem {
         label: String,
@@ -342,6 +346,7 @@ impl Kind {
             Kind::MenuBar { .. } => "MenuBar",
             Kind::Menu { .. } => "Menu",
             Kind::MenuItem { .. } => "MenuItem",
+            Kind::RichText(_) => "RichText",
         }
     }
 
@@ -439,6 +444,8 @@ pub struct Ui {
     dress: HashMap<Handle, extra::Dress>,
     /// The buttons that lie flat until the pointer comes.
     flat: Vec<Handle>,
+    /// Buttons that stay in, as tools that are on.
+    downs: Vec<Handle>,
     /// Buttons drawn as the keys of a calculator.
     keys: Vec<Handle>,
     /// Stacks laid on a pattern of black and white: eight rows of eight.
@@ -490,6 +497,8 @@ pub struct Ui {
     copy_out: Option<String>,
     /// A text field that has asked for the clipboard's text.
     paste_request: Option<Handle>,
+    /// A rich text widget waiting on the clipboard's RTF.
+    rich_paste: Option<Handle>,
     /// A scroll bar being held with the pointer.
     bar_press: Option<BarPress>,
     /// The barber's-pole phase last drawn.
@@ -1529,6 +1538,9 @@ impl Ui {
             self.list_edit_text(text);
             return Ok(out);
         }
+        if let Some(out) = self.rich_paste_text(h, text) {
+            return Ok(out);
+        }
         if self.editor_mut(h)?.insert(text) {
             out.push(self.field_event(h, "TextField.changed"));
         }
@@ -1609,6 +1621,7 @@ impl Ui {
                 if *orientation == Orientation::Vertical { (m.scroll_bar, *length) } else { (*length, m.scroll_bar) }
             }
             Kind::Spin { .. } => self.measure_stepper(),
+            Kind::RichText(_) => self.measure_rich(h),
             Kind::Label { text } => {
                 let text = text.clone();
                 (self.font.width(&text), line)
@@ -1747,7 +1760,7 @@ impl Ui {
         self.painting = Some(h);
         let rect = node.rect;
         let enabled = parent_enabled && node.enabled;
-        let held = self.pressed == Some((h, true)) || self.flash.is_some_and(|(f, _)| f == h);
+        let held = self.pressed == Some((h, true)) || self.flash.is_some_and(|(f, _)| f == h) || self.downs.contains(&h);
         // has the keyboard, and its window is the one being typed into
         let live = ctx.focus == Some(h) && ctx.active && enabled;
         let ants = self.ants_step() as i32;
@@ -1788,6 +1801,7 @@ impl Ui {
                 self.part(canvas, part.when(state::CHECKED, checked).when(state::HELD, held).when(state::FOCUSED, live));
             }
             Kind::TextField { .. } => self.paint_field(h, rect, live, canvas),
+            Kind::RichText(_) => self.paint_rich(h, rect, live, canvas),
             Kind::ScrollBar { orientation, .. } => {
                 let horizontal = *orientation == Orientation::Horizontal;
                 self.bar_draw(h, horizontal, canvas);
@@ -1843,6 +1857,7 @@ impl Ui {
             | Kind::Divider { .. }
             | Kind::List { .. }
             | Kind::Picture { .. }
+            | Kind::RichText(_)
                 if node.rect.contains(x, y) =>
             {
                 Some(h)
@@ -1925,6 +1940,9 @@ impl Ui {
             return Ok(out);
         }
         if let Some(out) = self.picture_pointer(over, x, y, kind) {
+            return Ok(out);
+        }
+        if let Some(out) = self.rich_pointer(window, over, x, y, kind) {
             return Ok(out);
         }
         // pressing a pop-up button pops its list up, which is a menu from then on
@@ -2037,7 +2055,7 @@ impl Ui {
     /// the way up the tree.
     fn focusable(&self, h: Handle) -> bool {
         let Some(node) = self.nodes.get(h) else { return false };
-        if !matches!(node.kind, Kind::TextField { .. } | Kind::Button { .. } | Kind::Checkbox { .. } | Kind::Popup { .. } | Kind::Radio { .. } | Kind::Slider { .. } | Kind::Spin { .. } | Kind::List { .. } | Kind::Tabs { .. } | Kind::Picture { keys: true, .. }) {
+        if !matches!(node.kind, Kind::TextField { .. } | Kind::Button { .. } | Kind::Checkbox { .. } | Kind::Popup { .. } | Kind::Radio { .. } | Kind::Slider { .. } | Kind::Spin { .. } | Kind::List { .. } | Kind::Tabs { .. } | Kind::Picture { keys: true, .. } | Kind::RichText(_)) {
             return false;
         }
         let mut up = Some(h);
@@ -2162,7 +2180,7 @@ impl Ui {
     /// Give a widget the keyboard. A text field has its text selected, as if
     /// it had been reached with Tab.
     pub fn focus(&mut self, h: Handle) -> Result<()> {
-        if !matches!(self.node(h)?.kind, Kind::TextField { .. } | Kind::Button { .. } | Kind::Checkbox { .. } | Kind::Popup { .. } | Kind::Radio { .. } | Kind::Slider { .. } | Kind::Spin { .. } | Kind::List { .. } | Kind::Tabs { .. } | Kind::Picture { keys: true, .. }) {
+        if !matches!(self.node(h)?.kind, Kind::TextField { .. } | Kind::Button { .. } | Kind::Checkbox { .. } | Kind::Popup { .. } | Kind::Radio { .. } | Kind::Slider { .. } | Kind::Spin { .. } | Kind::List { .. } | Kind::Tabs { .. } | Kind::Picture { keys: true, .. } | Kind::RichText(_)) {
             return Err(Error::WrongType);
         }
         let window = self.window_of(h).ok_or(Error::InvalidState)?;
@@ -2211,6 +2229,7 @@ impl Ui {
             }
             match self.live_focus(w).and_then(|f| self.nodes.get(f)).map(|n| &n.kind) {
                 Some(Kind::TextField { edit, .. }) => caret |= !edit.has_selection(),
+                Some(Kind::RichText(state)) => caret |= !state.edit.has_selection(),
                 Some(Kind::List { .. }) => caret |= self.list_edit.is_some(),
                 Some(_) => ring = true,
                 None => {}
@@ -2413,7 +2432,12 @@ impl Ui {
             let key = if key == Key::Menu { Key::F(10) } else { key };
             return Ok(vec![self.picture_key_down(picture, key, mods)]);
         }
-        if let Some(out) = self.menu_key(window, key, mods, in_field) {
+        // a rich text widget keeps its words' shortcuts, after the menus'
+        let in_rich = focus.is_some_and(|f| self.is_rich(f));
+        if let Some(out) = self.menu_key(window, key, mods, in_field || in_rich) {
+            return Ok(out);
+        }
+        if let Some(out) = focus.filter(|_| in_rich).and_then(|f| self.rich_key(f, key, mods)) {
             return Ok(out);
         }
         let mut out = Vec::new();
@@ -2540,6 +2564,9 @@ impl Ui {
         if let Some(found) = self.list_type(focus, text) {
             return Ok(found);
         }
+        if let Some(out) = self.rich_input(focus, text) {
+            return Ok(out);
+        }
         match self.editor_mut(focus) {
             Ok(edit) => {
                 if edit.insert(text) {
@@ -2584,6 +2611,7 @@ impl Ui {
         match self.hit(window, x, y) {
             Some(h) if self.over_column_edge(h, x, y) => Cursor::ResizeColumn,
             Some(h) if is_field(self, h) && self.text_rect(h).is_some_and(|r| r.contains(x, y)) => Cursor::Text,
+            Some(h) if self.is_rich(h) && self.rich_inner(h).is_some_and(|r| r.contains(x, y)) => Cursor::Text,
             _ => Cursor::Arrow,
         }
     }

@@ -169,7 +169,7 @@ its headers and the styles under `PREFIX` (`/usr/local`).
 | `include/press_style.h` | The interface a style is written against (by hand) |
 | `idl/press.toml` | The interface definition: enums, classes, methods, properties, events |
 | `crates/press-idl` | Parses the definition; generates the C header, Rust exports and the Python and Swift bindings |
-| `crates/press-core` | The engine: handles, widget tree, layout, input, text, and the style interface with the built-in style, Eighty-Four. No platform or FFI code |
+| `crates/press-core` | The engine: handles, widget tree, layout, input, text, and the style interface with the built-in style, Eighty-Four. No platform or FFI code. `rich.rs` and `rtf.rs` are rich text's document and RTF, and `ui/rich.rs` the widget |
 | `crates/press` | `libpress.so`: the generated exports, their implementation, the display backends, and the loader of styles |
 | `styles/ninetyfive` | A style in the manner of the middle 1990s, in C, as a library of its own: grey, bevelled, in the engine's own pixel type |
 | `styles/eightyfive` | A style in the manner of the home computer workbench of 1985: four colours and no shading |
@@ -569,6 +569,30 @@ The look is the original Macintosh; the handling is what people expect today.
 
 ![A text area and a password field](docs/notes.png)
 
+- A **rich text** widget (`press_rich_text_new`) holds a document as a
+  word processor does: each stretch of words in a font and size of its
+  own (any of the machine's fonts, found through fontconfig and drawn
+  smooth), bold, italic, underlined, struck through and in colour, in
+  paragraphs aligned left, centred, right or justified, indented, and
+  bulleted. Lines break at word gaps to fit the widget, or a width the
+  program sets (`set_wrap_width`), as a page's would; it scrolls up and
+  down with a bar of its own. Typing, the keys and the pointer work as in
+  a text area; a double click takes a word, and a third its paragraph.
+  Control with B, I or U turns bold, italic or underline on or off, and
+  Control with Z and Y undoes and does again, unless a menu has those
+  keys. The look of the selection is read and set with its properties
+  (`bold`, `italic`, `underline`, `strikeout`, `font`, `size` in points,
+  `color`, and for its paragraphs `justify`, `bullet` and `set_indents`);
+  set with nothing selected, a look is for what is typed next. Its whole
+  document is read and written as RTF (`rtf`), or as plain text (`text`).
+  Copying puts the selection on the clipboard as RTF beside the plain
+  text, so other word processors keep its looks, and pasting takes RTF
+  where the clipboard has it. The engine's RTF reader and writer, and the
+  document they read into, are in `press-core` (`rtf`, `rich`) for a Rust
+  program to use directly.
+
+![A letter in a rich text widget, with a toolbar, a format bar and a ruler, in the mid-nineties' style](docs/rich-text.png)
+
 ### Scroll bars
 
 A scroll bar has an arrow at each end, a grey track, and a white box that
@@ -822,6 +846,10 @@ What a whole program has round its dialogs.
   A status bar told to keep **panels** (`press_status_bar_set_panels`)
   shows each of its children in a cell of its own, the last reaching the
   end of the bar; let one stretch and it takes the room that is spare.
+- A button may stay **down** (`press_button_set_down`), drawn held in, as
+  a tool that is on is: Bold in a word processor's bar while the words at
+  the caret are bold. The program says whether it is down; clicking it
+  still raises `clicked`.
 - A button may be **flat** (`press_button_set_flat`): it has no edge until
   the pointer is over it or down on it, and is no wider than it needs.
   That is a tool in a toolbar.

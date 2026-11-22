@@ -244,6 +244,35 @@ fn named(family: &str, bold: bool) -> Option<Arc<fontdue::Font>> {
     found
 }
 
+/// The machine's font for a family in a weight and a slant, as fontconfig
+/// chooses it: for rich text, whose words may be italic as well as bold.
+pub(crate) fn styled(family: &str, bold: bool, italic: bool) -> Option<Arc<fontdue::Font>> {
+    type Faces = HashMap<(String, bool, bool), Option<Arc<fontdue::Font>>>;
+    static STYLED: OnceLock<Mutex<Faces>> = OnceLock::new();
+    let key = (family.to_string(), bold, italic);
+    let known = STYLED.get_or_init(Default::default);
+    if let Some(found) = known.lock().unwrap_or_else(|e| e.into_inner()).get(&key) {
+        return found.clone();
+    }
+    // fontconfig's patterns give a meaning to these in a name
+    let name: String = family.chars().flat_map(|c| if matches!(c, '-' | ':' | ',' | '\\') { vec!['\\', c] } else { vec![c] }).collect();
+    let pattern = format!("{name}{}{}:scalable=true", if bold { ":bold" } else { "" }, if italic { ":italic" } else { "" });
+    let found = Command::new("fc-match").args(["-f", "%{file}\n%{index}\n", &pattern]).output().ok().and_then(|out| {
+        let text = String::from_utf8(out.stdout).ok()?;
+        let mut lines = text.lines();
+        let file = PathBuf::from(lines.next().filter(|l| !l.is_empty())?);
+        let index = lines.next().and_then(|l| l.parse().ok()).unwrap_or(0);
+        face_at(&mut borrowed().lock().unwrap_or_else(|e| e.into_inner()), file, index)
+    });
+    known.lock().unwrap_or_else(|e| e.into_inner()).insert(key, found.clone());
+    found
+}
+
+/// A font of the machine's that has a character, for one a font lacks.
+pub(crate) fn fallback(ch: char) -> Option<Arc<fontdue::Font>> {
+    borrow(ch)
+}
+
 /// Whether a character is a mark that is written after a letter and sits
 /// on it: an accent, in the widest sense.
 pub fn is_mark(ch: char) -> bool {
