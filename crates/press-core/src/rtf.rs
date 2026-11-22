@@ -133,6 +133,11 @@ pub fn read(input: &str) -> Document {
                 i += 1;
                 let Some(&c) = bytes.get(i) else { break };
                 if !c.is_ascii_alphabetic() {
+                    if !c.is_ascii() {
+                        // a backslash before a character of several bytes escapes
+                        // nothing: the character is read next, whole
+                        continue;
+                    }
                     i += 1;
                     let ch = match c {
                         b'\\' | b'{' | b'}' => Some(c as char),
@@ -140,8 +145,15 @@ pub fn read(input: &str) -> Document {
                         b'-' => None,
                         b'_' => Some('\u{2011}'),
                         b'\'' => {
-                            let hex = input.get(i..i + 2).and_then(|h| u8::from_str_radix(h, 16).ok());
-                            i += 2;
+                            // two hex digits; anything else is not this escape's, and is
+                            // left to be read as what it is (it may be half a character)
+                            let hex = bytes
+                                .get(i..i + 2)
+                                .filter(|h| h.iter().all(u8::is_ascii_hexdigit))
+                                .and_then(|h| u8::from_str_radix(std::str::from_utf8(h).ok()?, 16).ok());
+                            if hex.is_some() {
+                                i += 2;
+                            }
                             if pending_skip > 0 {
                                 pending_skip -= 1;
                                 None
@@ -446,6 +458,19 @@ mod tests {
         assert!(bullet.bullet);
         assert_eq!((bullet.left, bullet.first), (360, -360));
         assert_eq!(back.paragraph(0), &Paragraph::default());
+    }
+
+    #[test]
+    fn a_broken_escape_before_a_wide_character_is_read_past() {
+        // \' wants two hex digits; what follows instead is kept as words
+        for broken in ["{\\rtf1 a\\\u{ffff}b}", "{\\rtf1 a\\\u{e9}", "{\\rtf1 a\\'\u{e9}b}", "{\\rtf1 a\\'4\u{65e5}b}", "{\\rtf1 \\u233\\'\u{ffff}}", "{\\rtf1 a\\'", "{\\rtf1 a\\'4"] {
+            let _ = read(broken);
+        }
+        assert_eq!(read("{\\rtf1 a\\'\u{e9}b}").text(), "a\u{e9}b");
+        assert_eq!(read("{\\rtf1 a\\'4\u{65e5}b}").text(), "a4\u{65e5}b");
+        assert_eq!(read("{\\rtf1 a\\'e9b}").text(), "a\u{e9}b");
+        // and a backslash before such a character escapes nothing
+        assert_eq!(read("{\\rtf1 a\\\u{65e5}b}").text(), "a\u{65e5}b");
     }
 
     #[test]
