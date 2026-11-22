@@ -1,0 +1,15 @@
+# What a C program needs to build against press, the engine of PRESS:
+#     cc hello.c $(pkg-config --cflags --libs press) -o hello
+# make install fills in the places and the versions.
+prefix=@PREFIX@
+libdir=${prefix}/lib
+includedir=${prefix}/include
+stylesdir=${libdir}/press/styles
+themesdir=${prefix}/share/press/themes
+abi_version=@ABI@
+
+Name: press
+Description: The engine of PRESS: a user interface toolkit with a flat C ABI, drawn in the style of a chosen year
+Version: @VERSION@
+Libs: -L${libdir} -lpress
+Cflags: -I${includedir}

@@ -125,8 +125,12 @@ python3 examples/python/hello.py
 swift run --package-path examples/swift Hello
 ```
 
-Each example takes `--snapshot NAME` to render to a PNG without opening a
-window. Set `PRESS_BACKEND=headless` to run with no display at all.
+Most of the examples take `--snapshot NAME` to render to a PNG without
+opening a window: the C ones but `hostloop` and `worker`, `hello.py`, and
+the Swift `Hello`. Those that show several states write `NAME-1.png`,
+`NAME-2.png` and so on. A program written with Press (`HelloUI`,
+`GalleryUI`, `ToolsUI`) is given `PRESS_SNAPSHOT=file.png` instead. Set
+`PRESS_BACKEND=headless` to run with no display at all.
 
 Set `PRESS_SCALE` to a whole number from 2 to 8 to magnify everything:
 
@@ -156,6 +160,15 @@ The package links against the `libpress.so` built last in its own checkout
 (`cargo build` there first), or the one in `PRESS_LIB_DIR` if that is set,
 or failing both an installed one. `sudo make install` installs the library,
 its headers, the styles and their themes under `PREFIX` (`/usr/local`).
+
+A C program finds what was installed through pkg-config, as `press`:
+
+```bash
+cc hello.c $(pkg-config --cflags --libs press) -o hello
+```
+
+`pkg-config --variable=stylesdir press` says where the styles are, and
+`themesdir` and `abi_version` are there too.
 
 The fonts as files, for other programs to set type in, are installed with
 them only if they have been built (`make fonts-venv fonts`, which needs

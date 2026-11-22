@@ -32,7 +32,10 @@ OUT = target/$(PROFILE)
 # The name programs ask for the library by: it ends in the interface's
 # version (abi_version in idl/press.toml), so one made for another version
 # is never mistaken for this one. The build gives the library this name.
-SONAME = libpress.so.$(shell sed -n 's/^abi_version *= *//p' idl/press.toml)
+ABI = $(shell sed -n 's/^abi_version *= *//p' idl/press.toml)
+SONAME = libpress.so.$(ABI)
+# PRESS's own version, for pkg-config (press.pc.in) to tell.
+VERSION = $(shell sed -n 's/^version *= *"\(.*\)"/\1/p' Cargo.toml)
 
 build:
 	cargo build $(if $(filter release,$(PROFILE)),--release,)
@@ -64,6 +67,9 @@ fonts:
 install:
 	install -Dm644 $(OUT)/libpress.so $(DESTDIR)$(PREFIX)/lib/$(SONAME)
 	ln -sf $(SONAME) $(DESTDIR)$(PREFIX)/lib/libpress.so
+	mkdir -p $(DESTDIR)$(PREFIX)/lib/pkgconfig
+	sed -e 's|@PREFIX@|$(PREFIX)|' -e 's|@VERSION@|$(VERSION)|' -e 's|@ABI@|$(ABI)|' press.pc.in > $(DESTDIR)$(PREFIX)/lib/pkgconfig/press.pc
+	chmod 644 $(DESTDIR)$(PREFIX)/lib/pkgconfig/press.pc
 	install -Dm644 include/press.h $(DESTDIR)$(PREFIX)/include/press.h
 	install -Dm644 include/press_style.h $(DESTDIR)$(PREFIX)/include/press_style.h
 	for s in $(STYLES); do install -Dm644 $(OUT)/libpress_style_$$s.so $(DESTDIR)$(PREFIX)/lib/press/styles/libpress_style_$$s.so || exit 1; done
@@ -81,7 +87,7 @@ install-fonts:
 	if [ -z "$(DESTDIR)" ] && command -v fc-cache >/dev/null; then fc-cache -f $(PREFIX)/share/fonts/press; fi
 
 uninstall:
-	rm -f $(DESTDIR)$(PREFIX)/lib/libpress.so $(DESTDIR)$(PREFIX)/lib/libpress.so.* $(DESTDIR)$(PREFIX)/include/press.h $(DESTDIR)$(PREFIX)/include/press_style.h
+	rm -f $(DESTDIR)$(PREFIX)/lib/libpress.so $(DESTDIR)$(PREFIX)/lib/libpress.so.* $(DESTDIR)$(PREFIX)/lib/pkgconfig/press.pc $(DESTDIR)$(PREFIX)/include/press.h $(DESTDIR)$(PREFIX)/include/press_style.h
 	rm -rf $(DESTDIR)$(PREFIX)/lib/press/styles
 	rmdir $(DESTDIR)$(PREFIX)/lib/press 2>/dev/null || true
 	rm -f $(DESTDIR)$(PREFIX)/share/press/themes/*.toml

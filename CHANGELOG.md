@@ -49,3 +49,4 @@ on 18 November 2026.
 - `make install` installs the library, its headers, the styles, the themes
   and the licence. The fonts as files are installed only if they have been
   built; the library carries its own copy.
+- A C program finds the library through pkg-config, as `press`.
