@@ -26,6 +26,8 @@ any of them without being built again.
 | ![The same program, in the manner of the end of the 1990s](docs/press-ninetynine.png) | ![The same program, in the manner of 2000](docs/press-twothousand.png) |
 | **Two Thousand and One** | **Two Thousand and Five** |
 | ![The same program, in the manner of 2001](docs/press-twothousandone.png) | ![The same program, in the manner of 2005](docs/press-twothousandfive.png) |
+| **Two Thousand and Twenty-Seven** | |
+| ![The same program, in lit gel](docs/press-twothousandtwentyseven.png) | |
 
 ```swift
 import Press
@@ -254,8 +256,8 @@ asks the style in use for these things:
 Whatever a style does not draw is drawn in black and white, so a style can
 be written a part at a time and is never left with holes in it.
 
-Fourteen come with PRESS, each named for its year. `eightyfour`, black and white
-in the manner of the first Macintosh, is built into the engine. The other thirteen
+Fifteen come with PRESS, each named for its year. `eightyfour`, black and white
+in the manner of the first Macintosh, is built into the engine. The other fourteen
 are libraries of their own, and are there as much to show how a style is
 written as to be worn:
 
@@ -274,6 +276,7 @@ written as to be worn:
 | `twothousand` | In the manner of 2000: Ninety-Five in a warmer grey and a deeper blue, with smooth type. It is written as that: its colours, sizes and typefaces, and then Ninety-Five's file for the rest |
 | `twothousandone` | In the manner of 2001: buttons rounded and shaded from top to bottom, gold where the pointer is, blue for what is selected, green in the progress bar, smooth type, a shadow under menus |
 | `twothousandfive` | In the manner of 2005: lozenges of clear and blue gel, a default button that throbs, finely striped windows, a glow round what has the keyboard, menus that cast a soft shadow |
+| `twothousandtwentyseven` | The one look that recalls no desktop there was: a future as the year 2001 saw it. Buttons are lozenges of lit gel, radio buttons and the knob of a slider are glass orbs, tabs are capsules, and words lie on plain pale ground in a clear sans. A window is a shell of gel with orbs on its title rail, in a colour the desktop may give it, and glows a little when it is in front. |
 
 | | |
 | --- | --- |
@@ -287,6 +290,7 @@ written as to be worn:
 | ![The same in Eighty-Eight](docs/eightyeight.png) | ![The same in Ninety-Three](docs/ninetythree.png) |
 | ![The same in Ninety-Eight](docs/ninetyeight.png) | ![Menus in Ninety-Eight](docs/ninetyeight-menus.png) |
 | ![The same in Ninety-One](docs/ninetyone.png) | ![Menus in Ninety-One](docs/ninetyone-menus.png) |
+| ![The same in Two Thousand and Twenty-Seven](docs/twothousandtwentyseven.png) | |
 
 They are drawn here from nothing, in the manner of what they recall: no
 picture, colour table or font of Apple's or Microsoft's is in them. For
@@ -297,7 +301,7 @@ not (DejaVu Sans, on most).
 **Choosing one.** A program chooses for itself: in Press, `static var
 style: Style` on its `App` (`.eightyFour`, `.eightyFive`, `.eightyEight`,
 `.eightyNine`, `.ninety`, `.ninetyOne`, `.ninetyThree`, `.ninetyFive`, `.ninetyEight`, `.ninetyNine`, `.twoThousand`, `.twoThousandOne`,
-`.twoThousandFour`, `.twoThousandFive`, or `.named("...")` for
+`.twoThousandFour`, `.twoThousandFive`, `.twoThousandTwentySeven`, or `.named("...")` for
 any other); in C, `press_app_set_style` after `press_app_init`, and
 `App.set_style` in Python. A program that does not choose wears what the
 desktop has chosen for every program, which is the first line of
@@ -307,7 +311,7 @@ environment dresses it so whatever it or the desktop says. Each of these
 is a name or the path of a library. A style that cannot be loaded is said
 so once on standard error, and the program looks as it did.
 
-**Windows with frames of their own.** A style may have a frame: the thirteen
+**Windows with frames of their own.** A style may have a frame: the fourteen
 that come as libraries all do. A program wearing one draws its windows
 whole, title bar, edges, buttons and all, and asks the desktop to draw
 nothing round them. Dragging the title bar moves the window, dragging an
@@ -337,7 +341,7 @@ colour with alpha, and the engine's own hand for words, and may put
 anything there. `styles/ninetyfive/ninetyfive.c` is one in four hundred
 lines of C; the two smooth ones share their drawing, `styles/common/smooth.h`,
 which another style is free to take or leave. `make styles` builds all
-thirteen. A style is looked for in the folders named in `PRESS_STYLE_PATH`, in
+fourteen. A style is looked for in the folders named in `PRESS_STYLE_PATH`, in
 `styles/` beside `libpress.so` and beside it, in
 `~/.local/lib/press/styles`, and in `/usr/local/lib/press/styles` and
 `/usr/lib/press/styles`.

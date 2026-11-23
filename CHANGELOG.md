@@ -35,10 +35,12 @@ on 18 November 2026.
 
 - A program's whole window, frame and all, is drawn by a style: a library
   of its own, written in C against `include/press_style.h`.
-- Fourteen looks, named for their years: Eighty-Four (built in),
+- Fifteen looks, named for their years: Eighty-Four (built in),
   Eighty-Five, Eighty-Eight, Eighty-Nine, Ninety, Ninety-One, Ninety-Three,
   Ninety-Five, Ninety-Eight, Ninety-Nine, Two Thousand, Two Thousand and
-  One, Two Thousand and Four and Two Thousand and Five.
+  One, Two Thousand and Four, Two Thousand and Five and Two Thousand and
+  Twenty-Seven. The last recalls no desktop there was: it is a future as
+  2001 saw it, in lit gel.
 - Themes: a look in other colours, sizes and type, from a text file. Six
   come with the library.
 - A title bar may have a button that puts its window behind the others,

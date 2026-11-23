@@ -61,7 +61,7 @@ unsafe fn dialog(dir: &std::path::Path, name: &str) -> (png::ColorType, Vec<u8>)
 /// test runs itself again for each, with the style named in the environment.
 #[test]
 fn windows_wear_styles_from_libraries_of_their_own() {
-    let styles: [(&str, [u8; 3]); 13] = [
+    let styles: [(&str, [u8; 3]); 14] = [
         ("ninetyone", [0xdd, 0xdd, 0xdd]),
         ("eightyeight", [0xcc, 0xcc, 0xcc]),
         ("ninetythree", [0xae, 0xb2, 0xc3]),
@@ -75,6 +75,7 @@ fn windows_wear_styles_from_libraries_of_their_own() {
         ("twothousand", [0xd4, 0xd0, 0xc8]),
         ("twothousandone", [0xec, 0xe9, 0xd8]),
         ("twothousandfive", [0xec, 0xec, 0xec]),
+        ("twothousandtwentyseven", [0xee, 0xf3, 0xfa]),
     ];
     if let Ok(wearing) = std::env::var("PRESS_STYLE_UNDER_TEST") {
         let (name, colour) = styles.iter().find(|(name, _)| wearing.ends_with(&format!("libpress_style_{name}.so"))).expect("a style this test knows");

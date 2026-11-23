@@ -416,6 +416,8 @@ public struct Style: Hashable, Sendable {
     public static let twoThousandFour = Style(name: "twothousandfour")
     /// In the manner of 2005: gel, stripes and soft shadows.
     public static let twoThousandFive = Style(name: "twothousandfive")
+    /// Lit gel and glass orbs on plain pale ground: a future as 2001 saw it.
+    public static let twoThousandTwentySeven = Style(name: "twothousandtwentyseven")
 }
 
 extension App {
