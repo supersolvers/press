@@ -168,6 +168,13 @@ class Icon(enum.IntEnum):
     APPLICATION = 3
 
 
+class IconLayout(enum.IntEnum):
+    """How an icon view lays out its items."""
+    ICONS = 0
+    TILES = 1
+    THUMBNAILS = 2
+
+
 class LineStyle(enum.IntEnum):
     """How a line is drawn on a Picture."""
     SOLID = 0
@@ -966,7 +973,7 @@ class ListBox(Widget):
         _check(_lib.press_list_box_set_image(self.handle, index, *_b(png)))
 
     def set_large_image(self, index, png):
-        """Give an item a large picture in colour, for an icon view: the bytes of a PNG file, up to 32 pixels each way, with see-through parts if it has them. An icon view shows it in place of the item's small picture drawn double size; picked out, every other pixel of it takes the colour the style selects in. No bytes take the picture away."""
+        """Give an item a large picture in colour, for an icon view: the bytes of a PNG file, up to 96 pixels each way, with see-through parts if it has them. An icon view shows it in place of the item's small picture drawn double size, made smaller where it is larger than the view's layout shows (32 pixels for icons, 48 for tiles, 96 for thumbnails); picked out as an icon or a tile, every other pixel of it takes the colour the style selects in. No bytes take the picture away."""
         _lib.press_list_box_set_large_image.argtypes = [ctypes.c_uint64, ctypes.c_int32, ctypes.c_char_p, ctypes.c_size_t]
         _check(_lib.press_list_box_set_large_image(self.handle, index, *_b(png)))
 
@@ -1113,6 +1120,11 @@ class IconView(ListBox):
         """Put an item's icon at a place in the view, measured in pixels from the top left of all the icons (not of the view, once it has been scrolled). A negative place puts it back in line with the rest. Clearing the view forgets every place."""
         _lib.press_icon_view_set_position.argtypes = [ctypes.c_uint64, ctypes.c_int32, ctypes.c_int32, ctypes.c_int32]
         _check(_lib.press_icon_view_set_position(self.handle, index, x, y))
+
+    def set_layout(self, layout):
+        """Lay the items out as icons (the first way), as tiles or as thumbnails. As tiles, a label's fields after the first, separated by tabs, are shown under the name: the first two that have anything in them. Changing the layout puts every icon back in line and scrolls to the top."""
+        _lib.press_icon_view_set_layout.argtypes = [ctypes.c_uint64, ctypes.c_int32]
+        _check(_lib.press_icon_view_set_layout(self.handle, int(layout)))
 
     def on_placed(self, fn):
         """The user dragged an icon to a new place in the view, which they can do once ListBox.set_reorderable has been turned on for it. index is the item; x and y are where it now is, as for set_position. Several selected icons dragged together are each reported. The order of the items does not change. The handler receives (index, x, y); pass None to disconnect."""

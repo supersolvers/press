@@ -25,6 +25,10 @@ on 18 November 2026.
   fields and text areas, lists, tables, icon views, tree views, tab views,
   scroll views, progress bars, pictures, group boxes, toolbars, status
   bars, menus, context menus and pop-up buttons.
+- Icon views laid out as icons, as tiles (a picture of 48 pixels with the
+  name and two lines of details beside it) or as thumbnails (a picture of
+  up to 96 pixels in a frame), `IconView.set_layout`; an item's large
+  picture may be up to 96 pixels.
 - Rich text: words with looks of their own, read and written as RTF.
 - Dividers between the panes of a stack.
 - Drag and drop, the clipboard, input methods, accessibility, whole-number

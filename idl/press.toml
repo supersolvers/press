@@ -113,6 +113,15 @@ values = [
 ]
 
 [[enum]]
+name = "IconLayout"
+doc = "How an icon view lays out its items."
+values = [
+    { name = "Icons", value = 0, doc = "a picture of 32 pixels with the name beneath" },
+    { name = "Tiles", value = 1, doc = "a picture of 48 pixels with the name beside it, and under the name the label's next two fields, fainter" },
+    { name = "Thumbnails", value = 2, doc = "a picture of up to 96 pixels in a frame, with the name beneath" },
+]
+
+[[enum]]
 name = "LineStyle"
 doc = "How a line is drawn on a Picture."
 values = [
@@ -888,7 +897,7 @@ doc = "Rows of text, one of which may be selected. It scrolls when there are mor
 
   [[class.method]]
   name = "set_large_image"
-  doc = "Give an item a large picture in colour, for an icon view: the bytes of a PNG file, up to 32 pixels each way, with see-through parts if it has them. An icon view shows it in place of the item's small picture drawn double size; picked out, every other pixel of it takes the colour the style selects in. No bytes take the picture away."
+  doc = "Give an item a large picture in colour, for an icon view: the bytes of a PNG file, up to 96 pixels each way, with see-through parts if it has them. An icon view shows it in place of the item's small picture drawn double size, made smaller where it is larger than the view's layout shows (32 pixels for icons, 48 for tiles, 96 for thumbnails); picked out as an icon or a tile, every other pixel of it takes the colour the style selects in. No bytes take the picture away."
   args = [{ name = "index", type = "i32" }, { name = "png", type = "bytes" }]
 
 [[class]]
@@ -942,6 +951,11 @@ doc = "A list box that shows its items as large pictures with their names beneat
   name = "set_position"
   doc = "Put an item's icon at a place in the view, measured in pixels from the top left of all the icons (not of the view, once it has been scrolled). A negative place puts it back in line with the rest. Clearing the view forgets every place."
   args = [{ name = "index", type = "i32" }, { name = "x", type = "i32" }, { name = "y", type = "i32" }]
+
+  [[class.method]]
+  name = "set_layout"
+  doc = "Lay the items out as icons (the first way), as tiles or as thumbnails. As tiles, a label's fields after the first, separated by tabs, are shown under the name: the first two that have anything in them. Changing the layout puts every icon back in line and scrolls to the top."
+  args = [{ name = "layout", type = "IconLayout" }]
 
   [[class.event]]
   name = "placed"

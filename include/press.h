@@ -121,6 +121,14 @@ enum {
     PRESS_ICON_APPLICATION = 3, /**< a diamond */
 };
 
+/** How an icon view lays out its items. */
+typedef int32_t press_icon_layout_t;
+enum {
+    PRESS_ICON_LAYOUT_ICONS = 0, /**< a picture of 32 pixels with the name beneath */
+    PRESS_ICON_LAYOUT_TILES = 1, /**< a picture of 48 pixels with the name beside it, and under the name the label's next two fields, fainter */
+    PRESS_ICON_LAYOUT_THUMBNAILS = 2, /**< a picture of up to 96 pixels in a frame, with the name beneath */
+};
+
 /** How a line is drawn on a Picture. */
 typedef int32_t press_line_style_t;
 enum {
@@ -638,7 +646,7 @@ PRESS_API press_status_t press_list_box_edit(press_list_box_t self, int32_t inde
 /** Give an item a picture in colour, in place of its icon: the bytes of a PNG file, up to 16 pixels each way, with see-through parts if it has them. No bytes take the picture away. */
 PRESS_API press_status_t press_list_box_set_image(press_list_box_t self, int32_t index, const uint8_t *png, size_t png_len);
 
-/** Give an item a large picture in colour, for an icon view: the bytes of a PNG file, up to 32 pixels each way, with see-through parts if it has them. An icon view shows it in place of the item's small picture drawn double size; picked out, every other pixel of it takes the colour the style selects in. No bytes take the picture away. */
+/** Give an item a large picture in colour, for an icon view: the bytes of a PNG file, up to 96 pixels each way, with see-through parts if it has them. An icon view shows it in place of the item's small picture drawn double size, made smaller where it is larger than the view's layout shows (32 pixels for icons, 48 for tiles, 96 for thumbnails); picked out as an icon or a tile, every other pixel of it takes the colour the style selects in. No bytes take the picture away. */
 PRESS_API press_status_t press_list_box_set_large_image(press_list_box_t self, int32_t index, const uint8_t *png, size_t png_len);
 
 /** The index of the selected row, counting from 0; -1 when none is. Setting it scrolls the row into view and does not raise changed. */
@@ -728,6 +736,9 @@ PRESS_API press_status_t press_icon_view_new(press_icon_view_t *out);
 
 /** Put an item's icon at a place in the view, measured in pixels from the top left of all the icons (not of the view, once it has been scrolled). A negative place puts it back in line with the rest. Clearing the view forgets every place. */
 PRESS_API press_status_t press_icon_view_set_position(press_icon_view_t self, int32_t index, int32_t x, int32_t y);
+
+/** Lay the items out as icons (the first way), as tiles or as thumbnails. As tiles, a label's fields after the first, separated by tabs, are shown under the name: the first two that have anything in them. Changing the layout puts every icon back in line and scrolls to the top. */
+PRESS_API press_status_t press_icon_view_set_layout(press_icon_view_t self, press_icon_layout_t layout);
 
 /** The user dragged an icon to a new place in the view, which they can do once ListBox.set_reorderable has been turned on for it. index is the item; x and y are where it now is, as for set_position. Several selected icons dragged together are each reported. The order of the items does not change. */
 typedef void (*press_icon_view_placed_fn)(press_icon_view_t self, int32_t index, int32_t x, int32_t y, void *userdata);

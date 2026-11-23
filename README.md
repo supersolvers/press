@@ -785,6 +785,13 @@ wherever they like in the view; `placed` reports each one's new place and
 `press_icon_view_set_position` puts one somewhere, or back in line. The
 order of the items is not changed by any of this.
 
+`press_icon_view_set_layout` lays the items out another way. As tiles, each
+has a picture of 48 pixels with its name beside it, and under the name the
+label's next two fields (separated by tabs, as a table's cells are), in
+fainter ink. As thumbnails, each has a picture of up to 96 pixels in a
+frame, with its name beneath. A large picture is made smaller where it is
+larger than the layout shows.
+
 ### Tables, tree views, tab views and progress bars
 
 - A **table** (`press_table_new`) is a list box with columns under a row
@@ -888,8 +895,8 @@ What a whole program has round its dialogs.
   where the file is. A button with a picture and no label is the picture.
   A picture in a list keeps its own colours when its row is chosen, and
   has a little room between it and its words. An icon view shows the
-  item's picture drawn double, or a large one of its own up to 32 pixels
-  (`press_list_box_set_large_image`); picked out, every other pixel of it
+  item's picture drawn double, or a large one of its own up to 96 pixels
+  (`press_list_box_set_large_image`), made smaller to fit its layout; picked out, every other pixel of it
   takes the colour the style selects in.
 - Any widget may have a **word of help** (`press_widget_set_tooltip`),
   shown below the pointer when it has rested there a moment. It hangs

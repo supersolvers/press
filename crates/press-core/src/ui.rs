@@ -44,7 +44,7 @@ pub use access::{AccessNode, AccessRole, AccessRun, AccessTree};
 use menu::MenuOpen;
 #[cfg(test)]
 use menu::BAR_HEIGHT;
-pub use list::Icon;
+pub use list::{Icon, IconLayout};
 pub use menu::{named_shortcut, MenuEntry, PopupInfo};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -266,6 +266,8 @@ enum Kind {
         rows: i32,
         min_width: i32,
         mode: list::ListMode,
+        /// How an icon view lays out its items.
+        layout: list::IconLayout,
         columns: Vec<(String, i32)>,
         /// What is kept for each item besides its label.
         meta: Vec<list::ItemMeta>,

@@ -33,8 +33,60 @@ pub(super) enum ListMode {
     Icons,
 }
 
-/// The room each item of an icon view is given.
+/// The room each item of an icon view is given, laid out as icons.
 const CELL: (i32, i32) = (92, 56);
+
+/// How an icon view lays out its items.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum IconLayout {
+    /// A picture of 32 pixels with the name beneath.
+    #[default]
+    Icons,
+    /// A picture of 48 pixels with the name beside it, and under the name
+    /// the next two of the label's fields, fainter.
+    Tiles,
+    /// A picture of up to 96 pixels in a frame, with the name beneath.
+    Thumbnails,
+}
+
+/// The largest picture an item can be given for an icon view.
+pub const LARGEST: i32 = 96;
+
+/// A tile's picture, and where its words begin.
+const TILE_SIDE: i32 = 48;
+const TILE_WORDS: i32 = 4 + TILE_SIDE + 6;
+
+/// A thumbnail's frame, which holds a picture of `LARGEST` inside an edge
+/// and a margin of a pixel each.
+const FRAME: i32 = LARGEST + 4;
+
+impl IconLayout {
+    fn cell(self) -> (i32, i32) {
+        match self {
+            IconLayout::Icons => CELL,
+            IconLayout::Tiles => (236, 56),
+            IconLayout::Thumbnails => (FRAME + 12, FRAME + 26),
+        }
+    }
+
+    /// How far down a cell its name is.
+    fn name_top(self) -> i32 {
+        match self {
+            IconLayout::Icons => crate::pictures::SIDE + 2,
+            IconLayout::Tiles => 0, // set by how many lines it has: see `tile_lines`
+            IconLayout::Thumbnails => FRAME + 4,
+        }
+    }
+
+    /// The largest picture drawn in a cell; larger ones are made smaller.
+    fn side(self) -> i32 {
+        match self {
+            IconLayout::Icons => crate::pictures::SIDE,
+            IconLayout::Tiles => TILE_SIDE,
+            IconLayout::Thumbnails => LARGEST,
+        }
+    }
+}
 
 /// A small picture shown before an item's label.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -128,6 +180,52 @@ impl ItemMeta {
     fn has_picture(&self) -> bool {
         self.icon != Icon::None || self.art.is_some() || self.image.is_some()
     }
+}
+
+/// How many lines a tile's words take: its name, and up to two of the
+/// fields after it that have anything in them.
+fn tile_lines(label: &str) -> i32 {
+    1 + label.split('\t').skip(1).filter(|f| !f.trim().is_empty()).take(2).count() as i32
+}
+
+/// One colour toward another: `ink` with `cover` of 255 of it, over `paper`.
+fn mix(ink: u32, paper: u32, cover: u32) -> u32 {
+    let part = |shift: u32| (((ink >> shift) & 0xff) * cover + ((paper >> shift) & 0xff) * (255 - cover)) / 255;
+    0xff00_0000 | part(16) << 16 | part(8) << 8 | part(0)
+}
+
+/// A picture no larger than `side` each way: itself, or made smaller with
+/// each pixel the mean of those it stands for, keeping what is see-through.
+fn shrunk(art: &Canvas, side: i32) -> Canvas {
+    if art.width <= side && art.height <= side {
+        return art.clone();
+    }
+    let big = art.width.max(art.height);
+    let (w, h) = ((art.width * side / big).max(1), (art.height * side / big).max(1));
+    let mut out = Canvas::filled(w, h, crate::canvas::TRANSPARENT);
+    for y in 0..h {
+        for x in 0..w {
+            let (x0, x1) = (x * art.width / w, ((x + 1) * art.width / w).max(x * art.width / w + 1));
+            let (y0, y1) = (y * art.height / h, ((y + 1) * art.height / h).max(y * art.height / h + 1));
+            let (mut sum, mut alpha, mut n) = ([0u64; 3], 0u64, 0u64);
+            for sy in y0..y1 {
+                for sx in x0..x1 {
+                    let p = art.get(sx, sy);
+                    let a = (p >> 24) as u64;
+                    for (k, shift) in [16, 8, 0].into_iter().enumerate() {
+                        sum[k] += ((p >> shift) & 0xff) as u64 * a;
+                    }
+                    alpha += a;
+                    n += 1;
+                }
+            }
+            if alpha > 0 {
+                let c = |k: usize| (sum[k] / alpha) as u32;
+                out.set(x, y, ((alpha / n) as u32) << 24 | c(0) << 16 | c(1) << 8 | c(2));
+            }
+        }
+    }
+    out
 }
 
 /// How deep the double rule along the top of a flush list is: two lines
@@ -238,6 +336,7 @@ impl Ui {
             rows: 5,
             min_width: 140,
             mode,
+            layout: IconLayout::Icons,
             columns: Vec::new(),
             meta: Vec::new(),
             multiple: false,
@@ -263,6 +362,36 @@ impl Ui {
     }
 
     /// A list box whose rows can hang from one another.
+    /// How an icon view lays out its items. The cells change size, so
+    /// icons that were put in places of their own go back in line.
+    pub fn icon_view_set_layout(&mut self, h: Handle, layout: IconLayout) -> Result<()> {
+        match &mut self.node_mut(h)?.kind {
+            Kind::List { meta, mode: ListMode::Icons, layout: now, scroll, .. } => {
+                if *now != layout {
+                    *now = layout;
+                    *scroll = 0;
+                    meta.iter_mut().for_each(|m| m.at = None);
+                }
+            }
+            _ => return Err(Error::WrongType),
+        }
+        self.list_settle(h);
+        self.dirty = true;
+        Ok(())
+    }
+
+    fn icon_layout(&self, h: Handle) -> IconLayout {
+        match self.nodes.get(h).map(|n| &n.kind) {
+            Some(Kind::List { layout, .. }) => *layout,
+            _ => IconLayout::Icons,
+        }
+    }
+
+    /// The room each item of an icon view is given.
+    fn cell(&self, h: Handle) -> (i32, i32) {
+        self.icon_layout(h).cell()
+    }
+
     pub fn icon_view_new(&mut self) -> Handle {
         let h = self.list_new(ListMode::Icons);
         if let Some(Kind::List { rows, .. }) = self.nodes.get_mut(h).map(|n| &mut n.kind) {
@@ -279,7 +408,7 @@ impl Ui {
             Some(Kind::List { meta, .. }) => meta.get(item).and_then(|m| m.at),
             _ => None,
         };
-        put.unwrap_or(((place as i32 % across) * CELL.0, (place as i32 / across) * CELL.1))
+        put.unwrap_or(((place as i32 % across) * self.cell(h).0, (place as i32 / across) * self.cell(h).1))
     }
 
     /// Where an icon is drawn: its place among all the icons, less how far
@@ -326,7 +455,7 @@ impl Ui {
         let cell = |ui: &Ui, item: usize| rows.iter().position(|r| *r == item).map(|place| ui.icon_cell(h, place, item));
         let Some(held) = cell(self, drag.item) else { return Vec::new() };
         // how far the pressed icon goes is how far they all go
-        let to = (drag.point.0 - area.x + self.list_across(h) - drag.grip.0, drag.point.1 - area.y + scroll * CELL.1 - drag.grip.1);
+        let to = (drag.point.0 - area.x + self.list_across(h) - drag.grip.0, drag.point.1 - area.y + scroll * self.cell(h).1 - drag.grip.1);
         let moving: Vec<(usize, (i32, i32))> = self.moving_rows(h, drag.item).into_iter().filter_map(|item| Some((item, cell(self, item)?))).collect();
         let mut out = Vec::new();
         for (item, was) in moving {
@@ -343,7 +472,7 @@ impl Ui {
     /// How many icons an icon view shows across.
     fn icons_across(&self, h: Handle) -> i32 {
         let Some(node) = self.nodes.get(h) else { return 1 };
-        ((self.list_side(h).x - node.rect.x - self.list_inset(h)) / CELL.0).max(1)
+        ((self.list_side(h).x - node.rect.x - self.list_inset(h)) / self.cell(h).0).max(1)
     }
 
     fn list_is_flush(&self, h: Handle) -> bool {
@@ -383,7 +512,7 @@ impl Ui {
         match mode {
             ListMode::Icons => {
                 let rows = self.list_rows(h);
-                Some(rows.iter().enumerate().map(|(place, row)| self.icon_cell(h, place, row.item).0 + CELL.0).max().unwrap_or(0))
+                Some(rows.iter().enumerate().map(|(place, row)| self.icon_cell(h, place, row.item).0 + self.cell(h).0).max().unwrap_or(0))
             }
             ListMode::Table if !columns.is_empty() => Some(columns.iter().map(|c| c.1).sum()),
             _ => None,
@@ -1432,10 +1561,10 @@ impl Ui {
             let in_line = (self.list_rows(h).len() as i32 + across - 1) / across;
             // and far enough to reach any that have been put lower down
             let lowest = match &node.kind {
-                Kind::List { meta, .. } => meta.iter().filter_map(|m| m.at).map(|at| (at.1 + 2 * CELL.1 - 1) / CELL.1).max().unwrap_or(0),
+                Kind::List { meta, .. } => meta.iter().filter_map(|m| m.at).map(|at| (at.1 + 2 * self.cell(h).1 - 1) / self.cell(h).1).max().unwrap_or(0),
                 _ => 0,
             };
-            return Some((rows, (rows.h / CELL.1).max(1), in_line.max(lowest)));
+            return Some((rows, (rows.h / self.cell(h).1).max(1), in_line.max(lowest)));
         }
         Some((rows, (rows.h / self.look.m.row_height).max(1), self.list_rows(h).len() as i32))
     }
@@ -1501,7 +1630,7 @@ impl Ui {
         };
         let icons = self.list_is(h, ListMode::Icons);
         // in an icon view the row is the row of icons the item is in, wherever it was put
-        let icon_row = |ui: &Ui, s: usize| rows.iter().position(|r| *r == s).map(|place| ui.icon_cell(h, place, s).1 / CELL.1);
+        let icon_row = |ui: &Ui, s: usize| rows.iter().position(|r| *r == s).map(|place| ui.icon_cell(h, place, s).1 / ui.cell(h).1);
         let seen = match self.nodes.get(h).map(|n| &n.kind) {
             Some(Kind::List { selected: Some(s), .. }) if icons => icon_row(self, *s),
             Some(Kind::List { selected: Some(s), .. }) => rows.iter().position(|r| r == s).map(|r| r as i32),
@@ -1545,10 +1674,10 @@ impl Ui {
         let rows = self.list_rows(h);
         if self.list_is(h, ListMode::Icons) {
             // the last drawn is in front, so it is looked for first
-            let (px, py) = (x - area.x, y - area.y + scroll * CELL.1);
+            let (px, py) = (x - area.x, y - area.y + scroll * self.cell(h).1);
             let found = rows.iter().enumerate().rev().find(|(place, row)| {
                 let (cx, cy) = self.icon_shown(h, *place, row.item);
-                Rect::new(cx, cy, CELL.0, CELL.1).contains(px, py)
+                Rect::new(cx, cy, self.cell(h).0, self.cell(h).1).contains(px, py)
             })?;
             return Some((found.1.item, false));
         }
@@ -1683,7 +1812,7 @@ impl Ui {
 
     pub(super) fn measure_list(&self, h: Handle) -> (i32, i32) {
         match self.nodes.get(h).map(|n| &n.kind) {
-            Some(Kind::List { rows, min_width, mode: ListMode::Icons, .. }) => ((*min_width).max(3 * CELL.0 + self.look.m.scroll_bar + 4), rows * CELL.1 + 4 + self.look.m.scroll_bar - 1),
+            Some(Kind::List { rows, min_width, mode: ListMode::Icons, .. }) => ((*min_width).max((3 * CELL.0).max(self.cell(h).0) + self.look.m.scroll_bar + 4), rows * self.cell(h).1 + 4 + self.look.m.scroll_bar - 1),
             Some(Kind::List { rows, min_width, columns, .. }) => {
                 // a table is as wide as its columns need
                 let wide = columns.iter().map(|c| c.1).sum::<i32>() + self.look.m.scroll_bar + 4;
@@ -1745,7 +1874,7 @@ impl Ui {
     /// Give an item a large picture in colour, for an icon view to show in
     /// place of its small one drawn double.
     pub fn list_box_set_large_image(&mut self, h: Handle, index: i32, image: Option<Canvas>) -> Result<()> {
-        if image.as_ref().is_some_and(|i| i.width > crate::pictures::SIDE || i.height > crate::pictures::SIDE) {
+        if image.as_ref().is_some_and(|i| i.width > LARGEST || i.height > LARGEST) {
             return Err(Error::InvalidArgument);
         }
         match &mut self.node_mut(h)?.kind {
@@ -1853,10 +1982,7 @@ impl Ui {
         let (left, top) = ((CELL.0 - art.width) / 2, (SIDE - art.height).max(0) / 2);
         c.blit(art, left, top);
         if picked {
-            // the colour the style selects in: what selecting makes of white
-            let mut probe = Canvas::filled(1, 1, WHITE);
-            self.part(&mut probe, Part::new(PartKind::Select, Rect::new(0, 0, 1, 1)));
-            let shade = probe.get(0, 0);
+            let shade = self.select_shade();
             for y in 0..art.height {
                 for x in 0..art.width {
                     if (x + y) % 2 == 0 && art.get(x, y) != crate::canvas::TRANSPARENT {
@@ -1868,6 +1994,96 @@ impl Ui {
             let w = names.width(&shown);
             let strip = Rect::new((CELL.0 - w) / 2 - 3, SIDE + 2, w + 6, names.line_height() + 2);
             self.part(&mut c, Part::new(PartKind::Select, strip));
+        }
+        c
+    }
+
+    /// The colour the style selects in: what selecting makes of white.
+    fn select_shade(&mut self) -> u32 {
+        let mut probe = Canvas::filled(1, 1, WHITE);
+        self.part(&mut probe, Part::new(PartKind::Select, Rect::new(0, 0, 1, 1)));
+        probe.get(0, 0)
+    }
+
+    /// A list's ink made fainter toward its paper, `cover` of 255 of it;
+    /// in a style of black and white alone, where there is nothing between
+    /// them, it stays ink.
+    fn fainter(&self, cover: u32) -> u32 {
+        let pal = &self.look.pal;
+        let one_bit = [pal.window, pal.text, pal.paper, pal.ink, pal.menu, pal.list, pal.list_ink, pal.pane].iter().all(|c| *c == BLACK || *c == WHITE);
+        if one_bit { pal.list_ink } else { mix(pal.list_ink, pal.list, cover) }
+    }
+
+    /// How far down its cell an item's name is.
+    fn name_top(&self, h: Handle, item: usize) -> i32 {
+        let layout = self.icon_layout(h);
+        if layout != IconLayout::Tiles {
+            return layout.name_top();
+        }
+        let Some(Kind::List { items, .. }) = self.nodes.get(h).map(|n| &n.kind) else { return 0 };
+        let line = self.look.font(self.look.style.icon_face()).line_height();
+        (layout.cell().1 - tile_lines(items.get(item).map_or("", |l| l.as_str())) * line) / 2
+    }
+
+    /// A tile or a thumbnail: its picture, no larger than its layout's,
+    /// and its words.
+    fn laid_cell(&mut self, names: &mut crate::font::Font, layout: IconLayout, label: &str, art: &Canvas, picked: bool) -> Canvas {
+        let (w, h) = layout.cell();
+        let mut c = Canvas::filled(w, h, crate::canvas::TRANSPARENT);
+        let (paper, ink) = (self.look.pal.list, self.look.pal.list_ink);
+        let line = names.line_height();
+        let mut fields = label.split('\t');
+        let name = fields.next().unwrap_or("");
+        let shade = if picked { self.select_shade() } else { paper };
+        match layout {
+            IconLayout::Tiles => {
+                let (left, top) = (4 + (TILE_SIDE - art.width) / 2, (h - art.height) / 2);
+                c.blit(art, left, top);
+                if picked {
+                    for y in 0..art.height {
+                        for x in 0..art.width {
+                            if (x + y) % 2 == 0 && art.get(x, y) >> 24 != 0 {
+                                c.set(left + x, top + y, shade);
+                            }
+                        }
+                    }
+                }
+                let details: Vec<&str> = fields.filter(|f| !f.trim().is_empty()).take(2).collect();
+                let room = w - TILE_WORDS - 4;
+                let mut y = (h - (1 + details.len() as i32) * line) / 2;
+                let shown = crate::pictures::fitted(names, name, room);
+                let strip = Rect::new(TILE_WORDS - 2, y - 1, names.width(&shown) + 4, line + 2);
+                c.fill(strip, paper);
+                names.draw(&mut c, &shown, TILE_WORDS, y, ink);
+                if picked {
+                    self.part(&mut c, Part::new(PartKind::Select, strip));
+                }
+                let faint = self.fainter(110);
+                for detail in details {
+                    y += line;
+                    let shown = crate::pictures::fitted(names, detail, room);
+                    names.draw(&mut c, &shown, TILE_WORDS, y, faint);
+                }
+            }
+            _ => {
+                let frame = Rect::new((w - FRAME) / 2, 2, FRAME, FRAME);
+                c.fill(frame, paper);
+                if picked {
+                    c.frame(frame, shade);
+                    c.frame(frame.inset(1), shade);
+                } else {
+                    c.frame(frame, self.fainter(60));
+                }
+                c.blit(art, frame.x + (FRAME - art.width) / 2, frame.y + (FRAME - art.height) / 2);
+                let shown = crate::pictures::fitted(names, name, w - 8);
+                let nw = names.width(&shown);
+                let strip = Rect::new((w - nw) / 2 - 3, layout.name_top(), nw + 6, line + 2);
+                c.fill(strip, paper);
+                names.draw(&mut c, &shown, strip.x + 3, strip.y + 1, ink);
+                if picked {
+                    self.part(&mut c, Part::new(PartKind::Select, strip));
+                }
+            }
         }
         c
     }
@@ -1896,20 +2112,26 @@ impl Ui {
         let mut clip = Canvas::like(canvas, area.w.max(1), area.h.max(1), self.look.pal.list);
         let _ = across;
         let mut names = self.look.font(self.look.style.icon_face());
+        let layout = self.icon_layout(h);
         for (place, row) in rows.iter().enumerate() {
             let (x, y) = self.icon_shown(h, place, row.item);
-            let y = y - scroll * CELL.1 + 2;
-            if y + CELL.1 < 0 || y > (fit + 1) * CELL.1 {
+            let y = y - scroll * self.cell(h).1 + 2;
+            if y + self.cell(h).1 < 0 || y > (fit + 1) * self.cell(h).1 {
                 continue; // scrolled out of sight
             }
             let name = items[row.item].split('\t').next().unwrap_or("");
-            let drawn = match Self::colour_picture(&meta[row.item]) {
-                Some(art) => self.coloured_icon(&mut names, name, &art, meta[row.item].picked),
-                None => crate::pictures::labelled(&mut names, name, &Self::big_picture(&meta[row.item]), CELL.0, meta[row.item].picked),
+            let drawn = match (layout, Self::colour_picture(&meta[row.item])) {
+                (IconLayout::Icons, Some(art)) => self.coloured_icon(&mut names, name, &shrunk(&art, crate::pictures::SIDE), meta[row.item].picked),
+                (IconLayout::Icons, None) => crate::pictures::labelled(&mut names, name, &Self::big_picture(&meta[row.item]), CELL.0, meta[row.item].picked),
+                (_, art) => {
+                    let art = art.unwrap_or_else(|| Self::big_picture(&meta[row.item]));
+                    self.laid_cell(&mut names, layout, &items[row.item], &shrunk(&art, layout.side()), meta[row.item].picked)
+                }
             };
             clip.blit(&drawn, x, y);
             if editing == Some(row.item) {
-                self.paint_edit(h, &mut clip, y + crate::pictures::SIDE + 2, area.w);
+                let down = self.name_top(h, row.item);
+                self.paint_edit(h, &mut clip, y + down, area.w);
             }
         }
         canvas.blit(&clip, area.x, area.y);
@@ -2046,7 +2268,11 @@ impl Ui {
         if self.list_is(h, ListMode::Icons) {
             // the name under the icon, the width of its cell
             let place = rows.iter().position(|r| r.item == edit.item)?;
-            return Some((self.icon_shown(h, place, edit.item).0 + 2, CELL.0 - 4));
+            let x = self.icon_shown(h, place, edit.item).0;
+            if self.icon_layout(h) == IconLayout::Tiles {
+                return Some((x + TILE_WORDS - 3, self.cell(h).0 - TILE_WORDS - 1));
+            }
+            return Some((x + 2, self.cell(h).0 - 4));
         }
         let row = rows.iter().find(|r| r.item == edit.item)?;
         let label_x = self.label_x(h, row);
@@ -2209,8 +2435,8 @@ impl Ui {
         let pre = self.preedit.as_ref().filter(|(f, _)| *f == h).map(|(_, t)| t.clone()).unwrap_or_default();
         let along = self.font.width(&before) + self.font.width(&pre);
         if self.list_is(h, ListMode::Icons) {
-            let down = self.icon_cell(h, (place + scroll) as usize, item).1 - scroll * CELL.1;
-            return Some(Rect::new(area.x + x + 3 + along, area.y + down + 4 + crate::pictures::SIDE, 1, self.look.m.row_height));
+            let down = self.icon_cell(h, (place + scroll) as usize, item).1 - scroll * self.cell(h).1;
+            return Some(Rect::new(area.x + x + 3 + along, area.y + down + 2 + self.name_top(h, item), 1, self.look.m.row_height));
         }
         Some(Rect::new(area.x + x + 3 + along, area.y + place * self.look.m.row_height, 1, self.look.m.row_height))
     }
@@ -2327,7 +2553,7 @@ impl Ui {
                         (None, Some((area, ..)), Some(Kind::List { scroll, mode: ListMode::Icons, .. })) => {
                             let place = self.list_rows(h).iter().position(|r| r.item == item).unwrap_or(0);
                             let cell = self.icon_shown(h, place, item);
-                            (self.clicks.1 - area.x - cell.0, self.clicks.2 - area.y + scroll * CELL.1 - cell.1)
+                            (self.clicks.1 - area.x - cell.0, self.clicks.2 - area.y + scroll * self.cell(h).1 - cell.1)
                         }
                         _ => (0, 0),
                     };
@@ -3459,6 +3685,70 @@ mod tests {
         assert_eq!((ui.row_drag_files(), ui.row_drag_text()), (vec!["/tmp/memo".to_string()], "memo\t1K\tdocument".to_string()));
         assert!(ui.row_drag_picture().is_some_and(|p| p.height == ROW_HEIGHT + 2));
         ui.row_drag_finish(false);
+    }
+
+    #[test]
+    fn an_icon_view_can_be_laid_out_as_tiles_or_as_thumbnails() {
+        let mut ui = Ui::natural();
+        let win = ui.window_new("Folder", 520, 300).unwrap();
+        let view = ui.icon_view_new();
+        for (i, name) in ["Letters\tFile Folder", "memo\tText Document\t1 KB", "plan\t\t2 KB", "x"].iter().enumerate() {
+            ui.list_box_add(view, name).unwrap();
+            ui.list_box_set_icon(view, i as i32, Icon::Document).unwrap();
+        }
+        ui.list_box_set_editable(view, true).unwrap();
+        ui.window_set_content(win, view).unwrap();
+        ui.icon_view_set_position(view, 3, 300, 100).unwrap();
+        // pictures up to 96 pixels are taken, and no larger
+        let big = Canvas::filled(96, 64, 0xff20_60c0);
+        ui.list_box_set_large_image(view, 0, Some(big.clone())).unwrap();
+        assert_eq!(ui.list_box_set_large_image(view, 1, Some(Canvas::filled(97, 4, BLACK))), Err(Error::InvalidArgument));
+        ui.render(win).unwrap();
+        assert_eq!(ui.list_item_at(view, 2 + 300 + 10, 2 + 100 + 10), Some((3, false)));
+        // as tiles: wider cells, names beside their pictures and the details under them
+        ui.icon_view_set_layout(view, IconLayout::Tiles).unwrap();
+        let (w, h) = IconLayout::Tiles.cell();
+        assert_eq!(ui.icons_across(view), (520 - 4 - BAR) / w);
+        assert_eq!(ui.list_item_at(view, 2 + w + 10, 2 + h / 2), Some((1, false)), "the second tile is beside the first");
+        assert_eq!(ui.icon_cell(view, 3, 3), ((3 % ui.icons_across(view)) * w, (3 / ui.icons_across(view)) * h), "the icon put out of line went back into it");
+        let line = ui.look.font(ui.look.style.icon_face()).line_height();
+        assert_eq!([ui.name_top(view, 0), ui.name_top(view, 1), ui.name_top(view, 2), ui.name_top(view, 3)], [(h - 2 * line) / 2, (h - 3 * line) / 2, (h - 2 * line) / 2, (h - line) / 2]);
+        let canvas = ui.render(win).unwrap();
+        // the large picture made small enough for a tile
+        let at = |c: &Canvas, x: i32, y: i32| c.get(2 + x, 2 + y);
+        assert_eq!(at(&canvas, 4 + 24, h / 2), 0xff20_60c0);
+        assert_ne!(at(&canvas, 4 + 24, (h - 32) / 2 - 1), 0xff20_60c0, "48 across, so 32 down");
+        // editing the name edits it beside the picture
+        ui.list_box_edit(view, 1, 0).unwrap();
+        assert_eq!(ui.edit_span(view, 500).map(|s| s.0), Some(w + TILE_WORDS - 3));
+        ui.list_edit = None;
+        // as thumbnails: the picture at its own size, in a frame
+        ui.icon_view_set_layout(view, IconLayout::Thumbnails).unwrap();
+        let (tw, _) = IconLayout::Thumbnails.cell();
+        let canvas = ui.render(win).unwrap();
+        let left = (tw - FRAME) / 2;
+        assert_eq!(at(&canvas, left + 2, 40), 0xff20_60c0, "96 across fills the frame's inside");
+        assert_eq!(at(&canvas, left, 2 + 50), BLACK, "the frame, in black where there is no grey");
+        assert_eq!(ui.list_item_at(view, 2 + tw + 10, 2 + 40), Some((1, false)));
+        // and back as icons, the picture made small again
+        ui.icon_view_set_layout(view, IconLayout::Icons).unwrap();
+        assert_eq!(ui.cell(view), CELL);
+        let canvas = ui.render(win).unwrap();
+        assert_eq!(at(&canvas, CELL.0 / 2, 16), 0xff20_60c0);
+        // only an icon view has a layout
+        let list = ui.list_box_new();
+        assert_eq!(ui.icon_view_set_layout(list, IconLayout::Tiles), Err(Error::WrongType));
+    }
+
+    #[test]
+    fn a_picture_made_smaller_keeps_its_colours_and_what_is_see_through() {
+        let mut art = Canvas::filled(96, 96, crate::canvas::TRANSPARENT);
+        art.fill(Rect::new(0, 0, 48, 96), 0xffff_0000);
+        let small = shrunk(&art, 32);
+        assert_eq!((small.width, small.height), (32, 32));
+        assert_eq!((small.get(4, 4), small.get(28, 4)), (0xffff_0000, crate::canvas::TRANSPARENT));
+        assert_eq!(shrunk(&art, 96).pixels, art.pixels, "small enough already");
+        assert_eq!(mix(BLACK, WHITE, 0), WHITE);
     }
 
     #[test]

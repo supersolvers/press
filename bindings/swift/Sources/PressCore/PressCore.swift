@@ -259,6 +259,16 @@ public enum Icon: Int32, CaseIterable, Sendable {
     case application = 3
 }
 
+/// How an icon view lays out its items.
+public enum IconLayout: Int32, CaseIterable, Sendable {
+    /// a picture of 32 pixels with the name beneath
+    case icons = 0
+    /// a picture of 48 pixels with the name beside it, and under the name the label's next two fields, fainter
+    case tiles = 1
+    /// a picture of up to 96 pixels in a frame, with the name beneath
+    case thumbnails = 2
+}
+
 /// How a line is drawn on a Picture.
 public enum LineStyle: Int32, CaseIterable, Sendable {
     /// every pixel
@@ -1229,7 +1239,7 @@ public class ListBox: Widget {
         try _check(press_list_box_set_image(handle, Int32(clamping: index), png, png.count))
     }
 
-    /// Give an item a large picture in colour, for an icon view: the bytes of a PNG file, up to 32 pixels each way, with see-through parts if it has them. An icon view shows it in place of the item's small picture drawn double size; picked out, every other pixel of it takes the colour the style selects in. No bytes take the picture away.
+    /// Give an item a large picture in colour, for an icon view: the bytes of a PNG file, up to 96 pixels each way, with see-through parts if it has them. An icon view shows it in place of the item's small picture drawn double size, made smaller where it is larger than the view's layout shows (32 pixels for icons, 48 for tiles, 96 for thumbnails); picked out as an icon or a tile, every other pixel of it takes the colour the style selects in. No bytes take the picture away.
     public func setLargeImage(_ index: Int, png: [UInt8]) throws {
         try _check(press_list_box_set_large_image(handle, Int32(clamping: index), png, png.count))
     }
@@ -1434,6 +1444,11 @@ public class IconView: ListBox {
     /// Put an item's icon at a place in the view, measured in pixels from the top left of all the icons (not of the view, once it has been scrolled). A negative place puts it back in line with the rest. Clearing the view forgets every place.
     public func setPosition(_ index: Int, x: Int, y: Int) throws {
         try _check(press_icon_view_set_position(handle, Int32(clamping: index), Int32(clamping: x), Int32(clamping: y)))
+    }
+
+    /// Lay the items out as icons (the first way), as tiles or as thumbnails. As tiles, a label's fields after the first, separated by tabs, are shown under the name: the first two that have anything in them. Changing the layout puts every icon back in line and scrolls to the top.
+    public func setLayout(_ layout: IconLayout) throws {
+        try _check(press_icon_view_set_layout(handle, layout.rawValue))
     }
 
     /// The user dragged an icon to a new place in the view, which they can do once ListBox.set_reorderable has been turned on for it. index is the item; x and y are where it now is, as for set_position. Several selected icons dragged together are each reported. The order of the items does not change. The handler receives (index, x, y). A new handler takes the place of the last; pass nil to disconnect.

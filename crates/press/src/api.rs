@@ -2,7 +2,7 @@
 //! The implementation behind each exported function. Names and signatures
 //! are dictated by the generated `abi` module; a mismatch fails to compile.
 
-use crate::abi::{Align, Icon, Key, LineStyle, Orientation, Status, Typeface, ABI_VERSION, MODIFIER_ALT, MODIFIER_CONTROL, MODIFIER_SHIFT};
+use crate::abi::{Align, Icon, IconLayout, Key, LineStyle, Orientation, Status, Typeface, ABI_VERSION, MODIFIER_ALT, MODIFIER_CONTROL, MODIFIER_SHIFT};
 use crate::backend;
 use crate::support::{deliver, forget, settle_clipboard, with, Handle};
 use press_core::{Mods, PointerKind};
@@ -815,6 +815,15 @@ pub fn icon_view_new() -> Result<Handle> {
 
 pub fn icon_view_set_position(this: Handle, index: i32, x: i32, y: i32) -> Result {
     with(|rt| Ok(rt.ui.icon_view_set_position(this, index, x, y)?))
+}
+
+pub fn icon_view_set_layout(this: Handle, layout: IconLayout) -> Result {
+    let layout = match layout {
+        IconLayout::Icons => press_core::IconLayout::Icons,
+        IconLayout::Tiles => press_core::IconLayout::Tiles,
+        IconLayout::Thumbnails => press_core::IconLayout::Thumbnails,
+    };
+    with(|rt| Ok(rt.ui.icon_view_set_layout(this, layout)?))
 }
 
 pub fn tree_view_new() -> Result<Handle> {
