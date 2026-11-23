@@ -65,5 +65,6 @@ buttons.add(paste)
 for widget in (buttons, rows, status):
     column.add(widget)
 window.set_content(column)
+window.fit()  # as large as what is in it needs, whatever the style
 window.show()
 press.App.run()

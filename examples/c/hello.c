@@ -254,6 +254,9 @@ int main(int argc, char **argv) {
     CHECK(press_menu_bar_add(bar, edit));
     CHECK(press_menu_bar_add(bar, options));
     CHECK(press_window_set_menu_bar(window, bar));
+    /* whatever the style, the window is as large as what is in it needs,
+     * its menu bar with it */
+    CHECK(press_window_fit(window));
 
     /* A context menu for the whole window: right-click anywhere but the name
      * field, which pops up its own Cut, Copy and Paste. */

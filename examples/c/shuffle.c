@@ -132,6 +132,8 @@ int main(int argc, char **argv) {
     CHECK(press_stack_add(column, headings));
     CHECK(press_stack_add(column, lists));
     CHECK(press_window_set_content(window, column));
+    /* whatever the style, the window is as large as what is in it needs */
+    CHECK(press_window_fit(window));
 
     if (snapshot) {
         /* without a pointer to drag with, do from the program what dragging would */

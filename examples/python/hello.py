@@ -101,6 +101,9 @@ cancel.on_clicked(press.App.quit)
 name.on_changed(lambda text: ok.set_enabled(bool(text)))
 check.on_toggled(set_shout)
 
+# whatever the style, the window is as large as what is in it needs
+window.fit()
+
 if len(sys.argv) == 3 and sys.argv[1] == "--snapshot":
     window.type_text("Zoë")  # the first text field has the keyboard
     window.press_key(press.Key.TAB, 0)

@@ -87,6 +87,8 @@ int main(void) {
     CHECK(press_stack_add(column, label));
     CHECK(press_stack_add(column, start));
     CHECK(press_window_set_content(window, column));
+    /* whatever the style, the window is as large as what is in it needs */
+    CHECK(press_window_fit(window));
     CHECK(press_window_show(window));
     if (getenv("WORKER_AUTOSTART")) {
         on_start(start, NULL); /* for trying it without a pointer */

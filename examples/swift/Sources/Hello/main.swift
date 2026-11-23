@@ -110,6 +110,9 @@ try cancel.onClicked { attempt { try App.quit() } }
 try name.onChanged { text in attempt { try ok.setEnabled(!text.isEmpty) } }
 try check.onToggled { value in attempt { try setShout(value) } }
 
+// whatever the style, the window is as large as what is in it needs
+try window.fit()
+
 if CommandLine.arguments.count == 3, CommandLine.arguments[1] == "--snapshot" {
     try window.typeText("Zoë")  // the first text field has the keyboard
     try window.pressKey(.tab, modifiers: 0)

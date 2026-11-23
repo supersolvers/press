@@ -27,6 +27,7 @@ async def main():
     column.add(label)
     column.add(reset)
     window.set_content(column)
+    window.fit()  # as large as what is in it needs, whatever the style
     window.show()
 
     seconds = 0

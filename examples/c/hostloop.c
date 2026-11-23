@@ -52,6 +52,8 @@ int main(void) {
     CHECK(press_stack_add(column, label));
     CHECK(press_stack_add(column, reset));
     CHECK(press_window_set_content(window, column));
+    /* whatever the style, the window is as large as what is in it needs */
+    CHECK(press_window_fit(window));
     CHECK(press_window_show(window));
 
     CHECK(press_app_start());

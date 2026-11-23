@@ -118,6 +118,8 @@ int main(int argc, char **argv) {
     CHECK(press_stack_add(column, size_row));
     CHECK(press_stack_add(column, st.summary));
     CHECK(press_window_set_content(window, column));
+    /* whatever the style, the window is as large as what is in it needs */
+    CHECK(press_window_fit(window));
 
     if (snapshot) {
         CHECK(press_widget_focus(faces));

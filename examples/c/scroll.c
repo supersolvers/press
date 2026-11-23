@@ -90,6 +90,8 @@ int main(int argc, char **argv) {
     CHECK(press_scroll_view_set_content(view, list));
     CHECK(press_stack_add(column, view));
     CHECK(press_window_set_content(window, column));
+    /* whatever the style, the window is as large as what is in it needs */
+    CHECK(press_window_fit(window));
 
     if (snapshot) {
         CHECK(press_window_click_at(window, 270, 48)); /* the right-hand arrow of the level */
