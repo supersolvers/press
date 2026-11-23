@@ -1,0 +1,4 @@
+usr/include/press.h
+usr/include/press_style.h
+usr/lib/*/libpress.so
+usr/lib/*/pkgconfig/press.pc

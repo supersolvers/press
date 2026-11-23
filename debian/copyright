@@ -1,0 +1,13 @@
+Upstream-Name: PRESS
+Source: https://github.com/supersolvers/press
+
+PRESS code is licensed under the GNU General Public License, version 3
+or later. The complete GPL version 3 text is available on Debian systems
+in /usr/share/common-licenses/GPL-3.
+
+The embedded fonts are distributed under the SIL Open Font License 1.1.
+Their copyright notices, source attributions, and full license text are
+installed with libpress1 in /usr/share/doc/libpress1/OFL.txt. The source
+tree also contains the individual upstream notices under fonts/vendor/.
+The vendored Font Awesome SCSS name list has a separate MIT license
+recorded in fonts/vendor/font-awesome/LICENSE-scss.txt.

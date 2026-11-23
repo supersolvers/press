@@ -77,6 +77,18 @@ a display.
 cargo build
 ```
 
+The Swift examples and tests need the native PRESS library, its headers,
+and `pkg-config`. If you've installed `libpress-dev` and its matching
+runtime package, SwiftPM finds those through `press.pc`. To use the native
+library from this checkout without a system install, stage it locally and
+run the Swift commands below in the same shell.
+
+```bash
+make swift-sdk PROFILE=debug
+export PKG_CONFIG_PATH="$PWD/target/debug/swift-sdk/lib/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
+export LD_LIBRARY_PATH="$PWD/target/debug/swift-sdk/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+```
+
 ```bash
 swift run --package-path examples/swift HelloUI
 ```
@@ -158,15 +170,19 @@ dependencies: [.package(name: "Press", path: "../press")],
 targets: [.executableTarget(name: "Hello", dependencies: [.product(name: "Press", package: "Press")])]
 ```
 
-Run `cargo build` in the PRESS checkout before building your Swift app.
-SwiftPM uses the most recent `libpress.so` build in that checkout. If it
-finds no build, it uses the system linker's normal search paths.
-`sudo make install` installs the library, headers, styles, and themes
-under `PREFIX` (`/usr/local` by default).
+SwiftPM uses `pkg-config` to find the native library and headers. Install
+`libpress-dev` and its matching runtime package, or use the local SDK
+setup above. When using a released Git tag, install the native packages
+from the same release. Once version 0.1.0 is tagged, the corresponding
+Git dependency and target entry are:
 
-Set `PRESS_LIB_DIR` when building with SwiftPM if you want to use a specific
-directory containing `libpress.so`. The override takes precedence over
-the checkout builds.
+```swift
+dependencies: [.package(url: "https://github.com/supersolvers/press.git", exact: "0.1.0")],
+targets: [.executableTarget(name: "Hello", dependencies: [.product(name: "Press", package: "press")])]
+```
+
+Use the `PressCore` product and `import PressCore` for the lower-level
+Swift binding.
 
 A C program finds what was installed through pkg-config, as `press`:
 
@@ -1354,6 +1370,18 @@ image, and snapshots of windows showing one preserve the color.
 
 `cargo run -p press-idl -- --check` fails if the checked-in header or bindings
 are out of date.
+
+## Package checks and releases
+
+GitHub Actions builds the Ubuntu 26.04 amd64 packages on pull requests and
+pushes to `main`. A separate job installs them and checks the C interface,
+the Swift tests, and a versioned SwiftPM consumer. Download the packages
+and `SHA256SUMS` from the workflow run.
+
+A push of a version tag such as `v0.1.0` runs the same checks. The tag must
+match the versions in `Cargo.toml` and `debian/changelog`. When the checks
+pass, the workflow attaches the tested packages and checksums to a draft
+GitHub release. Publish the draft from the Releases page after reviewing it.
 
 ## Licence
 

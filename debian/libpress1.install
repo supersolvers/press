@@ -1,0 +1,3 @@
+usr/lib/*/libpress.so.1
+usr/lib/*/press/styles/*.so
+usr/share/press/themes/*.toml

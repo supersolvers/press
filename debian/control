@@ -1,0 +1,23 @@
+Source: press
+Section: libs
+Priority: optional
+Maintainer: Zach <cress_07loaners@icloud.com>
+Build-Depends: debhelper-compat (= 13), cargo, rustc, fontconfig, libxkbcommon-dev, pkgconf
+Rules-Requires-Root: no
+Homepage: https://github.com/supersolvers/press
+
+Package: libpress1
+Architecture: linux-any
+Depends: ${shlibs:Depends}, ${misc:Depends}, fontconfig
+Description: PRESS widget toolkit runtime
+ PRESS provides a widget engine with Wayland and headless rendering and
+ loadable styles. This package contains the shared library, style plugins,
+ and themes.
+
+Package: libpress-dev
+Section: libdevel
+Architecture: linux-any
+Depends: libpress1 (= ${binary:Version}), ${misc:Depends}
+Description: Development files for the PRESS widget toolkit
+ This package contains the C headers, linker symlink, and pkg-config
+ metadata for building applications and style libraries against PRESS.

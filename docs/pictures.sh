@@ -6,8 +6,8 @@
 #
 #     make && docs/pictures.sh
 #
-# It needs a C compiler, Swift, and ImageMagick (convert, montage). Nothing
-# is shown on the screen. The pictures of programs on a desktop, under a
+# It needs a C compiler, Swift, pkg-config, and ImageMagick (convert, montage).
+# The examples run headless. The pictures of programs on a desktop, under a
 # pointer or at a screen's scale (content, fractional, pointers, stretch,
 # styles-on-ode, text-drag, accents, rich-text) are taken by hand and are
 # not drawn here.
@@ -20,6 +20,8 @@ LIB=$PWD/target/$OUT
 WORK=$(mktemp -d)
 trap 'rm -rf "$WORK"' EXIT
 
+make install PROFILE="$OUT" PREFIX="$WORK/sdk" LIBDIR="$WORK/sdk/lib" DESTDIR= INSTALL_FONTS=no >/dev/null
+export PKG_CONFIG_PATH="$WORK/sdk/lib/pkgconfig"
 export LD_LIBRARY_PATH="$LIB" PRESS_STYLE_PATH="$LIB" PRESS_BACKEND=headless
 unset PRESS_SCALE PRESS_SNAPSHOT PRESS_STYLE || true
 

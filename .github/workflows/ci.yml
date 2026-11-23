@@ -1,0 +1,90 @@
+name: PRESS CI and release
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  build:
+    name: Build and test Ubuntu 26.04 packages
+    runs-on: ubuntu-24.04
+    container: swift:6.4.2-resolute
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - name: Install build dependencies
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends build-essential curl debhelper fontconfig libxkbcommon-dev pkgconf
+          curl --proto '=https' --tlsv1.2 -fsSL https://sh.rustup.rs |
+            sh -s -- -y --profile minimal --default-toolchain 1.100.0
+          printf '%s\n' "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+      - name: Build packages and run Rust checks
+        run: .github/scripts/build-debs.sh dist
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: press-ubuntu-26.04-amd64
+          path: dist/
+          if-no-files-found: error
+
+  verify:
+    name: Test the installed packages and Swift dependency
+    needs: build
+    runs-on: ubuntu-24.04
+    container: swift:6.4.2-resolute
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: press-ubuntu-26.04-amd64
+          path: dist
+      - name: Install the built packages
+        run: |
+          (cd dist && sha256sum --check SHA256SUMS)
+          apt-get update
+          apt-get install -y --no-install-recommends gcc libc6-dev git pkgconf ./dist/libpress1_*.deb ./dist/libpress-dev_*.deb
+      - name: Test the installed C and Swift interfaces
+        run: .github/scripts/check-installed.sh
+
+  draft:
+    name: Create a draft GitHub release
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    needs: verify
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: press-ubuntu-26.04-amd64
+          path: dist
+      - name: Attach the verified packages to a draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          (cd dist && sha256sum --check SHA256SUMS)
+          gh release create "$GITHUB_REF_NAME" dist/*.deb dist/SHA256SUMS \
+            --verify-tag --draft --title "PRESS ${GITHUB_REF_NAME#v}" --notes-file - <<'NOTES'
+          The native packages were built and tested on Ubuntu 26.04 amd64.
+
+          Install `libpress1` to run an app that uses PRESS. Install
+          `libpress-dev` alongside it to build C or Swift apps. For Swift,
+          use the `Press` or `PressCore` product from this release tag.
+          NOTES

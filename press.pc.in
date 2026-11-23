@@ -2,7 +2,7 @@
 #     cc hello.c $(pkg-config --cflags --libs press) -o hello
 # make install fills in the places and the versions.
 prefix=@PREFIX@
-libdir=${prefix}/lib
+libdir=@LIBDIR@
 includedir=${prefix}/include
 stylesdir=${libdir}/press/styles
 themesdir=${prefix}/share/press/themes
