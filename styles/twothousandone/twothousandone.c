@@ -240,29 +240,53 @@ static void popup(const press_part *p, box r) {
     arrow(drop.x + drop.w / 2, drop.y + drop.h / 2, 4, 1, SKY_INK);
 }
 
-/* A window's frame: blue, deep at the edges and light along the top of
- * the title bar, with the top corners rounded off and the title in white.
- * Behind others it is paler. */
+/* A window's title bar, row by row from its top, as the period's desktop
+ * shaded it: a lit line just under its rim, deepest a quarter of the way
+ * down, lighter again low down, and a dark last row. Behind others it is
+ * pale. Read off the period's desktop pixel by pixel; every one is turned
+ * to the theme's blue by like(). */
+static const uint32_t TITLE[30] = {
+    0x0058ee, 0x3f97ff, 0x2b90ff, 0x0372ff, 0x0365f1, 0x005ce9, 0x0058e6, 0x0054e3, 0x0054e3, 0x0054e3,
+    0x0055e5, 0x0055e5, 0x0055e5, 0x0055e5, 0x0055e5, 0x0055ea, 0x0055ea, 0x0058ee, 0x005bf2, 0x005af5,
+    0x0060f9, 0x0164f9, 0x026afe, 0x026afe, 0x026afe, 0x026afe, 0x0065fd, 0x0060fc, 0x004de3, 0x0043cf,
+};
+static const uint32_t TITLE_BEHIND[30] = {
+    0x688de0, 0x98b2e8, 0x9db9eb, 0x8aace7, 0x7ea2e4, 0x7b9de1, 0x7a99e0, 0x7996de, 0x7996de, 0x7996de,
+    0x7a96df, 0x7a96df, 0x7a96df, 0x7a96e0, 0x7b97e0, 0x7b99e1, 0x7b99e1, 0x7d9be3, 0x7d9be3, 0x7f9fe6,
+    0x7fa2e6, 0x80a5e7, 0x81a7e8, 0x82a9e9, 0x82a9e9, 0x81a7e8, 0x80a5e7, 0x7e9de5, 0x7a93df, 0x7a93df,
+};
+/* The four pixels of the edge at the left, from the outside in, and at the
+ * right and the foot, from the inside out; and their pale kin behind. */
+static const uint32_t EDGE_LEFT[4] = {0x0019cf, 0x0732d9, 0x166aee, 0x0855dd};
+static const uint32_t EDGE_OTHER[4] = {0x0048f1, 0x003edc, 0x001ea1, 0x00138c};
+static const uint32_t EDGE_LEFT_BEHIND[4] = {0x5b68cd, 0x7276d1, 0x747cd5, 0x7686d9};
+static const uint32_t EDGE_OTHER_BEHIND[4] = {0x7686d9, 0x747cd5, 0x7276d1, 0x5b68cd};
+
+/* A window's frame: the title bar as above, its top corners rounded off,
+ * the title in white with a soft shadow; down the sides and along the
+ * foot an edge four pixels deep, lighter inside than out. */
 static void frame(const press_part *p, box r) {
     int active = has(p, PRESS_STATE_ENABLED), line = line_height();
-    uint32_t deep = active ? like(BLUE, 0x0a3fcf) : like(BLUE, 0x7a8fd0), mid = active ? like(BLUE, 0x0f62e8) : like(BLUE, 0x8ba3e0), high = active ? like(BLUE, 0x4d9bff) : like(BLUE, 0xa9bdf0);
-    /* the whole shape, rounded at the top only */
-    round_fill((box){r.x, r.y, r.w, p->a + 8}, 7, deep, deep);
-    fill((box){r.x, r.y + p->a, r.w, r.h - p->a}, deep);
-    box bar = {r.x + 1, r.y + 1, r.w - 2, p->a - 1};
-    for (int y = 0; y < bar.h; y++) {
-        float t = (float)y / (bar.h - 1);
-        uint32_t c = t < 0.12f ? mix(high, mid, t / 0.12f) : t < 0.85f ? mix(mid, mix(mid, deep, 0.35f), (t - 0.12f) / 0.73f) : mix(mix(mid, deep, 0.35f), deep, (t - 0.85f) / 0.15f);
-        for (int x = bar.x; x < bar.x + bar.w; x++) {
-            float cover = covered(outside((box){r.x + 1, r.y + 1, r.w - 2, p->a + 8}, 6, x, bar.y + y));
-            if (cover > 0) blend(x, bar.y + y, c, cover);
+    const uint32_t *rows = active ? TITLE : TITLE_BEHIND;
+    const uint32_t *left = active ? EDGE_LEFT : EDGE_LEFT_BEHIND, *other = active ? EDGE_OTHER : EDGE_OTHER_BEHIND;
+    int t = p->a, e = 4;
+    /* the edges, and the inside, which the window covers */
+    fill((box){r.x, r.y + t, r.w, r.h - t}, like(BLUE, other[0]));
+    for (int i = 0; i < e; i++) {
+        fill((box){r.x + i, r.y + t, 1, r.h - t}, like(BLUE, left[i]));
+        fill((box){r.x + r.w - 1 - i, r.y + t, 1, r.h - t - i}, like(BLUE, other[e - 1 - i]));
+        fill((box){r.x + i, r.y + r.h - 1 - i, r.w - 2 * i, 1}, like(BLUE, other[e - 1 - i]));
+    }
+    /* the title bar, its rows spread over its height, rounded at the top */
+    box shape = {r.x, r.y, r.w, t + 8};
+    for (int y = 0; y < t; y++) {
+        uint32_t c = like(BLUE, rows[t > 1 ? y * 29 / (t - 1) : 0]);
+        for (int x = r.x; x < r.x + r.w; x++) {
+            float cover = covered(outside(shape, 7, x, r.y + y));
+            if (cover > 0) blend(x, r.y + y, c, cover);
         }
     }
-    /* the edges: a lighter line just inside the dark one */
-    fill((box){r.x + 1, r.y + p->a, 1, r.h - p->a - 1}, mid);
-    fill((box){r.x + r.w - 2, r.y + p->a, 1, r.h - p->a - 1}, mid);
-    fill((box){r.x + 1, r.y + r.h - 2, r.w - 2, 1}, mid);
-    int ty = r.y + (p->a - line) / 2 + 1;
+    int ty = r.y + (t - line) / 2 + 1;
     words(p->text, r.x + 9, ty + 1, with_alpha(like(BLUE, 0x0a1883), active ? 0.9f : 0.3f));
     words(p->text, r.x + 8, ty, active ? WHITE : like(BLUE, 0xd8e4f8));
 }
@@ -433,14 +457,14 @@ static void metrics(press_metrics *m) {
     m->menu_item_height = 19;
     m->menu_shadow = 4;
     /* a frame of its own, with its menus in it */
-    m->frame_title = 29;
+    m->frame_title = 30;
     m->ok_leads = 1; /* OK, then Cancel */
     m->frame_border = 4;
     m->frame_button_width = 21;
     m->frame_button_height = 21;
     m->frame_button_gap = 2;
     m->frame_button_inset = 6;
-    m->frame_button_rise = 1;
+    m->frame_button_rise = 2;
     m->frame_left = 0;
     m->frame_right = 0x231; /* put away, make large, close */
     m->menu_in_window = 1;

@@ -43,6 +43,10 @@ on 18 November 2026.
   come with the library.
 - A title bar may have a button that puts its window behind the others,
   through a Wayland protocol of PRESS's own, `press_depth_v1`.
+- Two Thousand and One's window frame is measured from the period's
+  desktop: a title bar 30 pixels high, shaded row for row as its title bars
+  were (and paler behind), with its buttons six pixels down, and an edge
+  four pixels deep, lighter inside than out.
 
 ### Installing
 
