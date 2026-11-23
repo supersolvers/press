@@ -53,6 +53,23 @@ on 18 November 2026.
   desktop: a title bar 30 pixels high, shaded row for row as its title bars
   were (and paler behind), with its buttons six pixels down, and an edge
   four pixels deep, lighter inside than out.
+- Two Thousand and Four's window frame is laid out as the period's window
+  manager laid out its frames: square, in a line of black; a line of light
+  and a title bar of twenty rows shading from tan to brown, the title in
+  white over a shadow, and a dark line under it; edges five pixels deep
+  with a line of shade at the right and foot; square buttons of 17 pixels,
+  darker than the bar in a rim of light, with signs two pixels thick.
+  Behind others it is flat parchment with a grey title.
+- Two Thousand and Four's widgets are shaped as the period's were,
+  measured from it and drawn in the style's own colours: buttons flat and
+  pale in a thin grey line, a little darker low down, the default one in a
+  dark line with a soft glow three pixels deep (`default_ring` 3; buttons
+  and pop-ups 30 pixels high); boxes to tick and rings to choose sunk a
+  little; fields white in a grey line; scroll bars and sliders with grey
+  troughs and knobs with a grip of dots (a slider's knob 31 pixels long and
+  nothing marking the way gone); tabs behind greyer and two pixels lower;
+  list headers as buttons side by side; menus flat, with no shadow and a
+  single line between groups, their items 23 pixels high.
 
 ### Installing
 

@@ -21,6 +21,7 @@ FOLLOWER(EDGE, 0x9aaecb);
 #define EDGE follows(EDGE, WINDOW)
 FOLLOWER(GREY, 0x8a97ab);
 #define GREY follows(GREY, WINDOW)
+COLOUR(GOLD, 0xe9b44c);     /* gilt: the rim round what is set in */
 COLOUR(WHITE, 0xffffff);
 COLOUR(BLACK, 0x000000);
 
@@ -276,12 +277,26 @@ static void frame(const press_part *p, box r) {
     box shine = {r.x + 3, r.y + 2, r.w - 6, p->a / 2};
     if (shine.w > 0 && shine.h > 0) round_fill(shine, radius - 3 > 0 ? radius - 3 : 0, with_alpha(WHITE, active ? 0.7f : 0.45f), with_alpha(WHITE, 0.1f));
     round_line(r, radius, 1, with_alpha(mix(tint, WHITE, 0.6f), 0.9f));
-    /* the line where the content will lie */
+    /* the shell stands up: lit along its upper edge, shaded along its foot */
+    box rim_in = inset(r, 1);
+    clip_to((box){r.x, r.y, r.w, r.h / 2});
+    round_line(rim_in, radius - 1, 1, with_alpha(WHITE, active ? 0.55f : 0.3f));
+    clip_to((box){r.x, r.y + r.h / 2, r.w, r.h - r.h / 2});
+    round_line(rim_in, radius - 1, 1, with_alpha(BLACK, 0.28f));
+    clip_off();
+    /* the content is set into the shell: a shaded cut, a fine rim of gilt
+     * round it, a lit lip below */
     box in = {r.x + p->b - 1, r.y + p->a - 1, r.w - 2 * p->b + 2, r.h - p->a - p->b + 2};
-    if (in.w > 0 && in.h > 0) outline(in, with_alpha(mix(tint, BLACK, 0.4f), 0.5f));
-    /* the window's mark and its title */
+    if (in.w > 0 && in.h > 0) {
+        box gilt = {in.x - 1, in.y - 1, in.w + 2, in.h + 2};
+        outline(gilt, with_alpha(active ? GOLD : mix(GOLD, like(WINDOW, 0xaab6c8), 0.6f), active ? 0.95f : 0.6f));
+        outline(in, with_alpha(mix(tint, BLACK, 0.6f), 0.7f));
+        fill_over((box){gilt.x, gilt.y + gilt.h, gilt.w, 1}, with_alpha(WHITE, 0.35f));
+    }
+    /* the window's mark, set in gilt, and its title */
     int side = 14, my = r.y + (p->a - side) / 2;
     orb((box){r.x + p->b + 9, my, side, side}, active ? mix(tint, WHITE, 0.35f) : mix(tint, like(WINDOW, 0xaab6c8), 0.6f), 0);
+    round_line((box){r.x + p->b + 8, my - 1, side + 2, side + 2}, (side + 2) / 2.0f, 1, with_alpha(GOLD, active ? 1.0f : 0.5f));
     int tx = r.x + p->b + 9 + side + 9, ty = r.y + (p->a - line_height()) / 2;
     uint32_t ink = active ? mix(tint, INK, 0.85f) : mix(INK, WHITE, 0.35f);
     words(p->text, tx, ty + 1, with_alpha(WHITE, 0.55f));
