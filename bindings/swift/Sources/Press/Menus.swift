@@ -9,8 +9,7 @@ import PressCore
 
 // MARK: - Describing
 
-/// What a view comes to when it is read as an item of a menu, a choice of a
-/// picker or a row of a list.
+/// A view's description as a menu item, picker choice, or list row.
 struct ItemSpec {
     enum Kind {
         case text(String)

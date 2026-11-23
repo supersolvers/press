@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! Regenerate the checked-in bindings from idl/press.toml:
-//!
-//!     cargo run -p press-idl            write include/press.h and bindings/
-//!     cargo run -p press-idl -- --check fail if they are out of date
+//! Regenerate the checked-in C header and bindings from `idl/press.toml`
+//! with `cargo run -p press-idl`. Add `-- --check` to check for stale
+//! output without writing files.
 
 use press_idl::Idl;
 use std::path::Path;
@@ -36,7 +35,7 @@ fn main() -> ExitCode {
         let path = root.join(rel);
         if check {
             if std::fs::read_to_string(&path).ok().as_deref() != Some(content.as_str()) {
-                eprintln!("{rel} is out of date; run: cargo run -p press-idl");
+                eprintln!("{rel} is out of date. Regenerate it with cargo run -p press-idl.");
                 stale = true;
             }
         } else {

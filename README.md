@@ -2,14 +2,14 @@
 
 **P**RESS **R**enders **E**very **S**tyle in **S**wift.
 
-A user interface framework for Swift, and the toolkit under it. A program
-says what its windows hold, as values, in the manner of SwiftUI; an engine
-written in Rust keeps the widgets, lays them out, and takes the keyboard and
-the pointer; and a *style* decides what all of it looks like. The style the
-engine was born with is one bit deep, black and white in the manner of the
-first Macintosh. It is one choice among others: a style is a small library
-of its own, chosen when a program starts, and the same program is drawn in
-any of them without being built again.
+PRESS is a UI framework for Swift with a Rust toolkit underneath. You
+describe what's in a window using SwiftUI-style values. The engine manages
+the widgets, lays them out, and handles keyboard and pointer input. The
+*style* draws the interface.
+
+Eighty-Four is the built-in black-and-white style, inspired by the first
+Macintosh. Other styles are small libraries that PRESS can load at startup.
+You can run the same program in any of them without rebuilding it.
 
 | Eighty-Four | Ninety-Five |
 | --- | --- |
@@ -44,10 +44,9 @@ struct Hello: App {
 }
 ```
 
-The program says how it looks, and that is how it looks wherever it is
-run: its controls, its type, the frame and title bar of its windows, and
-where its menus are. A program that says nothing looks as the desktop it
-is on would have it.
+That style choice covers the controls, fonts, window frames, title bars,
+and menu placement. If you leave the style unspecified, the program uses
+the desktop's choice.
 
 ![The same dialog as five programs, each in a style of its own, frame and all](docs/frames.png)
 
@@ -55,10 +54,9 @@ is on would have it.
 
 ![And three more: lozenges and brackets, slate and rose, and a title that is a tab](docs/frames-three.png)
 
-A title bar need not be a bar. A style may say it is a tab, as wide as the
-title and its buttons need, on the top left corner of the window; the
-strip beside it is then no part of the window, and what is behind shows
-there.
+Some styles draw the title bar as a tab at the top left, with room for
+the title and its buttons. The area beside the tab is outside the window,
+so you can see what's behind it.
 
 There are three layers, and each can be used without the one above it:
 
@@ -127,12 +125,14 @@ python3 examples/python/hello.py
 swift run --package-path examples/swift Hello
 ```
 
-Most of the examples take `--snapshot NAME` to render to a PNG without
-opening a window: the C ones but `hostloop` and `worker`, `hello.py`, and
-the Swift `Hello`. Those that show several states write `NAME-1.png`,
-`NAME-2.png` and so on. A program written with Press (`HelloUI`,
-`GalleryUI`, `ToolsUI`) is given `PRESS_SNAPSHOT=file.png` instead. Set
-`PRESS_BACKEND=headless` to run with no display at all.
+Use `--snapshot NAME` to render the C examples, `hello.py`, or the Swift
+`Hello` to PNG without opening a window. The C examples `hostloop` and
+`worker` don't take that flag. Examples that capture several states write
+`NAME-1.png`, `NAME-2.png` and so on.
+
+For the Press examples (`HelloUI`, `GalleryUI`, `ToolsUI`), set
+`PRESS_SNAPSHOT=file.png`. Set `PRESS_BACKEND=headless` to run without a
+display.
 
 Set `PRESS_SCALE` to a whole number from 2 to 8 to magnify everything:
 
@@ -158,10 +158,15 @@ dependencies: [.package(name: "Press", path: "../press")],
 targets: [.executableTarget(name: "Hello", dependencies: [.product(name: "Press", package: "Press")])]
 ```
 
-The package links against the `libpress.so` built last in its own checkout
-(`cargo build` there first), or the one in `PRESS_LIB_DIR` if that is set,
-or failing both an installed one. `sudo make install` installs the library,
-its headers, the styles and their themes under `PREFIX` (`/usr/local`).
+Run `cargo build` in the PRESS checkout before building your Swift app.
+SwiftPM uses the most recent `libpress.so` build in that checkout. If it
+finds no build, it uses the system linker's normal search paths.
+`sudo make install` installs the library, headers, styles, and themes
+under `PREFIX` (`/usr/local` by default).
+
+Set `PRESS_LIB_DIR` when building with SwiftPM if you want to use a specific
+directory containing `libpress.so`. The override takes precedence over
+the checkout builds.
 
 A C program finds what was installed through pkg-config, as `press`:
 
@@ -321,9 +326,10 @@ no frame of its own: its windows wear the desktop's.
 
 ![Three windows on a Wayland desktop. One uses the desktop frame and two draw their own](docs/styles-on-ode.png)
 
-This works on any Wayland desktop that lets a program draw its own frame. A desktop that insists on drawing the
-frame is let, and the window is then content alone. `PRESS_FRAME=desktop`
-in a program's environment asks for that everywhere.
+On a Wayland desktop that supports client-side decorations, the app
+draws its own frame. If the compositor supplies the frame, the app draws
+only its content. Set `PRESS_FRAME=desktop` to request compositor-drawn
+frames.
 
 A style also says whether its menus stay in the window. Those in the
 manner of desktops that kept them there do (Eighty-Eight, Eighty-Nine,
@@ -401,9 +407,8 @@ A Rust program that embeds the engine can dress it directly:
 
 ### Themes
 
-A style can be worn in other colours, sizes and type without building
-anything: a theme is a file of a few lines that names a style and says
-what of it is to be otherwise.
+A theme names a base style and overrides its colors, sizes, or fonts.
+Edit the theme file to try a variation without rebuilding the style.
 
 ```toml
 name = "Ninety-Nine, Sage"   # what to call it, for people
@@ -500,22 +505,18 @@ style, in C.
 
 The desktops of 1985 and 1991 gave a window a box that put it behind
 every other, and the styles of those years have it (`PRESS_FRAME_BACK`).
-The window protocol has a way to put a window away and none to put it
-behind, so this is asked by a small protocol of press's own,
-`press_depth_v1` (`protocols/press-depth-v1.xml`). A
-compositor can send the window to the back and give focus to the window
-now in front. On a
-desktop that does not offer it the box puts the window away instead.
-`crates/press-protocols` holds both sides of the protocol, for a desktop
-that would offer it too.
+`press_depth_v1` (`protocols/press-depth-v1.xml`) lets a compositor send
+the window to the back and give keyboard focus to the window now in front.
+If the compositor doesn't support the protocol, the button minimizes the
+window. `crates/press-protocols` contains the client and server bindings.
 
 ## The ABI
 
 - **Handles, not pointers.** Every object is an opaque 64-bit handle holding a
   slot index and a generation. A destroyed or stale handle returns
   `INVALID_HANDLE`; a handle of the wrong class returns `WRONG_TYPE`.
-- **Status codes only.** Every function returns a status; results come back
-  through a final out pointer. Panics are caught at the boundary.
+- **Status codes only.** Every function returns a status. Results come back
+  through a final out pointer. The ABI catches panics at the boundary.
 - **Strings** are UTF-8 with an explicit length, borrowed for the call.
 - **Strings given to a handler** (a text field passes its text with
   `changed` and `submitted`) are lent for the call and NUL-terminated.
@@ -681,8 +682,8 @@ A window will not go smaller than its content's natural size.
 A window can also fill its screen: `press_window_set_full_screen` asks
 the desktop for it, and `full_screen_changed` says when the desktop has
 done so or undone it, as when the user leaves by the desktop's own means.
-The window then has no title bar or frame, and draws no menu bar of its
-own. Menu shortcuts still work.
+While full screen, the window draws without a title bar, frame, or menu
+bar. Menu shortcuts still work.
 
 The back and forward buttons on the side of many a mouse are heard as a
 window's `navigate` event (`press_window_on_navigate`), with which of the
@@ -998,8 +999,7 @@ what Qt and GTK applications use, so this needs nothing from the
 application. Where no such desktop is running the bar stays in the window.
 `PRESS_MENU_BAR=window` keeps it in the window regardless.
 
-Under Plasma the bar at the top of the screen is drawn by Plasma, in its
-style.
+The desktop draws the exported menu bar in its own style.
 
 ## Scale and the pointer
 
@@ -1137,10 +1137,10 @@ program that already has one (a game loop, libuv, GLib, asyncio) keeps it:
    false once `press_app_quit` has been called or the last window has gone.
 4. `press_app_stop()` disconnects.
 
-The descriptor covers everything press needs a turn for, so there is no
-timeout to compute: input from the display, the caret blink and other
-animations, key repeat, a paste arriving, and any change you make through
-the API from outside a handler (a timer of yours setting a label, say).
+The descriptor covers display input, caret blinking and other animations,
+key repeat, incoming paste data, and API calls that change the UI outside a
+handler. If a timer in your loop updates a label, press wakes the loop
+through the same descriptor. You don't need a separate timeout for press.
 
 `examples/c/hostloop.c` does this with `poll()`, and
 `examples/python/hostloop.py` with asyncio's `add_reader`.

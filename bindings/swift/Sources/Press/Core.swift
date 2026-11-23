@@ -1,18 +1,16 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Press: press in the manner of SwiftUI. A program says what its windows
-// hold as values, in `body`, and this module keeps the widgets of the PressCore
-// module in step with them.
+// Press apps describe windows as SwiftUI-style values in `body`. Press
+// updates the PressCore widgets when those values change.
 //
-// This file is the middle of it: what a view is, the builder that gathers
-// views, the state a view keeps, and the tree of nodes that stands between
-// the views a program describes and the widgets on the screen.
+// The view, builder, and state types live here alongside the node tree
+// that connects views to widgets.
 import Foundation
 import PressCore
 import Observation
 
 // MARK: - Views
 
-/// A piece of a window, described by what it is made of.
+/// A piece of a window described by its content.
 @MainActor
 public protocol View {
     associatedtype Body: View
@@ -27,7 +25,7 @@ extension View where Body == Never {
     public var body: Never { fatalError("\(Self.self) is drawn by press and has no body") }
 }
 
-/// Nothing at all.
+/// A view with no content.
 public struct EmptyView: View, _NodeView {
     public typealias Body = Never
     public init() {}
@@ -389,7 +387,7 @@ public struct Environment<Value>: DynamicProperty, _LinkedProperty {
     public init(_ type: Value.Type) where Value: AnyObject & Observable {
         read = { values in
             guard let object = values[object: type] else {
-                fatalError("No \(type) was put in the environment; use .environment(_:) on a view above this one")
+                fatalError("No \(type) in the environment. Use .environment(_:) on an ancestor view.")
             }
             return object
         }
@@ -436,9 +434,9 @@ final class WeakNode: @unchecked Sendable {
     }
 }
 
-/// What stands for a view while it is in a window. Views are made again and
-/// again; a node stays, holding the view's state and its widgets, for as
-/// long as a view of the same kind is described in the same place.
+/// A view can be recreated while its node stays in the tree. The node
+/// keeps the state and widgets as long as the view's type and position
+/// stay the same.
 @MainActor
 class Node {
     weak var parent: Node?

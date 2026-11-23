@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! Themes: a style from a library, worn in other colours, sizes and type.
-//! A theme is a few lines of text that anybody can write, and needs no
-//! compiler:
+//! A theme overrides colors, sizes, and fonts from a base style. You can
+//! edit the TOML file without compiling a new style library.
 //!
 //! ```toml
 //! name = "Sage"            # what to call it, for people
@@ -20,17 +19,17 @@
 //! interface = { family = "DejaVu Sans", size = 12 }
 //! ```
 //!
-//! It is found by its file's name where a style is found by its library's:
-//! `sage.toml` is what `PRESS_STYLE=sage` wears.
+//! Select a theme by its filename without the extension. For example,
+//! set `PRESS_STYLE=sage` to select `sage.toml`.
 
 use press_core::{Metrics, Palette, Type};
 
-/// What a theme says is to be otherwise than its style has it.
+/// Overrides to apply to a base style.
 #[derive(Debug, Default, Clone, PartialEq)]
 pub struct Theme {
-    /// What it is called, for people; the engine knows it by its file.
+    /// Display name. The engine selects the theme by filename.
     pub name: Option<String>,
-    /// The style it is a way of wearing: a name, or the path of a library.
+    /// Base style name or path to a style library.
     pub style: String,
     /// The style's own colours, by the names the style gives them.
     pub colours: Vec<(String, u32)>,
@@ -38,7 +37,7 @@ pub struct Theme {
     pub sizes: Vec<(String, i32)>,
     /// Typefaces, by the number a style library knows each use by.
     pub types: Vec<(u32, Type)>,
-    /// What in the file was not understood, and was passed over.
+    /// Diagnostics for entries the parser skipped.
     pub doubts: Vec<String>,
 }
 

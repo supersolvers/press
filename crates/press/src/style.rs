@@ -1,17 +1,15 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! Styles from outside: a look for the interface that lives in a shared
-//! library of its own, written against `include/press_style.h`.
+//! Loads style libraries built against `include/press_style.h`.
 //!
-//! Which style is chosen once, when the program starts: `PRESS_STYLE` says,
-//! or failing that the first line of `press/style` in the user's
-//! configuration folder, the desktop's choice for every program. Either is
-//! a name (`ninetyfive` is looked for as `libpress_style_ninetyfive.so`) or
-//! the path of a library. With neither, or if the library cannot be had,
-//! the interface is black and white.
+//! At startup, press reads `PRESS_STYLE` or falls back to the first line of
+//! `press/style` in the user's configuration directory. Either can name a
+//! style (such as `ninetyfive`, which resolves to
+//! `libpress_style_ninetyfive.so`) or give a path to a library. With no
+//! selection or no usable library, press uses the built-in black-and-white
+//! style.
 //!
-//! Either may also be a theme, a file of text that names a style and says
-//! what of it is to be otherwise: see [`crate::theme`]. `sage` is looked
-//! for as a library first and then as `sage.toml`.
+//! A name can also identify a theme. For `sage`, press looks for a style
+//! library first, then for `sage.toml`. See [`crate::theme`].
 
 use crate::theme::Theme;
 use press_core::{Metrics, Painter, Palette, Part, Style};
@@ -348,8 +346,8 @@ unsafe fn colour(raw: &RawStyle, theme: Option<&Theme>) -> Vec<String> {
     doubts
 }
 
-/// Load a style from a library, to be worn as a theme would have it if
-/// there is one: `called` is then the name the theme was chosen by.
+/// Load a style library and apply any theme overrides. The theme's name
+/// here is the one used to select it.
 fn load(path: &Path, theme: Option<(&str, Theme)>) -> Result<Arc<dyn Style>, String> {
     let c_path = CString::new(path.as_os_str().as_encoded_bytes()).map_err(|_| "its name has a NUL in it".to_string())?;
     unsafe {
@@ -458,7 +456,7 @@ fn library(named: &str) -> Option<PathBuf> {
     folders().into_iter().map(|d| d.join(&file)).find(|p| p.is_file())
 }
 
-/// A style worn as the theme in a file would have it.
+/// Load a theme file and apply it to its base style.
 fn themed(file: &Path) -> Result<Arc<dyn Style>, String> {
     let text = std::fs::read_to_string(file).map_err(|why| format!("{} cannot be read: {why}", file.display()))?;
     let theme = Theme::parse(&text).map_err(|why| format!("{}: {why}", file.display()))?;

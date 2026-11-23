@@ -85,11 +85,10 @@ sheets.
    hieroglyphs are redrawn from `vendor/font-awesome` and
    `vendor/noto-egyptian` (`src/borrow.py`).
 
-Checking a change: build the family, then set some text in it (the README's
-pictures were made that way) and look for strokes run together. A solid square
-of three pixels by three in a light family, or two letters that come out
-pixel for pixel the same (ä and ă once did, in the heavy faces), is the thing
-to look for.
+To check a change, build the family and render some sample text, as in the
+README images. Look for strokes that merge into a solid block, like a
+3 × 3 square in a light family. Check that similar letters still look
+distinct. In the heavy faces, ä and ă once rendered pixel for pixel the same.
 
 ## Licence
 

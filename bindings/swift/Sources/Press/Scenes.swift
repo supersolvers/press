@@ -26,11 +26,11 @@ public struct WindowResizability: Hashable, Sendable {
 
     public static let automatic = WindowResizability(resizable: true)
     public static let contentMinSize = WindowResizability(resizable: true)
-    /// The window is the size of its content and stays so.
+    /// Fits the window to its content and disables resizing.
     public static let contentSize = WindowResizability(resizable: false)
 }
 
-/// What a scene comes to: a window that can be opened.
+/// The description of a window a scene can open.
 struct WindowSpec {
     var title: String
     var id: String?

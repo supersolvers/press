@@ -1,13 +1,12 @@
 # Changes
 
-What changed in each version of PRESS, the newest first. The version is the
-one in `Cargo.toml`. Two other numbers say what a program or a style can
-rely on, and each has its own history:
+Releases are listed newest first. The PRESS version comes from
+`Cargo.toml`. The program and style interfaces have their own versions.
 
-- the interface a program is written against (`PRESS_ABI_VERSION` in
-  `include/press.h`, and the number `libpress.so.1` ends in), now 1;
-- the interface a style is written against (`PRESS_STYLE_ABI` in
-  `include/press_style.h`), now 11.
+- The program ABI is 1, as recorded by `PRESS_ABI_VERSION` in
+  `include/press.h` and the library name `libpress.so.1`.
+- The style ABI is 11, as recorded by `PRESS_STYLE_ABI` in
+  `include/press_style.h`.
 
 ## 0.1.0, not yet released
 
@@ -29,7 +28,7 @@ on 18 November 2026.
   name and two lines of details beside it) or as thumbnails (a picture of
   up to 96 pixels in a frame), `IconView.set_layout`; an item's large
   picture may be up to 96 pixels.
-- Rich text: words with looks of their own, read and written as RTF.
+- The rich-text widget reads and writes RTF.
 - Dividers between the panes of a stack.
 - Drag and drop, the clipboard, input methods, accessibility, whole-number
   and fractional scale, and a program's own event loop.
@@ -45,8 +44,8 @@ on 18 November 2026.
   One, Two Thousand and Four, Two Thousand and Five and Two Thousand and
   Twenty-Seven. The last recalls no desktop there was: it is a future as
   2001 saw it, in lit gel.
-- Themes: a look in other colours, sizes and type, from a text file. Six
-  come with the library.
+- Themes override a style's colors, sizes, and fonts from a text file.
+  Six come with the library.
 - A title bar may have a button that puts its window behind the others,
   through a Wayland protocol of PRESS's own, `press_depth_v1`.
 - Two Thousand and One's window frame is measured from the period's

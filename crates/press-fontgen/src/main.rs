@@ -121,7 +121,9 @@ fn write(path: &Path, strike: &Strike, (wide, right, up): (u8, i8, i8), keep: &d
 
 fn main() -> Result<(), String> {
     let args: Vec<String> = std::env::args().skip(1).collect();
-    let [from, to] = args.as_slice() else { return Err("usage: press-fontgen fonts/build OUT-FOLDER".into()) };
+    let [from, to] = args.as_slice() else {
+        return Err("Usage: press-fontgen fonts/build OUT-FOLDER (extract bitmap strikes from built fonts)".into());
+    };
     let (from, to) = (Path::new(from), Path::new(to));
     std::fs::create_dir_all(to).map_err(|e| e.to_string())?;
     // the family the shared characters are taken from, first
