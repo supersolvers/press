@@ -270,8 +270,8 @@ impl Ui {
             Some(Kind::Slider { .. }) => {
                 let (vertical, ..) = self.slider_shape(h)?;
                 let (pos, knob) = (if vertical { y } else { x }, self.knob_at(h)?);
-                // on the knob: hold it where it was taken. Elsewhere on the
-                // groove: the knob comes to the pointer, then follows it.
+                // Keep the grab offset when a drag starts on the knob. A press
+                // on the track centers the knob under the pointer.
                 let grip = if (knob..knob + self.look.m.slider_knob).contains(&pos) { pos - knob } else { self.look.m.slider_knob / 2 };
                 self.slider_drag = Some((h, grip));
                 self.dirty = true;

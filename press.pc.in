@@ -1,4 +1,4 @@
-# What a C program needs to build against press, the engine of PRESS:
+# Build a C program against the PRESS engine:
 #     cc hello.c $(pkg-config --cflags --libs press) -o hello
 # make install fills in the places and the versions.
 prefix=@PREFIX@

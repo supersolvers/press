@@ -1,18 +1,16 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! How things look, apart from what they are.
+//! The style interface and the built-in Eighty-Four style.
 //!
-//! The engine knows what a button is: where it is, what it says, whether it
-//! is held. A [`Style`] knows what a button looks like. The engine asks the
-//! style for its sizes ([`Metrics`]) and its colours ([`Palette`]), and when
-//! it draws, it hands each piece of a window to the style as a [`Part`].
+//! The engine tracks widget bounds, labels, and interaction state. A
+//! [`Style`] supplies sizes ([`Metrics`]) and colors ([`Palette`]) and
+//! draws each [`Part`] using the state the engine passes in.
 //!
-//! The look the engine was born with, black and white in the manner of the
-//! first Macintosh, is one style among others: [`EightyFour`]. It is also the
-//! one that draws whatever another style declines to, so a style may be
-//! written a part at a time.
+//! [`EightyFour`] is the black-and-white style inspired by the first
+//! Macintosh. It also draws parts a custom style leaves to the engine,
+//! so you can implement a style a piece at a time.
 //!
-//! Everything here is plain data with a fixed layout, so that a style can
-//! live in a library of its own, in any language (see `press_style.h`).
+//! The fixed-layout data lets styles live in separate libraries. See
+//! `press_style.h` for the C interface.
 
 use crate::canvas::{Canvas, Rect, BLACK, TRANSPARENT, WHITE};
 use crate::font::{Face, Font, Type};

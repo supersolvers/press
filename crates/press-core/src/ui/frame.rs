@@ -1,16 +1,14 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! A window's own frame: the title bar, the edges and the buttons in the
-//! title bar, drawn by the style round the window's content.
+//! Client-drawn title bars, borders, and window buttons.
 //!
-//! Whether a window has one is the style's to say (a style whose title bar
-//! has no height leaves the frame to the desktop) and the display's, which
-//! turns frames on only where it can show them. Everything else in the
-//! engine goes on measuring from the corner of the content, as it always
-//! has; only this file knows that there is anything outside it. A display
-//! asks how far the frame reaches ([`Ui::frame_insets`]), has the two
-//! drawn together ([`Ui::render_framed`]), and hands every pointer event
-//! here first ([`Ui::frame_pointer`]), which either says where in the
-//! content it fell or what the user is doing to the window.
+//! A style requests a frame by giving the title bar a positive height. The
+//! display backend enables it where supported. Fullscreen windows omit
+//! their frame. Layout and widget code measure from the content origin.
+//!
+//! The backend uses [`Ui::frame_insets`] to measure the frame and
+//! [`Ui::render_framed`] to draw it with the content. It sends pointer
+//! events to [`Ui::frame_pointer`] first to get content coordinates or a
+//! window action such as a move or resize.
 
 use super::*;
 
@@ -25,12 +23,12 @@ pub const MENU: u8 = 5;
 /// Put the window behind every other, where the desktop will.
 pub const BACK: u8 = 6;
 
-/// What a pointer event on a framed window comes to.
+/// The result of routing a pointer event through the window frame.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FrameAct {
-    /// It fell in the content, at this place there: it is the content's.
+    /// Forward the event at these content-relative coordinates.
     Inside(i32, i32),
-    /// It fell on the frame, and nothing is to be done.
+    /// The frame consumed the event without an action.
     Nothing,
     /// The window is being dragged by its title bar.
     Move,
@@ -103,14 +101,13 @@ impl Ui {
         self.dirty = true;
     }
 
-    /// What was last chosen from a window's own menu, for the display to do.
+    /// Take the pending frame action for the display backend.
     pub fn take_frame_ask(&mut self) -> Option<(Handle, FrameAct)> {
         self.frame_asked.take()
     }
 
-    /// Something was chosen from a window's own menu, or asked by its
-    /// button: what the engine can do itself it does, and the rest waits
-    /// for the display.
+    /// Handle a frame button or window menu command. Rolling happens in
+    /// the engine. Other actions wait for the display backend.
     pub(super) fn frame_ask(&mut self, window: Handle, which: u8) {
         match which {
             ROLL => self.roll(window),

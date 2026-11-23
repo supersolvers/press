@@ -1,9 +1,8 @@
-# The press fonts
+# PRESS fonts
 
-Pixel typefaces for a one-bit desktop, each drawn for the one size it is used at,
-in the spirit of the system faces of the 1984 Macintosh to Windows 95. They
-began as a project of their own, Fonts of Old; that project is now this folder.
-`SELECTION.md` is the survey it started from.
+These pixel typefaces are drawn at the sizes PRESS uses, with inspiration
+from system fonts spanning the 1984 Macintosh to Windows 95. They originated
+in Fonts of Old. The original font survey is in `SELECTION.md`.
 
 | Family | Size | What it is for |
 | --- | --- | --- |
@@ -21,11 +20,10 @@ Cyrillic and Hebrew letters of their own, and share some 34,000 Chinese,
 Japanese and Korean characters taken from Fusion Pixel Font. Pica and Elite
 have box drawing and block elements as well.
 
-Each font file carries outlines, for any size, and the hand-tuned pixels at
-its own size as an embedded bitmap. press draws only the pixels (see
-`crates/press-fontgen` and `crates/press-core/src/font.rs`); other programs
-use the files through fontconfig, and need `fontconfig/65-press.conf` to show
-the pixels rather than smoothed outlines.
+Each font file contains scalable outlines and a hand-tuned bitmap at its
+target size. PRESS draws from the bitmap data (see `crates/press-fontgen` and
+`crates/press-core/src/font.rs`). For apps that use fontconfig,
+`fontconfig/65-press.conf` selects the embedded bitmaps.
 
 ## Building
 
@@ -33,7 +31,7 @@ From the top of the repository:
 
 ```sh
 make fonts-venv    # once: Python with fontTools, skia-pathops, numpy and Pillow
-make fonts         # build every family into fonts/build, and bundle them into press
+make fonts         # build every family into fonts/build, and bundle them into PRESS
 ```
 
 `make fonts-venv` needs Python's `venv` module (`python3-venv` on Debian and
@@ -53,15 +51,14 @@ sheets.
 
 ## How a letter is made
 
-1. **Drawn.** `src/` draws each letter as an outline from a skeleton and a
-   pen (`engine.py`; the letters in `glyphs.py`, `latin.py`, `scripts.py`,
-   `more.py`), with each family's widths, weight and heights (`build.py`,
-   `FAMILIES`). Accented letters are put together from a letter and its
-   accents (`latin.py`).
-2. **Rendered.** The outline is rendered at the family's size and every pixel
-   more than about two-fifths covered is ink (`bitmap.py`).
-3. **Corrected by hand.** Where that is not good enough, the letter is drawn
-   in pixels in `pixels/<Family>.txt`, which wins over the rendering:
+1. **Draw the outline.** The engine in `src/engine.py` draws from a skeleton
+   and a pen. The letter shapes live in `glyphs.py`, `latin.py`, `scripts.py`,
+   and `more.py`. Widths, weight, and heights come from `FAMILIES` in
+   `build.py`. For accented letters, `latin.py` combines the base and accents.
+2. **Render at the target size.** `bitmap.py` fills any pixel where the
+   outline covers more than about two-fifths of the pixel.
+3. **Adjust individual glyphs.** A hand-drawn glyph in `pixels/<Family>.txt`
+   takes precedence over the rendered glyph.
 
    ```
    glyph Ж top=7
@@ -70,16 +67,16 @@ sheets.
    ...
    ```
 
-   `#` is ink, anything else blank; `top` is the row of the cell the first line
-   is on (row 0 is the top of the strike; the baseline is below row
-   `line_asc + 3`). Column 0 is the left edge of the advance.
-4. **Composed in pixels** (Elite only, whose 8-pixel cell is too narrow for
-   rendered accents): an accented letter is its plain letter, hand-tuned or
-   not, with a small accent set above or hung below in pixels
-   (`src/compose.py`). So an accented letter always follows its plain one; a
-   hand-drawn one in the pixel file still wins.
-5. **Box drawing** (Pica and Elite) is made in pixels from the characters'
-   Unicode names (`src/boxes.py`), filling the cell so that lines join.
+   `#` marks ink. All other characters leave the pixel blank. `top` sets
+   the row of the first line. Row 0 is the top of the strike, and the
+   baseline sits below row `line_asc + 3`. Column 0 marks the left edge of
+   the advance.
+4. **Add accents in Elite.** Its 8-pixel cell is too narrow for rendered
+   accents. `src/compose.py` places the accent above or below the current
+   base bitmap, including any hand edits. A hand-drawn accented glyph
+   still takes precedence.
+5. **Join box-drawing lines in Pica and Elite.** `src/boxes.py` uses the
+   Unicode character names to build glyphs whose lines meet at cell edges.
 6. **Imported.** The CJK characters' pixels are taken as they are from the
    BDF files in `vendor/fusion-pixel` (`src/cjk.py`); the pictographs and the
    hieroglyphs are redrawn from `vendor/font-awesome` and
@@ -92,7 +89,7 @@ distinct. In the heavy faces, ä and ă once rendered pixel for pixel the same.
 
 ## Licence
 
-The fonts are under the SIL Open Font License 1.1 (`OFL.txt`), not press's
+The fonts are under the SIL Open Font License 1.1 (`OFL.txt`), not the toolkit's
 GPL: anyone may use, change and pass them on, so long as a changed version
 does not take their names. What they borrow keeps its own licence, in
 `vendor/`: Fusion Pixel Font and the fonts it is built from (OFL 1.1), Font

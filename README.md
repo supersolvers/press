@@ -62,7 +62,7 @@ There are three layers, and each can be used without the one above it:
 
 - **Press**, the Swift library: views, state, scenes and menus under
   SwiftUI's names. See [Press](#press).
-- **press**, the engine, behind a flat C interface in `libpress.so`. The
+- **The PRESS engine** exposes a flat C interface in `libpress.so`. The
   interface is declared once, in `idl/press.toml`, and the C header, the
   Rust export layer and the Python and Swift bindings are generated from
   it, so C and Python programs are written against the same toolkit.
@@ -191,36 +191,36 @@ and needs nothing more.
 | `bindings/swift/Sources/PressCore` | The engine's interface in Swift, one generated source file (checked in) |
 | `bindings/python/press.py` | Generated ctypes binding (checked in) |
 | `include/press.h` | Generated C header (checked in) |
-| `include/press_style.h` | The interface a style is written against (by hand) |
+| `include/press_style.h` | Handwritten C interface for style libraries |
 | `idl/press.toml` | The interface definition: enums, classes, methods, properties, events |
 | `crates/press-idl` | Parses the definition; generates the C header, Rust exports and the Python and Swift bindings |
 | `crates/press-core` | The engine: handles, widget tree, layout, input, text, and the style interface with the built-in style, Eighty-Four. No platform or FFI code. `rich.rs` and `rtf.rs` are rich text's document and RTF, and `ui/rich.rs` the widget |
 | `crates/press` | `libpress.so`: the generated exports, their implementation, the display backends, and the loader of styles |
-| `styles/ninetyfive` | A style in the manner of the middle 1990s, in C, as a library of its own: grey, bevelled, in the engine's own pixel type |
-| `styles/eightyfive` | A style in the manner of the home computer workbench of 1985: four colours and no shading |
-| `styles/eightyeight` | A style in the manner of the open workstation look of 1988: lozenges, a lift on a cable, brackets at a window's corners |
-| `styles/ninetyone` | A style in the manner of the desktop of 1991 that came in a computer's ROM: flat pale grey, thin black lines, a cream title bar |
-| `styles/ninetythree` | A style in the manner of the common desktop of 1993: heavy bevels in slate blue, a frame in rose |
-| `styles/ninetyeight` | A style in the manner of the media desktop of 1998: the title a yellow tab on the window's corner |
-| `styles/eightynine` | A style in the manner of the workstation of 1989: four greys, slabs and hollows, black title bars |
-| `styles/ninety` | A style in the manner of the office desktops of 1990: grey buttons on white windows |
-| `styles/twothousandfour` | A style in the manner of the free desktop of 2004: parchment, tan and orange, smooth type |
-| `styles/ninetynine` | A style in the manner of the platinum desktops of the end of the 1990s: black outlines and rounded corners in shades of grey, in the engine's own pixel type |
-| `styles/twothousand` | A style in the manner of 2000: Ninety-Five told other colours, sizes and smooth type, in forty lines |
-| `styles/twothousandone` | A style in the manner of 2001: rounded and shaded, with a glow under the pointer and smooth type |
-| `styles/twothousandfive` | A style in the manner of 2005: gel buttons, a default button that throbs, striped windows, soft shadows |
-| `styles/common/smooth.h` | What the two smooth styles draw with: blending, gradients, rounded shapes, shadows. Not part of the style interface |
+| `styles/ninetyfive` | Mid-1990s gray bevels and the built-in pixel fonts. This style is a separate C library. |
+| `styles/eightyfive` | Four flat colors inspired by the 1985 home computer workbench. |
+| `styles/eightyeight` | A 1988 workstation look with lozenge buttons, a scrollbar thumb on a cable, and bracketed window corners. |
+| `styles/ninetyone` | Pale gray, thin black lines, and a cream title bar inspired by the 1991 ROM desktop. |
+| `styles/ninetythree` | Heavy slate-blue bevels and a rose window frame, based on a 1993 workstation desktop. |
+| `styles/ninetyeight` | A yellow title tab at the corner of the window, like the 1998 media desktop. |
+| `styles/eightynine` | Four shades of gray, raised and inset controls, and black title bars from a 1989 workstation look. |
+| `styles/ninety` | Gray buttons on white windows, inspired by 1990 office desktops. |
+| `styles/twothousandfour` | Parchment, tan, orange, and smooth fonts inspired by the 2004 free desktop. |
+| `styles/ninetynine` | Black outlines, rounded gray corners, and pixel fonts in a late-1990s platinum look. |
+| `styles/twothousand` | A 40-line variation on Ninety-Five with its own colors, sizes, and smooth fonts. |
+| `styles/twothousandone` | Rounded shading, smooth fonts, and a glow under the pointer. |
+| `styles/twothousandfive` | Gel buttons, a pulsing default button, striped windows, and soft shadows. |
+| `styles/common/smooth.h` | Internal drawing helpers for blending, gradients, rounded shapes, and shadows |
 | `fonts/` | The fonts' sources: the scripts that draw them, hand-drawn pixels, the build, and what they borrow (see `fonts/README.md`) |
 | `crates/press-fontgen` | Takes the pixels out of the built font files and writes them in the form the engine bundles |
-| `crates/press-protocols` | Wayland protocols of press's own (`protocols/`), read into both sides: for a program and for a desktop |
+| `crates/press-protocols` | PRESS Wayland protocols (`protocols/`) with client and server bindings |
 | `assets/fonts` | The bundled fonts, as written by `press-fontgen`, and their licence |
 | `examples/` | The same dialog in C, Python and Swift (twice: with `PressCore` and with `Press`), a tour of Press, the furniture of a whole program in C and with Press (tools), a host event loop in each, and in C a worker thread, a notes window, scroll bars, a window of other controls, a file browser and a pair of lists to drag between |
 
 ## Styles
 
-The engine knows what a button is: where it is, what it says, whether the
-pointer is down on it. A style knows what a button looks like. The engine
-asks the style in use for these things:
+The engine tracks a button's bounds, label, and pressed state. The style
+uses that information to draw it. The same split applies to the rest of
+the interface. A style can control the following.
 
 - whether its windows have **frames of their own**, how tall the title
   bar is and how thick the edges, which buttons the title bar has and at
@@ -261,27 +261,27 @@ asks the style in use for these things:
 Whatever a style does not draw is drawn in black and white, so a style can
 be written a part at a time and is never left with holes in it.
 
-Fifteen come with PRESS, each named for its year. `eightyfour`, black and white
-in the manner of the first Macintosh, is built into the engine. The other fourteen
-are libraries of their own, and are there as much to show how a style is
-written as to be worn:
+PRESS ships 15 styles named for their years. The engine includes
+`eightyfour`, the black-and-white style inspired by the first Macintosh.
+The other 14 are separate libraries you can run or use as examples when
+writing a style.
 
 | | |
 | --- | --- |
-| `ninetyfive` | Grey and bevelled, in the manner of the middle 1990s. Whole pixels and the engine's own type, the light Agate for the interface and its bold for title bars: what a style can be with nothing smooth in it |
-| `eightyfive` | In the manner of the home computer workbench of 1985: blue, white, black and orange, and nothing else. No shading and no round corners; what is chosen or held turns to its opposite colour, blue to orange and white to black. Words are white on blue; menus are the other way about |
-| `eightyeight` | In the manner of the open workstation look of 1988, which went its own way in nearly everything: buttons are lozenges, a button that opens a menu carries a small triangle, one choice among several is a row of boxes with the chosen one in a heavy line, a line to type on is a line and no box, a scroll bar is a lift on a cable, and a window has brackets at its corners to take hold of |
-| `ninetyone` | In the manner of the desktop of 1991 that came in the ROM of a British computer: flat pale grey with every box a thin black line, and what is chosen or held turned inside out, white for black. The title bar of the window that has the keyboard is cream and the others' grey, with a box that sends the window behind the rest and one that closes it at its left; a star in a check box; a red caret; a pale blue pointer; and one face with every letter the same width |
-| `ninetythree` | In the manner of the common desktop of the workstations of 1993: slate blue, everything two pixels out of the ground or two pixels into it, a check box that is pressed in when on, a diamond for a choice among several, a black line right round what has the keyboard, and the frame of the window in front in rose |
-| `ninetyeight` | In the manner of the media desktop of 1998: quiet grey, thin dark lines, blue under the label of what has the keyboard, and a window whose title is not a bar but a yellow tab, as wide as the title needs, on its top left corner |
-| `eightynine` | In the manner of the workstation of 1989: black, two greys and white. Everything is a slab of light grey standing out of the page or a hollow pressed into it; title bars are black; the button Return presses carries the sign of that key |
-| `ninety` | In the manner of the office desktops of 1990: white windows, grey buttons in black lines with their corners off, a cross in a check box, navy for the title bar and for what is selected, and a thick grey band round the window to take hold of |
-| `twothousandfour` | In the manner of the free desktop of the autumn of 2004: parchment windows, square frames with title bars of tan shading to brown and the title in white, flat pale buttons in thin grey lines, grey troughs and knobs with grips of dots, orange for what is selected and for work done, smooth type |
-| `ninetynine` | Platinum, in the manner of the end of the 1990s: the black-and-white Macintosh in shades of grey. Black outlines, rounded corners, faces lit from the top left; lavender for what is selected in a list and deep blue in a menu. Whole pixels and the engine's own type, which was drawn for a desktop like it |
-| `twothousand` | In the manner of 2000: Ninety-Five in a warmer grey and a deeper blue, with smooth type. It is written as that: its colours, sizes and typefaces, and then Ninety-Five's file for the rest |
-| `twothousandone` | In the manner of 2001: buttons rounded and shaded from top to bottom, gold where the pointer is, blue for what is selected, green in the progress bar, smooth type, a shadow under menus |
-| `twothousandfive` | In the manner of 2005: lozenges of clear and blue gel, a default button that throbs, finely striped windows, a glow round what has the keyboard, menus that cast a soft shadow |
-| `twothousandtwentyseven` | The one look that recalls no desktop there was: a future as the year 2001 saw it. Buttons are lozenges of lit gel, radio buttons and the knob of a slider are glass orbs, tabs are capsules, and words lie on plain pale ground in a clear sans. A window is a shell of gel with orbs on its title rail, in a colour the desktop may give it, and glows a little when it is in front. |
+| `ninetyfive` | Mid-1990s gray bevels, drawn in whole pixels. Light Agate is the interface font and bold Agate is used in title bars. |
+| `eightyfive` | The 1985 workbench palette is blue, white, black, and orange. Controls have square corners and flat colors. Selection or press swaps blue with orange and white with black. Text is white on blue, and menus use the reverse. |
+| `eightyeight` | This 1988 workstation look uses lozenge buttons and small triangles on menu buttons. A heavy outline marks the selected choice in a row of boxes. Text fields are underlined, scrollbar thumbs run along a cable, and window corners use bracket-shaped grips. |
+| `ninetyone` | A 1991 ROM desktop look with a pale gray surface and thin black borders. Pressed and selected controls invert their colors. The active title bar is cream, the inactive ones gray. Send-behind and close sit at the left. Checkboxes use a star, the caret is red, the pointer is pale blue, and the font is fixed-width. |
+| `ninetythree` | Slate blue with two-pixel bevels in the style of 1993 workstations. Checked boxes look recessed, radio buttons are diamonds, and a black outline marks keyboard focus. The active window has a rose frame. |
+| `ninetyeight` | Quiet gray and thin dark lines inspired by a 1998 media desktop. Blue underline marks keyboard focus. The title sits in a yellow tab at the upper left, sized to its contents. |
+| `eightynine` | A 1989 workstation palette of black, two grays, and white. Controls look raised or recessed, title bars are black, and the default button carries the Return symbol. |
+| `ninety` | White windows and gray buttons with clipped corners and black outlines. Checkboxes use a cross, and navy marks the title bar and selection. A thick gray border provides a resize grip. |
+| `twothousandfour` | Parchment windows with square frames, tan-to-brown title bars, and white titles. Pale buttons have thin gray outlines, and knobs have dotted grips in gray tracks. Orange marks selections and progress. Text uses smooth fonts. |
+| `ninetynine` | A late-1990s platinum look with black outlines, rounded corners, and highlights from the upper left. List selections are lavender and menu selections are deep blue. It uses whole pixels and the built-in fonts. |
+| `twothousand` | Starts with Ninety-Five and uses warmer gray, deeper blue, and smooth fonts. It sets its own colors, sizes, and fonts and includes Ninety-Five’s source for the rest. |
+| `twothousandone` | Buttons have rounded corners and vertical shading. Hover is gold, selection is blue, and progress is green. Text uses smooth fonts and menus cast shadows. |
+| `twothousandfive` | Clear and blue gel buttons, a pulsing default button, and finely striped windows. A glow marks keyboard focus, and menus cast soft shadows. |
+| `twothousandtwentyseven` | A future imagined from 2001. Gel buttons are lozenges, radio buttons and slider knobs are glass orbs, and tabs are capsules. Text uses a clear sans on a pale background. The desktop can tint the gel frame, which glows when the window is active. |
 
 | | |
 | --- | --- |
@@ -855,7 +855,7 @@ Lists, tables and trees can do more when asked:
   window of the program, and the line shows there. A tree can take rows
   too: onto an item, or between two. What is dragged out of a tree takes
   its whole branch, which keeps its shape in another tree and is laid out
-  flat in a plain list. All of this works between two press programs as
+  flat in a plain list. All of this works between two PRESS programs as
   well: the rows are written out by one, read by the other, and removed
   from the first once the second has them. Anything else that takes text
   is given their labels, and the list keeps its rows. They leave the first list and join the second, keeping
@@ -982,7 +982,7 @@ too, where it would otherwise pop up a context menu: `right_pressed` and
 `right_released` with the place, and where the pointer goes while it is
 held by `dragged`, as for the left. `middle_button` does the same for the
 middle button, with `middle_pressed` and `middle_released`; nothing else in
-press takes it.
+PRESS takes it.
 
 ### At the top of the screen
 
@@ -1014,7 +1014,7 @@ Windows, menus and the pointer all scale together.
 
 Where the scale is not a whole number, such as 150%, a picture drawn at a
 whole scale would be resampled by the compositor and go soft, and one-pixel
-patterns do not survive that. So there press draws straight in the
+patterns do not survive that. So PRESS draws directly in the
 screen's own pixels: each engine pixel is a square as many screen pixels
 across as the scale rounded to the nearest whole number (two at 150% or
 175%, one at 125%), and the compositor is told to show the picture as it
@@ -1026,7 +1026,7 @@ off and leaves the scaling to the compositor as before.
 
 ![The same window at 150%: left to the compositor, and drawn in the screen's own pixels](docs/fractional.png)
 
-press draws its own pointer in one bit, black edged with white so that it
+PRESS draws its own pointer in one bit, black edged with white so that it
 shows on anything:
 
 ![The arrow, the I-beam, arrows sideways, up and down, and cornerwise, and the hourglass](docs/pointers.png)
@@ -1139,7 +1139,7 @@ program that already has one (a game loop, libuv, GLib, asyncio) keeps it:
 
 The descriptor covers display input, caret blinking and other animations,
 key repeat, incoming paste data, and API calls that change the UI outside a
-handler. If a timer in your loop updates a label, press wakes the loop
+handler. If a timer in your loop updates a label, PRESS wakes the loop
 through the same descriptor. You don't need a separate timeout for press.
 
 `examples/c/hostloop.c` does this with `poll()`, and
@@ -1148,7 +1148,7 @@ through the same descriptor. You don't need a separate timeout for press.
 ## Threads
 
 A process has one UI thread: the one that called `press_app_init`. Every
-press call must come from it, and a call from any other thread is refused
+PRESS call must come from it, and a call from any other thread is refused
 with `NOT_INITIALIZED`. A second thread cannot become the UI thread until
 the first has called `press_app_shutdown`.
 
@@ -1279,7 +1279,7 @@ at its place among its neighbours; one that goes has its widget destroyed.
 The views of a `ForEach` are known by their ids, so they keep their state
 and their widgets when the order changes.
 
-**The event loop** is the main run loop, with press as a guest in it (see
+**The event loop** is the main run loop, with the PRESS engine running inside it (see
 *Using your own event loop*), so `Task`, `async` and `await` on the main
 actor work as they do in a SwiftUI program, and `.task` can sleep and count.
 State may be changed from any thread; the window is drawn again on the main
@@ -1292,7 +1292,7 @@ field has the keyboard, as a SwiftUI program has on a Macintosh.
 before, after or in place of the standard ones. A window tagged as a box
 (`.windowTag("dialog:...")`) has none: a box has no menus.
 
-**Where it parts from SwiftUI**, because press is what it is:
+**How Press differs from SwiftUI**
 
 - **What a program draws is black and white**, whatever style its
   controls are in. There are no colours, images, shapes, opacity or
@@ -1302,7 +1302,7 @@ before, after or in place of the standard ones. A window tagged as a box
   among them: `.body` is Cicero, `.caption` Agate, `.callout` Brevier,
   `.title` Elite, and `.monospaced()` Pica. `Font.press(.pica)` names one
   outright.
-- **Layout is press's.** A stack gives each view the size it asks for and
+- **PRESS handles layout.** A stack gives each view the size it asks for and
   shares spare room among those that grow. `.frame` sets a least size, not
   a greatest; `.frame(maxWidth: .infinity)` asks to grow; `.padding` is the
   same on every side. There is no `ZStack`, `GeometryReader`, `Grid` or
@@ -1311,8 +1311,8 @@ before, after or in place of the standard ones. A window tagged as a box
   `.defaultSize` says otherwise.
 - **Rows are words.** A `List` row, a `Picker` choice and a `Table` cell
   show the words of a `Text` or a `Label`, and a `Label`'s picture is one
-  of press's three icons. A list's `.onSubmit` hears a row opened.
-- **Menu shortcuts are one character with Control**, which is press's
+  of the three built-in icons. A list's `.onSubmit` hears a row opened.
+- **Menu shortcuts are one character with Control**, the PRESS
   command key; other modifiers are accepted and not used.
 - **A tab view's pages cannot be put in another order** once shown, nor
   their tabs renamed; a new page goes on the end.

@@ -654,8 +654,8 @@ public struct TableColumn<RowValue> {
 
 @resultBuilder
 public enum TableColumnBuilder<RowValue> {
-    /// Each column is read as one of this table's, which is how `\.name`
-    /// comes to mean a property of its rows.
+    /// Columns share the table’s row type, so `\.name` resolves to a
+    /// property on that type.
     public static func buildExpression(_ column: TableColumn<RowValue>) -> TableColumn<RowValue> { column }
     public static func buildBlock(_ columns: TableColumn<RowValue>...) -> [TableColumn<RowValue>] { columns }
 }
