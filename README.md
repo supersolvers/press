@@ -71,6 +71,25 @@ There are three layers, and each can be used without the one above it:
 PRESS opens windows through Wayland and can render to PNG files without
 a display.
 
+## Install PRESS
+
+PRESS 0.1.0 has packages for Ubuntu 26.04 amd64. If you’re running an app
+that already links against PRESS, install `libpress1`. To build a C or
+Swift app, download both packages and `SHA256SUMS` from the same release.
+[PRESS 0.1.0 release](https://github.com/supersolvers/press/releases/tag/v0.1.0)
+
+From the directory where you downloaded the files, check them and install
+the development packages.
+
+```bash
+sha256sum -c SHA256SUMS
+sudo apt install pkgconf ./libpress1_0.1.0-1_amd64.deb ./libpress-dev_0.1.0-1_amd64.deb
+```
+
+`libpress1` supplies the shared library, styles, and themes. `libpress-dev`
+supplies the headers and the `press.pc` file that C builds and SwiftPM use
+to find the library.
+
 ## Build and run
 
 ```bash
@@ -162,29 +181,31 @@ swift test
 
 ## Using it in a program of your own
 
-A Swift program names this package as a dependency, by its path or by the
-address of its repository, and depends on the product `Press`:
+### Swift
 
-```swift
-dependencies: [.package(name: "Press", path: "../press")],
-targets: [.executableTarget(name: "Hello", dependencies: [.product(name: "Press", package: "Press")])]
-```
-
-SwiftPM uses `pkg-config` to find the native library and headers. Install
-`libpress-dev` and its matching runtime package, or use the local SDK
-setup above. When using a released Git tag, install the native packages
-from the same release. Once version 0.1.0 is tagged, the corresponding
-Git dependency and target entry are:
+Install the native packages above, then add PRESS 0.1.0 to your app’s
+`Package.swift`. SwiftPM uses `pkg-config` to find the headers and library.
+Keep the Swift package and the native packages on the same release.
 
 ```swift
 dependencies: [.package(url: "https://github.com/supersolvers/press.git", exact: "0.1.0")],
 targets: [.executableTarget(name: "Hello", dependencies: [.product(name: "Press", package: "press")])]
 ```
 
-Use the `PressCore` product and `import PressCore` for the lower-level
-Swift binding.
+Write `import Press` in your app. For direct access to the engine, depend
+on the `PressCore` product and write `import PressCore`.
 
-A C program finds what was installed through pkg-config, as `press`:
+If you’re working on PRESS and want your app to use an adjacent checkout,
+stage the local SDK as shown above and use a path dependency.
+
+```swift
+dependencies: [.package(name: "Press", path: "../press")],
+targets: [.executableTarget(name: "Hello", dependencies: [.product(name: "Press", package: "Press")])]
+```
+
+### C
+
+Include `press.h` and let `pkg-config` supply the compiler and linker flags.
 
 ```bash
 cc hello.c $(pkg-config --cflags --libs press) -o hello
